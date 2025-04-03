@@ -1,13 +1,12 @@
-  
 import streamlit as st
 import google.generativeai as genai
 
-# 🔐 Gemini APIキーを入力（Google AI Studioで取得）
-GEMINI_API_KEY = "AIzaSyCbj_4rn7KbEcJdPMV8r7fSSYrJ7KjPZmk"  # ← 実際のキーに置き換えてください
+# 🔐 APIキーをsecretsから読み込む（安全）
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="WEBCM見積もりAI", layout="centered")
-st.title("WEBCM AI見積もりエージェント（Gemini）")
+st.title("WebCM 見積もりAIエージェント（models/gemini-1.5-pro-latest）")
 
 # --- 入力フォーム ---
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
@@ -36,7 +35,7 @@ budget_hint = st.text_input("参考予算（任意）")
 if st.button("💡 Geminiに見積もりを依頼"):
     with st.spinner("AIが見積もりを作成中です..."):
         prompt = f"""
-あなたは広告制作費のプロです。以下条件でWebCM見積もりを提示してください：
+あなたは広告制作のプロデューサーです。制作見積作成のプロです。以下条件でWebCM見積もりを提示してください：
 - 尺：{video_duration}、本数：{num_versions}本
 - 撮影：{shoot_days}日、編集：{edit_days}日、納品希望日：{delivery_date}
 - キャスト：メイン{cast_main}人、エキストラ{cast_extra}人、タレント：{'あり' if talent_use else 'なし'}
