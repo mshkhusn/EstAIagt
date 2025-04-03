@@ -6,7 +6,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="WebCM見積もりAI", layout="centered")
-st.title("WebCM 見積もりAIエージェント（Gemini 2.0 Pro）")
+st.title("WebCM 見積もりAIエージェント（Gemini 2.5 Pro）")
 
 # --- 入力フォーム ---
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
@@ -35,7 +35,7 @@ budget_hint = st.text_input("参考予算（任意）")
 if st.button("💡 Geminiに見積もりを依頼"):
     with st.spinner("AIが見積もりを作成中です..."):
         prompt = f"""
-あなたは広告制作のプロデューサーです。制作費の見積作成のプロフェッショナルです。以下条件でWebCM見積もりを提示してください：
+あなたは広告制作のプロデューサーです。制作費のプロフェッショナルです。以下条件でWebCM見積もりを提示してください：
 - 尺：{video_duration}、本数：{num_versions}本
 - 撮影：{shoot_days}日、編集：{edit_days}日、納品希望日：{delivery_date}
 - キャスト：メイン{cast_main}人、エキストラ{cast_extra}人、タレント：{'あり' if talent_use else 'なし'}
@@ -47,7 +47,7 @@ if st.button("💡 Geminiに見積もりを依頼"):
 - 使用地域：{usage_region}、期間：{usage_period}、予算：{budget_hint or 'なし'}
 各費用項目ごとの内訳と概算金額（日本円）を提示してください。
 """
-        model = genai.GenerativeModel("gemini-2.0-pro-exp-02-05")
+        model = genai.GenerativeModel("gemini-2.5-pro-exp-03-25")
         response = model.generate_content(prompt)
         st.success("✅ Geminiによる見積もり結果")
         st.text_area("出力内容", response.text, height=400)
