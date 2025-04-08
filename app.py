@@ -16,7 +16,7 @@ st.markdown("### バナー広告 見積もりAIエージェント")
 st.markdown("[バナーエージェントを開く](https://estalagt-banner.streamlit.app/)")
 
 st.markdown("### LP制作 見積もりAIエージェント（※使用回数制限あり）")
-st.markdown("[LPエージェントを開く](https://estalagt-lp.streamlit.app/)")
+st.markdown("[LPエージェントを開く](https://estaiagt-lp.streamlit.app/)")
 
 st.markdown("---")
 st.caption("※ 上記はプロトタイプです。実際の見積もりには使用しないでください。")
