@@ -8,7 +8,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="LP見積もりAI", layout="centered")
-st.title("LP見積もりAIエージェント（Gemini 2.5 Pro）")
+st.title("🧾 LP見積もりAIエージェント（Gemini 2.5 Pro）")
 
 # --- 基本情報 ---
 st.header("1. 基本情報")
@@ -18,6 +18,7 @@ page_structure = st.text_input("想定ページ構成（例：1ページLP、ペ
 goal = st.text_input("目的・ゴール（例：資料請求、購入、申込、応募 など）")
 target = st.text_input("ターゲット（年齢層・性別・職業など）")
 delivery_date = st.date_input("納品希望日")
+budget_hint = st.text_input("参考予算（任意）")
 
 # --- 制作仕様 ---
 st.header("2. 制作仕様")
@@ -57,6 +58,7 @@ if st.button("💡 Geminiに見積もりを依頼"):
 - 想定ページ構成：{page_structure or "（未入力）"}
 - 目的・ゴール：{goal or "（未入力）"}
 - ターゲット：{target or "（未入力）"}
+- 参考予算：{budget_hint or "（未入力）"}
 
 【制作仕様】
 - レスポンシブ対応：{'あり' if responsive else 'なし'}
