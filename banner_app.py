@@ -10,7 +10,7 @@ st.title("バナー見積もりAIエージェント（Gemini 2.0 Flash）")
 
 st.markdown("""
 <style>
-.small-label { font-size: 0.9rem; font-weight: 500; margin-bottom: 4px; }
+.small-label { font-size: 0.9rem; font-weight: 500; margin-bottom: 0px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -23,9 +23,12 @@ banner_types = {
     "動画": ["16:9（横型）", "9:16（縦型）", "1:1（正方形）", "その他"]
 }
 
-# 入力行数を選択
-st.markdown("#### "+"<span class='small-label'>入力するバナーの組み合わせ数</span>", unsafe_allow_html=True)
-row_count = st.number_input("", min_value=1, max_value=10, value=3, step=1)
+# 入力行数を選択（ラベルと入力を横並び）
+row_col1, row_col2 = st.columns([1.5, 2])
+with row_col1:
+    st.markdown("#### <span class='small-label'>入力するバナーの組み合わせ数</span>", unsafe_allow_html=True)
+with row_col2:
+    row_count = st.number_input("", min_value=1, max_value=10, value=3, step=1, label_visibility='collapsed')
 
 banner_rows = []
 total_count = 0
