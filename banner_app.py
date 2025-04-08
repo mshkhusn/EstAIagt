@@ -14,7 +14,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("### 🧾 バナータイプ・サイズ・本数の入力")
+st.markdown("バナータイプ・サイズ・本数の入力")
 
 # 定義：バナータイプと対応サイズ
 banner_types = {
