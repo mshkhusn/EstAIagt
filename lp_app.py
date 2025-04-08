@@ -9,7 +9,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # ━━━ アプリ設定 ━━━
 st.set_page_config(page_title="LP見積もりAI", layout="centered")
-st.title("LP見積もりAIエージェント")
+st.title("🌐 LP見積もりAIエージェント")
 
 st.markdown("### 基本情報")
 page_type = st.selectbox("LPの種類", ["キャンペーンLP", "問合わせ紹介LP", "商品説明LP", "その他"])
@@ -20,6 +20,9 @@ has_form = st.checkbox("フォーム入力/問合わせ機能あり")
 has_tracking = st.checkbox("GA4/ターゲッティング追跡対応")
 delivery_date = st.date_input("約定納品日")
 budget_hint = st.text_input("参考予算 (任意)")
+assets_provided = st.checkbox("組織内統一デザインやロゴ等の支給あり")
+responsive = st.checkbox("レスポンシブ対応/スマホ対応の要素あり")
+seo_consideration = st.checkbox("SEOを意識したコンテンツ構成")
 
 st.markdown("### 参考LPのURL (あれば)")
 reference_url = st.text_input("参考サイトのURL", placeholder="https://example.com/")
@@ -51,6 +54,9 @@ if st.button("📊 Geminiに見積もりを依頼"):
 【要素】：{', '.join(content_elements) if content_elements else '未指定'}
 【フォーム】：{'あり' if has_form else 'なし'}
 【計測・タグ】：{'あり' if has_tracking else 'なし'}
+【レスポンシブ】：{'あり' if responsive else 'なし'}
+【素材支給】：{'あり' if assets_provided else 'なし'}
+【SEO対応】：{'あり' if seo_consideration else 'なし'}
 【納品日】：{delivery_date}
 【参考予算】：{budget_hint or 'なし'}
 {reference_info}
