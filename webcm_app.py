@@ -35,11 +35,13 @@ budget_hint = st.text_input("参考予算（任意）")
 if st.button("💡 Geminiに見積もりを依頼"):
     with st.spinner("AIが見積もりを作成中です..."):
         prompt = f"""
-あなたは広告制作のプロフェッショナルです。以下条件でWebCM見積もりをHTML形式で提示してください。
+あなたは広告制作費のプロフェッショナルな見積もりエージェントです。
+以下の条件に基づいて、WebCM制作に必要な費用を詳細に見積もってください。
+予算、納期、仕様、スタッフ構成、撮影条件などから、実務に即した内容で正確かつ論理的に推論してください。
+短納期である場合や仕様が複雑な場合には、工数や費用が増える点も加味してください。
 
-【WebCM見積もり】
-
-■ 条件
+---
+【WebCM見積もり条件】
 - 尺：{video_duration}
 - 納品本数：{num_versions}本
 - 撮影日数：{shoot_days}日
@@ -62,29 +64,28 @@ if st.button("💡 Geminiに見積もりを依頼"):
 - 使用期間：{usage_period}
 - 参考予算：{budget_hint or 'なし'}
 
-■ 出力形式
-- HTML形式で整形して出力してください
-- 費用の内訳を「項目名・詳細・単価・数量・金額（日本円）」の表形式で整理してください
-- 合計金額はわかりやすく強調してください（例：太字または色付き）
-- 「備考」や「注意事項」も記載してください（見積金額は概算である旨も明記）
-- フォントは可読性の高いもの（例：Arial）を想定し、表示が崩れないように
-なお、納品希望日が近い（短納期）の場合、特急対応費や追加スタッフ対応、休日稼働などが発生し、費用が増加する場合があります。その点も考慮して見積もってください。
+---
+# 出力形式要件
+- HTML + Markdown形式で読みやすく出力
+- 見積もり表は「項目名・詳細・単価・数量・金額（日本円）」のテーブルで出力
+- 合計金額は太字または色付きで強調
+- 備考や注意点も記載
+- フォントはArialを想定
+- 正しいHTML構造で出力してください
+- 出力が崩れる場合は、再実行してください
 """
 
         model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(prompt)
         html_output = response.text
 
-        st.success("✅ Geminiによる見積もり結果")
+        st.success("✅ Geminiによる見積もり結果（※崩れる場合は再実行してください）")
         st.components.v1.html(
             f"""
             <div style="font-family: 'Arial', sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;">
                 {html_output}
             </div>
             """,
-            height=1000,
+            height=1200,
             scrolling=True
         )
-
-        # 💬 表示崩れが起きる可能性がある旨の補足
-        st.caption("※ 表示が崩れる場合は、もう一度「Geminiに見積もりを依頼」ボタンを押して再実行してください。")
