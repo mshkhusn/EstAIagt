@@ -3,73 +3,84 @@ import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
 
-# ━━━ セクレット 読み込み ━━━
+# 🔐 APIキーの読み込み
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
-# ━━━ アプリ設定 ━━━
 st.set_page_config(page_title="LP見積もりAI", layout="centered")
-st.title("🌐 LP見積もりAIエージェント")
+st.title("📈 LP見積もりAIエージェント (Gemini 2.5 Pro)")
 
-st.markdown("### 基本情報")
-page_type = st.selectbox("LPの種類", ["キャンペーンLP", "問合わせ紹介LP", "商品説明LP", "その他"])
-industry = st.text_input("業種")
-num_pages = st.slider("ページ数 (約2メインビュー以内の前提)", 1, 10, 3)
-content_elements = st.multiselect("含まれる主要要素", ["ヒーローヘッダ", "説明文", "図解", "アイコン", "動画", "おしゃれな動き", "ボタン/CTA", "フォーム"])
-has_form = st.checkbox("フォーム入力/問合わせ機能あり")
-has_tracking = st.checkbox("GA4/ターゲッティング追跡対応")
-delivery_date = st.date_input("約定納品日")
-budget_hint = st.text_input("参考予算 (任意)")
-assets_provided = st.checkbox("組織内統一デザインやロゴ等の支給あり")
-responsive = st.checkbox("レスポンシブ対応/スマホ対応の要素あり")
-seo_consideration = st.checkbox("SEOを意識したコンテンツ構成")
+st.markdown("""
+<style>
+.small-label { font-size: 0.9rem; font-weight: 500; margin-bottom: 4px; }
+</style>
+""", unsafe_allow_html=True)
 
-st.markdown("### 参考LPのURL (あれば)")
-reference_url = st.text_input("参考サイトのURL", placeholder="https://example.com/")
-if reference_url:
-    st.caption("🔹 参考URLの解析には時間がかかります。出力までしばらくお待ちください")
+# 入力項目
+st.markdown("### ページ要件")
+page_type = st.selectbox("ページ種別", ["キャンペーンLP", "商品紹介", "ブランドサイト", "その他"])
+elements = st.multiselect("含まれる要素", ["ビジュアル", "モーション", "動画", "フォーム", "お問い合わせ", "試算", "ランディングページ"], default=["ビジュアル"])
+lang_support = st.checkbox("多言語対応あり")
+responsive = st.checkbox("レスポンシブ対応")
+backend_link = st.checkbox("CMS/APIなどとの連携あり")
+seo_required = st.checkbox("SEO/追跡コード対応")
+design_level = st.selectbox("デザインレベル", ["シンプル", "標準", "リッチ"])
+expected_pages = st.number_input("情報量ボリューム(セクション数)", 1, 10, 3)
+delivery_date = st.date_input("納品希望日")
+budget_hint = st.text_input("参考予算(任意)")
 
-# ━━━ 参考サイト解析 ━━━
-reference_info = ""
-if reference_url:
+# 参考URLの入力
+st.markdown("### 参考LPサイト")
+ref_url = st.text_input("参考サイトURL", placeholder="https://...")
+st.caption("\ud83d\udd5b 参考URLの解析には時間がかかります。出力までしばらくお待ちください")
+
+ref_summary = ""
+if ref_url:
     try:
-        res = requests.get(reference_url, timeout=10)
-        soup = BeautifulSoup(res.content, "html.parser")
-        title = soup.title.string.strip() if soup.title else ""
-        keyword_count = len(soup.find_all(["img", "video", "form", "script"]))
-        reference_info = f"\n\n[補足] 指定されたURL（{reference_url}）は「{title}」というタイトルで、画像/動画/JS等 {keyword_count} 要素を含む複雑な構造の可能性があります。"
-    except:
-        reference_info = f"\n\n[補足] 指定されたURL（{reference_url}）は正しく読み取れませんでしたが、類似するLPとして考慮してください。"
+        html = requests.get(ref_url, timeout=10).text
+        soup = BeautifulSoup(html, "html.parser")
+        title = soup.title.string.strip() if soup.title else "(title不明)"
+        tag_count = len(soup.find_all())
+        has_video = bool(soup.find("video"))
+        has_animation = any("animate" in str(tag.get("class", "")) for tag in soup.find_all())
 
-# ━━━ Gemini 見積もり出力 ━━━
-if st.button("📊 Geminiに見積もりを依頼"):
+        ref_summary = f"\n[参考LP構造解析] タイトル: {title}\n- HTMLタグ数: {tag_count}\n- 動画要素: {'あり' if has_video else 'なし'}\n- アニメーション的classの検出: {'あり' if has_animation else 'なし'}\n- ブランド要素の富みから、高度なUI/インタラクションやコーポレート要件を含むと体系して見停もりを行ってください\n"
+    except Exception as e:
+        ref_summary = f"[参考LPの解析に失敗しました]：{e}"  # 安全な出力に留める
+
+# 見積もり作成
+if st.button("📊 Gemini 2.5 Pro で見積もり作成"):
     with st.spinner("AIが見積もりを作成中..."):
         prompt = f"""
-あなたはLP制作のプロフェッショナルです。
-以下の条件をもとに、構成・仕様・参考費用（日本円）の見積もりをHTMLで提示してください。
+あなたはLP制作費用見積もりのプロフェッショナルです。以下の情報をもとに、内訳と約算価格をHTMLで解析して仕様を推定してください。
 
-【LP種別】：{page_type}
-【業種】：{industry}
-【ページ数】：{num_pages}ページ
-【要素】：{', '.join(content_elements) if content_elements else '未指定'}
-【フォーム】：{'あり' if has_form else 'なし'}
-【計測・タグ】：{'あり' if has_tracking else 'なし'}
-【レスポンシブ】：{'あり' if responsive else 'なし'}
-【素材支給】：{'あり' if assets_provided else 'なし'}
-【SEO対応】：{'あり' if seo_consideration else 'なし'}
-【納品日】：{delivery_date}
-【参考予算】：{budget_hint or 'なし'}
-{reference_info}
+---
 
-構成概要・設計意図・各項目ごとの内訳金額・想定工数などを含め、見やすくHTMLで出力してください。
-重要な金額や合計費用には<strong>太字</strong>や色も使ってください。
-        """
-        model = genai.GenerativeModel("gemini-2.0-flash")
+【LP種別】: {page_type}
+【要素】: {', '.join(elements)}
+【多言語対応】: {'あり' if lang_support else 'なし'}
+【レスポンシブ】: {'あり' if responsive else 'なし'}
+【システム連携】: {'あり' if backend_link else 'なし'}
+【SEO/追跡】: {'あり' if seo_required else 'なし'}
+【デザインレベル】: {design_level}
+【情報量ボリューム】: {expected_pages}P
+【納品希望日】: {delivery_date}
+【参考予算】: {budget_hint or 'なし'}
+
+{ref_summary}
+
+---
+
+セクション別に「内訳」「概算金額」を演算し、補足説明を付けたテーブル風HTML表示で表示して下さい。
+"""
+
+        model = genai.GenerativeModel("gemini-2.5-pro-exp-03-25")
         response = model.generate_content(prompt)
+        html_output = response.text
 
-        st.success("📊 GeminiによるLP見積もり")
+        st.success("✅ Gemini 2.5 Pro による見積もり結果")
         st.components.v1.html(f"""
-            <div style='font-family: "Segoe UI", sans-serif; font-size: 15px; line-height: 1.7;'>
-            {response.text}
-            </div>
-        """, height=1000, scrolling=True)
+        <div style='font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7; padding: 10px;'>
+        {html_output}
+        </div>
+        """, height=800, scrolling=True)
