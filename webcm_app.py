@@ -1,7 +1,5 @@
 import streamlit as st
 import google.generativeai as genai
-from weasyprint import HTML
-import tempfile
 
 # 🔐 secrets に登録された APIキーを読み込み
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -74,32 +72,18 @@ if st.button("💡 Geminiに見積もりを依頼"):
 
         model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(prompt)
-        st.session_state["html_output"] = response.text
+        html_output = response.text
 
-# --- 表示とPDF出力 ---
-if "html_output" in st.session_state:
-    html_output = st.session_state["html_output"]
-
-    st.success("✅ Geminiによる見積もり結果")
-    st.components.v1.html(
-        f"""
-        <div style="font-family: 'Arial', sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;">
-            {html_output}
-        </div>
-        """,
-        height=1000,
-        scrolling=True
-    )
-
-    # PDFダウンロード機能
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        HTML(string=html_output).write_pdf(tmp_file.name)
-        with open(tmp_file.name, "rb") as pdf_file:
-            pdf_bytes = pdf_file.read()
-
-        st.download_button(
-            label="📥 見積もりをPDFでダウンロード",
-            data=pdf_bytes,
-            file_name="webcm_estimate.pdf",
-            mime="application/pdf"
+        st.success("✅ Geminiによる見積もり結果")
+        st.components.v1.html(
+            f"""
+            <div style="font-family: 'Arial', sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;">
+                {html_output}
+            </div>
+            """,
+            height=1000,
+            scrolling=True
         )
+
+        # 💬 表示崩れが起きる可能性がある旨の補足
+        st.caption("※ 表示が崩れる場合は、もう一度「Geminiに見積もりを依頼」ボタンを押して再実行してください。")
