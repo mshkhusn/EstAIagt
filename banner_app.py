@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import re
 
 # APIキーの読み込み
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -11,6 +12,18 @@ st.title("バナー見積もりAIエージェント（Gemini 2.0 Flash）")
 st.markdown("""
 <style>
 .small-label { font-size: 0.9rem; font-weight: 500; margin-bottom: 0px; }
+.result-box {
+    background-color: #f9f9f9;
+    padding: 1rem;
+    border-radius: 8px;
+    font-family: "Helvetica", sans-serif;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+.highlight {
+    color: #d62828;
+    font-weight: bold;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -89,5 +102,9 @@ if st.button("💡 Geminiに見積もりを依頼"):
 """
         model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(prompt)
-        st.success("✅ Geminiによる見積もり結果")
-        st.text_area("📋 出力内容", response.text, height=400)
+
+        formatted_output = response.text.strip()
+        formatted_output = re.sub(r'(合計金額.*?)$', r'<span class="highlight">\1</span>', formatted_output, flags=re.MULTILINE)
+
+        st.markdown("### 📋 出力内容（整形表示）")
+        st.markdown(f"<div class='result-box'>{formatted_output}</div>", unsafe_allow_html=True)
