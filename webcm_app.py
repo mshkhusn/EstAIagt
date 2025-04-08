@@ -5,8 +5,8 @@ import google.generativeai as genai
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
-st.set_page_config(page_title="WebCM見算もりAI", layout="centered")
-st.title("WWWWebCM 見算もりAIエージェント（Gemini 2.0 Flash）")
+st.set_page_config(page_title="WebCM見積もりAI", layout="centered")
+st.title("WebCM 見積もりAIエージェント（Gemini 2.0 Flash）")
 
 # --- 入力フォーム ---
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
@@ -72,7 +72,6 @@ if st.button("💡 Geminiに見積もりを依頼"):
 - 備考や注意点も記載
 - フォントはArialを想定
 - 正しいHTML構造で出力してください
-- 出力が崩れる場合は、再実行してください
 """
 
         model = genai.GenerativeModel("gemini-2.0-flash")
