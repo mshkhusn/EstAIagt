@@ -89,5 +89,5 @@ if st.button("💡 Geminiに見積もりを依頼"):
 """
         model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(prompt)
-        st.success("📊 Geminiによる見積もり結果")
+        st.success("✅ Geminiによる見積もり結果")
         st.text_area("📋 出力内容", response.text, height=400)
