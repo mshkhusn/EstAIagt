@@ -6,7 +6,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="バナー見積もりAI", layout="centered")
-st.title("バナー見積もりAIエージェント（Gemini Flash）")
+st.title("バナー見積もりAIエージェント（Gemini 2.0 Flash）")
 
 st.markdown("""
 <style>
