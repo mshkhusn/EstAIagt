@@ -6,7 +6,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="バナー見積もりAI", layout="centered")
-st.title("🧠 バナー見積もりAIエージェント（Gemini Flash）")
+st.title("バナー見積もりAIエージェント（Gemini Flash）")
 
 st.markdown("""
 <style>
@@ -49,12 +49,15 @@ st.markdown(f"**🎯 合計本数：{total_count} 本**")
 st.markdown("### ✏️ 制作情報の入力")
 due_date = st.date_input("納品希望日")
 media = st.text_input("掲載媒体（例：Yahoo!、Google、SNS など）")
-assigned_roles = st.multiselect("必要なスタッフ", ["デザイナー", "アニメーター", "動画編集者", "ディレクター"])
+assigned_roles = st.multiselect("必要なスタッフ", ["デザイナー", "コピーライター", "アニメーター", "動画編集者", "ディレクター"])
 need_copywriting = st.checkbox("キャッチコピー・コピーライティングあり")
 need_translation = st.checkbox("翻訳・多言語対応あり")
 resolution = st.selectbox("解像度の希望", ["通常（72dpi）", "高解像度（150dpi 以上）", "未定"])
 design_level = st.selectbox("デザインのクオリティ感", ["シンプル", "標準", "リッチ"])
 budget_hint = st.text_input("参考予算（任意）")
+assets_provided = st.checkbox("素材支給あり")
+resize_count = st.number_input("リサイズパターン数（異なるサイズへの展開）", 0, 10, 0)
+design_reference = st.checkbox("トンマナ参考資料あり")
 
 # --- Gemini Flash による見積もり生成 ---
 if st.button("💡 Geminiに見積もりを依頼"):
@@ -74,6 +77,9 @@ if st.button("💡 Geminiに見積もりを依頼"):
 【翻訳対応】：{'あり' if need_translation else 'なし'}
 【解像度】：{resolution}
 【デザインクオリティ】：{design_level}
+【素材支給】：{'あり' if assets_provided else 'なし'}
+【リサイズパターン】：{resize_count}種
+【トンマナ資料】：{'あり' if design_reference else 'なし'}
 【参考予算】：{budget_hint or 'なし'}
 
 項目ごとに内訳を示し、日本円で概算金額を記載してください。
