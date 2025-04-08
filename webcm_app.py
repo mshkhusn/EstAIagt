@@ -6,7 +6,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="WebCM見積もりAI", layout="centered")
-st.title("🎬 WebCM 見積もりAIエージェント（Gemini 2.0 Flash）")
+st.title("WebCM 見積もりAIエージェント（Gemini 2.0 Flash）")
 
 # --- 入力フォーム ---
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
