@@ -4,7 +4,7 @@ st.set_page_config(page_title="見積もり制作AIエージェントメニュ�
 
 st.title("見積もり制作AIエージェント")
 
-st.markdown("以下から見積もりアプリを選択してください")
+st.markdown("プロトタイプ公開中　※テスト中のため実際の見積もりには使用しないでください。")
 
 # 各ページへのリンク
 st.markdown("---")
@@ -19,4 +19,4 @@ st.markdown("### LP制作 見積もりAIエージェント（準備中）")
 st.markdown("[LPエージェントを開く](https://estalagt-lp.streamlit.app/)")
 
 st.markdown("---")
-st.caption("※ 上記リンクはデプロイ名・構成に応じて調整してください")
+st.caption("※ 上記はプロトタイプです。実際の見積もりには使用しないでください。")
