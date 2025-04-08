@@ -9,7 +9,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # ━━━ アプリ設定 ━━━
 st.set_page_config(page_title="LP見積もりAI", layout="centered")
-st.title("🌐 LP見積もりAIエージェント")
+st.title("LP見積もりAIエージェント")
 
 st.markdown("### 基本情報")
 page_type = st.selectbox("LPの種類", ["キャンペーンLP", "問合わせ紹介LP", "商品説明LP", "その他"])
