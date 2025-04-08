@@ -4,7 +4,7 @@ st.set_page_config(page_title="見積もり制作AIエージェントメニュ�
 
 st.title("見積もり制作AIエージェント メニュー")
 
-st.markdown("以下から見積もりアプリを選択してください👇")
+st.markdown("以下から見積もりアプリを選択してください")
 
 # 各ページへのリンク
 st.markdown("---")
