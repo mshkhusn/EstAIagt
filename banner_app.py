@@ -44,9 +44,9 @@ for i in range(int(row_count)):
             banner_rows.append({"type": banner_type, "size": size, "qty": qty})
             total_count += qty
 
-st.markdown(f"**🎯 合計本数：{total_count} 本**")
+st.markdown(f"**合計本数：{total_count} 本**")
 
-st.markdown("### ✏️ 制作情報の入力")
+st.markdown("#制作情報の入力")
 due_date = st.date_input("納品希望日")
 media = st.text_input("掲載媒体（例：Yahoo!、Google、SNS など）")
 assigned_roles = st.multiselect("必要なスタッフ", ["デザイナー", "コピーライター", "アニメーター", "動画編集者", "ディレクター"])
