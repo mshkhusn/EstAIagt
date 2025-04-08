@@ -86,16 +86,18 @@ if st.button("💡 Geminiに見積もりを依頼"):
             "- 見積もり表は「項目・詳細・単価・数量・金額（日本円）」形式のテーブルで出力\n"
             "- 合計金額は太字または色付きで強調\n"
             "- 備考や注意点も記載\n"
-            "- 表示フォントはArialを想定"
+            "- 表示フォントはArialを想定\n"
+            "- 正しいHTML構造で出力してください\n"
+            "- **出力が崩れた場合は、再度依頼ボタンを押して試してください。**"
         )
 
         model = genai.GenerativeModel("gemini-2.5-pro-exp-03-25")
         response = model.generate_content(prompt)
         html_output = response.text
 
-        st.success("✅ Geminiによる見積もり結果")
+        st.success("✅ Geminiによる見積もり結果（※崩れる場合は再実行してください）")
         st.components.v1.html(f"""
         <div style='font-family: "Arial", sans-serif; font-size: 15px; line-height: 1.7; padding: 10px;'>
         {html_output}
         </div>
-        """, height=900, scrolling=True)
+        """, height=1200, scrolling=True)
