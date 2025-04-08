@@ -8,7 +8,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="LP見積もりAI", layout="centered")
-st.title("🧾 LP見積もりAIエージェント（Gemini 2.5 Pro）")
+st.title("LP見積もりAIエージェント（Gemini 2.5 Pro）※使用回数制限ありver.")
 
 # --- 基本情報 ---
 st.header("1. 基本情報")
