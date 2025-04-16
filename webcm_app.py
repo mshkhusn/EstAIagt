@@ -10,6 +10,14 @@ st.title("WebCM 見積もりAIエージェント（Gemini 2.0 Flash）")
 
 # --- 入力フォーム ---
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
+
+# 「その他」が選ばれた場合、自由入力フィールドを表示
+if video_duration == "その他":
+    video_duration_custom = st.text_input("尺の長さ（自由記入）を入力してください")
+    final_duration = video_duration_custom or "未入力"
+else:
+    final_duration = video_duration
+
 num_versions = st.number_input("納品本数", 1, 10, 1)
 shoot_days = st.number_input("撮影日数", 1, 10, 2)
 edit_days = st.number_input("編集日数", 1, 10, 3)
@@ -30,6 +38,7 @@ subtitle_langs = st.multiselect("字幕言語", ["日本語", "英語", "その�
 usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
 usage_period = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）")
+extra_notes = st.text_area("その他備考（任意）") 
 
 # --- 出力実行 ---
 if st.button("💡 Geminiに見積もりを依頼"):
@@ -42,7 +51,7 @@ if st.button("💡 Geminiに見積もりを依頼"):
 
 ---
 【WebCM見積もり条件】
-- 尺：{video_duration}
+- 尺：{final_duration}
 - 納品本数：{num_versions}本
 - 撮影日数：{shoot_days}日
 - 編集日数：{edit_days}日
@@ -63,6 +72,7 @@ if st.button("💡 Geminiに見積もりを依頼"):
 - 使用地域：{usage_region}
 - 使用期間：{usage_period}
 - 参考予算：{budget_hint or 'なし'}
+- その他備考：{extra_notes or 'なし'}
 
 ---
 # 出力形式要件
