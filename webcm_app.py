@@ -28,7 +28,10 @@ talent_use = st.checkbox("タレント起用あり")
 staff_roles = st.multiselect("必要なスタッフ", ["制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター", "カメラ", "照明", "スタイリスト", "ヘアメイク", "アシスタント"])
 shoot_location = st.text_input("撮影場所（例：都内スタジオ＋ロケ）")
 kizai = st.multiselect("撮影機材", ["4Kカメラ", "照明", "ドローン", "グリーンバック"])
-set_design = st.checkbox("セット建て・美術装飾あり")
+set_design_quality = st.selectbox(
+    "セット建て・美術装飾の規模", 
+    ["なし", "小（簡易装飾）", "中（通常レベル）", "大（本格セット）"]
+)
 use_cg = st.checkbox("CG・VFXあり")
 use_narration = st.checkbox("ナレーション収録あり")
 use_music = st.selectbox("音楽素材", ["既存ライセンス音源", "オリジナル制作", "未定"])
@@ -62,7 +65,7 @@ if st.button("💡 Geminiに見積もりを依頼"):
 - 必要スタッフ：{', '.join(staff_roles) if staff_roles else '未入力'}
 - 撮影場所：{shoot_location or '未入力'}
 - 撮影機材：{', '.join(kizai) if kizai else 'なし'}
-- セット建て：{'あり' if set_design else 'なし'}
+- セット建て・美術装飾：{set_design_quality}
 - CG・VFX：{'あり' if use_cg else 'なし'}
 - ナレーション：{'あり' if use_narration else 'なし'}
 - 音楽：{use_music}
