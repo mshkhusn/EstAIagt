@@ -99,7 +99,7 @@ prompt = f"""
 """
 
 # --- モデル実行 ---
-if st.button("\ud83d\udca1 見積もりを作成"):
+if st.button("見積もりを作成"):
     with st.spinner("AIが見積もりを作成中です..."):
         if model_choice == "Gemini":
             model = genai.GenerativeModel("gemini-2.0-flash")
