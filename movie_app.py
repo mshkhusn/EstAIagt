@@ -1,13 +1,14 @@
 import streamlit as st
 import google.generativeai as genai
-import openai
+from openai import OpenAI
 
 # --- 認証・設定 ---
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
+
 genai.configure(api_key=GEMINI_API_KEY)
-openai.api_key = OPENAI_API_KEY
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # --- パスワード認証 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
@@ -16,7 +17,7 @@ if password_input != APP_PASSWORD:
     st.warning("認証が必要です")
     st.stop()
 
-st.title("映像制作AIエージェント（Gemini / GPT 切替対応版）")
+st.title("映像制作AIエージェント（Gemini / GPT-4o 切替対応版）")
 
 # --- 入力フォーム ---
 st.header("制作条件の入力")
@@ -106,7 +107,7 @@ if st.button("見積もりを作成"):
             response = model.generate_content(prompt)
             result = response.text
         else:
-            response = openai.chat.completions.create(
+            response = openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
@@ -115,7 +116,7 @@ if st.button("見積もりを作成"):
             )
             result = response.choices[0].message.content
 
-        st.success("\u2705 見積もり結果")
+        st.success("✅ 見積もり結果")
         st.components.v1.html(
             f"""
             <div style='font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;'>
