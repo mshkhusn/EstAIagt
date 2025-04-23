@@ -11,6 +11,8 @@ APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 genai.configure(api_key=GEMINI_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
+st.write("■ OPENAI_API_KEY (先頭10文字):", OPENAI_API_KEY[:10])
+
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
 
 # ③ パスワード認証
