@@ -1,17 +1,20 @@
 import streamlit as st
 import google.generativeai as genai
-import openai
+from openai import OpenAI
 import datetime
 
-# --- 認証・設定 ---
+# --- Streamlit 設定 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
 
+# --- シークレット読み込み ---
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY  = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD    = st.secrets["APP_PASSWORD"]
 
+# Gemini 設定
 genai.configure(api_key=GEMINI_API_KEY)
-openai.api_key = OPENAI_API_KEY
+# GPT 用クライアント初期化
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # --- パスワード認証 ---
 password_input = st.text_input("パスワードを入力してください", type="password")
@@ -25,7 +28,7 @@ st.title("🎬 映像制作AIエージェント（Gemini / GPT 切替対応版�
 st.header("1. 制作条件の入力")
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
 if video_duration == "その他":
-    final_duration = st.text_input("尺の長さ（自由記入）")
+    final_duration = st.text_input("尺の長さ（自由記入）を入力してください")
 else:
     final_duration = video_duration
 
@@ -109,7 +112,7 @@ prompt = f"""
 - 各項目の計算と合計の再確認を行い、金額の整合性が取れていることをチェックした上で出力してください。
 """
 
-# --- モデル実行 ---
+# --- 実行ボタン ---
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中です..."):
         if model_choice == "Gemini":
@@ -117,7 +120,7 @@ if st.button("💡 見積もりを作成"):
                          .generate_content(prompt) \
                          .text
         else:
-            resp = openai.ChatCompletion.create(
+            res = openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
@@ -125,7 +128,7 @@ if st.button("💡 見積もりを作成"):
                 ],
                 temperature=0.0
             )
-            ai_output = resp.choices[0].message.content
+            ai_output = res.choices[0].message.content
 
         st.success("✅ 見積もり結果")
         st.components.v1.html(
