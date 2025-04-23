@@ -1,14 +1,14 @@
 import streamlit as st
 import google.generativeai as genai
-import openai
+from openai import OpenAI
+from datetime import date
 
 # --- 認証・設定 ---
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
-
 genai.configure(api_key=GEMINI_API_KEY)
-openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # --- パスワード認証 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
@@ -26,12 +26,12 @@ final_duration = st.text_input("尺の長さ（自由記入）を入力してく
 num_versions = st.number_input("納品本数", 1, 10, 1)
 shoot_days = st.number_input("撮影日数", 1, 10, 2)
 edit_days = st.number_input("編集日数", 1, 10, 3)
-delivery_date = st.date_input("納品希望日")
+delivery_date = st.date_input("納品希望日", value=date.today())
 cast_main = st.number_input("メインキャスト人数", 0, 10, 1)
 cast_extra = st.number_input("エキストラ人数", 0, 20, 3)
 talent_use = st.checkbox("タレント起用あり")
 staff_roles = st.multiselect("必要なスタッフ", [
-    "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター", 
+    "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター",
     "カメラマン", "照明スタッフ", "スタイリスト", "ヘアメイク", "アシスタント"
 ])
 shoot_location = st.text_input("撮影場所（例：都内スタジオ＋ロケ）")
