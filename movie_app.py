@@ -30,7 +30,7 @@ cast_main = st.number_input("メインキャスト人数", 0, 10, 1)
 cast_extra = st.number_input("エキストラ人数", 0, 20, 3)
 talent_use = st.checkbox("タレント起用あり")
 staff_roles = st.multiselect("必要なスタッフ", [
-    "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター", 
+    "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター",
     "カメラマン", "照明スタッフ", "スタイリスト", "ヘアメイク", "アシスタント"
 ])
 shoot_location = st.text_input("撮影場所（例：都内スタジオ＋ロケ）")
@@ -42,7 +42,7 @@ use_music = st.selectbox("音楽素材", ["既存ライセンス音源", "オリ
 ma_needed = st.checkbox("MAあり")
 deliverables = st.multiselect("納品形式", ["mp4（16:9）", "mp4（1:1）", "mp4（9:16）", "ProRes"])
 subtitle_langs = st.multiselect("字幕言語", ["日本語", "英語", "その他"])
-usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
+target_area = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
 usage_period = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("その他備考（任意）")
@@ -75,7 +75,7 @@ prompt = f"""
 - MA：{'あり' if ma_needed else 'なし'}
 - 納品形式：{', '.join(deliverables) if deliverables else '未定'}
 - 字幕言語：{', '.join(subtitle_langs) if subtitle_langs else '未定'}
-- 使用地域：{usage_region}
+- 使用地域：{target_area}
 - 使用期間：{usage_period}
 - 参考予算：{budget_hint or 'なし'}
 - その他備考：{extra_notes or 'なし'}
@@ -106,7 +106,7 @@ if st.button("見積もりを作成"):
             response = model.generate_content(prompt)
             result = response.text
         else:
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
