@@ -6,9 +6,7 @@ from openai import OpenAI
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
-
 genai.configure(api_key=GEMINI_API_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # --- パスワード認証 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
@@ -53,9 +51,6 @@ model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o"])
 prompt = f"""
 あなたは広告制作費のプロフェッショナルな見積もりエージェントです。
 以下の条件に基づいて、映像制作に必要な費用を詳細に見積もってください。
-予算、納期、仕様、スタッフ構成、撮影条件などから、実務に即した内容で正確かつ論理的に推論してください。
-短納期である場合や仕様が複雑な場合には、工数や費用が増える点も加味してください。
-
 ---
 【映像制作見積もり条件】
 - 尺：{final_duration}
@@ -80,23 +75,6 @@ prompt = f"""
 - 使用期間：{usage_period}
 - 参考予算：{budget_hint or 'なし'}
 - その他備考：{extra_notes or 'なし'}
-
----
-# 出力形式要件
-- HTML + Markdown形式で読みやすく出力
-- 見積もり表は「項目名・詳細・単価・数量・金額（日本円）」のテーブルで出力
-- 合計金額は太字または色付きで強調
-- 備考や注意点も記載
-- フォントはArialを想定
-- 正しいHTML構造で出力してください
-
-# 見積もり出力における注意点
-- 各項目の「単価 × 数量 = 金額」を正確に計算してください。
-- 最後に全項目の金額を合算し、正確な合計金額（税抜）を表示してください。
-- 合計金額には端数処理（円未満切り捨て／四捨五入）は行わず、正確に足し算してください。
-- 金額は必ず日本円（円単位）で表示してください。
-- 合計金額は見やすく太字または色付きで強調してください。
-- 各項目の計算と合計の再確認を行い、金額の整合性が取れていることをチェックした上で出力してください。
 """
 
 # --- モデル実行 ---
@@ -107,7 +85,8 @@ if st.button("見積もりを作成"):
             response = model.generate_content(prompt)
             result = response.text
         else:
-            response = openai_client.chat.completions.create(
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
@@ -116,7 +95,7 @@ if st.button("見積もりを作成"):
             )
             result = response.choices[0].message.content
 
-        st.success("✅ 見積もり結果")
+        st.success("\u2705 見積もり結果")
         st.components.v1.html(
             f"""
             <div style='font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;'>
