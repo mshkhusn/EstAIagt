@@ -6,13 +6,16 @@ from openai import OpenAI
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
+# Gemini 設定
 genai.configure(api_key=GEMINI_API_KEY)
+# GPT-4o クライアント設定
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # --- パスワード認証 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
 password_input = st.text_input("パスワードを入力してください", type="password")
 if password_input != APP_PASSWORD:
-    st.warning("認証が必要です")
+    st.warning("認証が必要です。正しいパスワードを入力してください。")
     st.stop()
 
 st.title("映像制作AIエージェント（Gemini / GPT-4o 切替対応版）")
@@ -41,7 +44,7 @@ use_music = st.selectbox("音楽素材", ["既存ライセンス音源", "オリ
 ma_needed = st.checkbox("MAあり")
 deliverables = st.multiselect("納品形式", ["mp4（16:9）", "mp4（1:1）", "mp4（9:16）", "ProRes"])
 subtitle_langs = st.multiselect("字幕言語", ["日本語", "英語", "その他"])
-target_area = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
+usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
 usage_period = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("その他備考（任意）")
@@ -51,6 +54,9 @@ model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o"])
 prompt = f"""
 あなたは広告制作費のプロフェッショナルな見積もりエージェントです。
 以下の条件に基づいて、映像制作に必要な費用を詳細に見積もってください。
+予算、納期、仕様、スタッフ構成、撮影条件などから、実務に即した内容で正確かつ論理的に推論してください。
+短納期や複雑仕様の場合、工数・費用が増える点も考慮してください。
+
 ---
 【映像制作見積もり条件】
 - 尺：{final_duration}
@@ -61,32 +67,48 @@ prompt = f"""
 - メインキャスト人数：{cast_main}人
 - エキストラ人数：{cast_extra}人
 - タレント：{'あり' if talent_use else 'なし'}
-- 必要スタッフ：{', '.join(staff_roles) if staff_roles else '未入力'}
-- 撮影場所：{shoot_location or '未入力'}
+- 必要スタッフ：{', '.join(staff_roles) if staff_roles else '未指定'}
+- 撮影場所：{shoot_location or '未指定'}
 - 撮影機材：{', '.join(kizai) if kizai else 'なし'}
 - セット建て・美術装飾：{set_design_quality}
 - CG・VFX：{'あり' if use_cg else 'なし'}
 - ナレーション：{'あり' if use_narration else 'なし'}
 - 音楽：{use_music}
 - MA：{'あり' if ma_needed else 'なし'}
-- 納品形式：{', '.join(deliverables) if deliverables else '未定'}
-- 字幕言語：{', '.join(subtitle_langs) if subtitle_langs else '未定'}
-- 使用地域：{target_area}
+- 納品形式：{', '.join(deliverables) if deliverables else '未指定'}
+- 字幕言語：{', '.join(subtitle_langs) if subtitle_langs else '未指定'}
+- 使用地域：{usage_region}
 - 使用期間：{usage_period}
 - 参考予算：{budget_hint or 'なし'}
 - その他備考：{extra_notes or 'なし'}
+
+---
+# 出力形式要件
+- HTML + Markdown形式で読みやすく出力
+- 見積もり表は「項目名・詳細・単価・数量・金額（日本円）」のテーブルで出力
+- 合計金額は太字や色付きで強調
+- 備考や注意点を記載
+- フォントはArial想定
+- 正しいHTML構造で出力
+
+# 注意点
+- 各項目の「単価 × 数量 = 金額」を正確に計算
+- 全項目の金額を合算し、正確な合計金額（税抜）を表示
+- 端数処理なしで正しく足し算
+- 日本円（円単位）で表示
+- 合計金額を太字や色付きで見やすく強調
+- 計算と合計を再チェックし、金額の整合性を保証
 """
 
 # --- モデル実行 ---
-if st.button("見積もりを作成"):
+if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中です..."):
         if model_choice == "Gemini":
             model = genai.GenerativeModel("gemini-2.0-flash")
             response = model.generate_content(prompt)
             result = response.text
         else:
-            client = OpenAI(api_key=OPENAI_API_KEY)
-            response = client.chat.completions.create(
+            response = openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
@@ -95,10 +117,10 @@ if st.button("見積もりを作成"):
             )
             result = response.choices[0].message.content
 
-        st.success("\u2705 見積もり結果")
+        st.success("✅ 見積もり結果")
         st.components.v1.html(
             f"""
-            <div style='font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;'>
+            <div style='font-family: Arial, sans-serif; font-size:15px; line-height:1.6; padding:10px;'>
                 {result}
             </div>
             """,
