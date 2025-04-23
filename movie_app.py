@@ -46,7 +46,7 @@ usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", 
 usage_period = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("その他備考（任意）")
-model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4"])  # モデル選択
+model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o"])  # モデル選択
 
 # --- プロンプト生成 ---
 prompt = f"""
@@ -99,17 +99,19 @@ prompt = f"""
 """
 
 # --- モデル実行 ---
-if st.button("💡 見積もりを作成"):
+if st.button("\U0001F4A1 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中です..."):
         if model_choice == "Gemini":
             model = genai.GenerativeModel("gemini-2.0-flash")
             response = model.generate_content(prompt)
             result = response.text
         else:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[{"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
-                         {"role": "user", "content": prompt}],
+            response = openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
+                    {"role": "user", "content": prompt}
+                ],
                 temperature=0.7
             )
             result = response.choices[0].message.content
