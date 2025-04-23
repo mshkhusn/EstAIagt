@@ -13,9 +13,6 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
 
-# —🔧（任意）デバッグ用: キーが正しく読めているか確認—
-# st.write("OpenAI Key Prefix:", OPENAI_API_KEY[:8])
-
 # ③ パスワード認証
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
@@ -24,12 +21,101 @@ if password != APP_PASSWORD:
 
 st.title("映像制作AIエージェント（Gemini / GPT 切替）")
 
-# ④ フォーム入力（あなたの既存のコードを流用してください）
-model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o"])
-# （その他の入力欄…）
+# ④ フォーム入力
+st.header("制作条件の入力")
+video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
+final_duration = (
+    st.text_input("尺の長さ（自由記入）を入力してください")
+    if video_duration == "その他"
+    else video_duration
+)
+num_versions  = st.number_input("納品本数", 1, 10, 1)
+shoot_days    = st.number_input("撮影日数", 1, 10, 2)
+edit_days     = st.number_input("編集日数", 1, 10, 3)
+delivery_date = st.date_input("納品希望日")
+cast_main     = st.number_input("メインキャスト人数", 0, 10, 1)
+cast_extra    = st.number_input("エキストラ人数", 0, 20, 0)
+talent_use    = st.checkbox("タレント起用あり")
+staff_roles   = st.multiselect(
+    "必要なスタッフ",
+    [
+        "制作プロデューサー",
+        "制作プロジェクトマネージャー",
+        "ディレクター",
+        "カメラマン",
+        "照明スタッフ",
+        "スタイリスト",
+        "ヘアメイク",
+        "アシスタント",
+    ],
+)
+shoot_location    = st.text_input("撮影場所（例：都内スタジオ＋ロケ）")
+kizai             = st.multiselect("撮影機材", ["4Kカメラ", "照明", "ドローン", "グリーンバック"])
+set_design_quality = st.selectbox(
+    "セット建て・美術装飾の規模",
+    ["なし", "小（簡易装飾）", "中（通常レベル）", "大（本格セット）"],
+)
+use_cg        = st.checkbox("CG・VFXあり")
+use_narration = st.checkbox("ナレーション収録あり")
+use_music     = st.selectbox("音楽素材", ["既存ライセンス音源", "オリジナル制作", "未定"])
+ma_needed     = st.checkbox("MAあり")
+deliverables  = st.multiselect("納品形式", ["mp4（16:9）", "mp4（1:1）", "mp4（9:16）", "ProRes"])
+subtitle_langs = st.multiselect("字幕言語", ["日本語", "英語", "その他"])
+usage_region  = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
+usage_period  = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
+budget_hint   = st.text_input("参考予算（任意）")
+extra_notes   = st.text_area("その他備考（任意）")
+model_choice  = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o"])
 
-# ⑤ プロンプト組み立て（あなたの既存プロンプトをここで `prompt` という変数にセット）
-# prompt = f"""…"""
+# ⑤ プロンプト生成（必ずボタン外で行い、prompt 変数を定義しておく）
+prompt = f"""
+あなたは広告制作費のプロフェッショナルな見積もりエージェントです。
+以下の条件に基づいて、映像制作に必要な費用を詳細に見積もってください。
+予算、納期、仕様、スタッフ構成、撮影条件などから、実務に即した内容で正確かつ論理的に推論してください。
+短納期である場合や仕様が複雑な場合には、工数や費用が増える点も加味してください。
+
+---
+【映像制作見積もり条件】
+- 尺：{final_duration}
+- 納品本数：{num_versions}本
+- 撮影日数：{shoot_days}日
+- 編集日数：{edit_days}日
+- 納品希望日：{delivery_date}
+- メインキャスト人数：{cast_main}人
+- エキストラ人数：{cast_extra}人
+- タレント：{'あり' if talent_use else 'なし'}
+- 必要スタッフ：{', '.join(staff_roles) if staff_roles else 'なし'}
+- 撮影場所：{shoot_location or 'なし'}
+- 撮影機材：{', '.join(kizai) if kizai else 'なし'}
+- セット建て・美術装飾：{set_design_quality}
+- CG・VFX：{'あり' if use_cg else 'なし'}
+- ナレーション：{'あり' if use_narration else 'なし'}
+- 音楽：{use_music}
+- MA：{'あり' if ma_needed else 'なし'}
+- 納品形式：{', '.join(deliverables) if deliverables else 'なし'}
+- 字幕言語：{', '.join(subtitle_langs) if subtitle_langs else 'なし'}
+- 使用地域：{usage_region}
+- 使用期間：{usage_period}
+- 参考予算：{budget_hint or 'なし'}
+- その他備考：{extra_notes or 'なし'}
+
+---
+# 出力形式要件
+- HTML + Markdown形式で読みやすく出力
+- 見積もり表は「項目名・詳細・単価・数量・金額（日本円）」のテーブルで出力
+- 合計金額は太字または色付きで強調
+- 備考や注意点も記載
+- フォントはArialを想定
+- 正しいHTML構造で出力してください
+
+# 見積もり出力における注意点
+- 各項目の「単価 × 数量 = 金額」を正確に計算してください。
+- 最後に全項目の金額を合算し、正確な合計金額（税抜）を表示してください。
+- 端数処理は行わず、正確に足し算してください。
+- 金額は必ず日本円単位で表示してください。
+- 合計金額は強調して見やすくしてください。
+- 出力前に計算と合計を再確認し、整合性が取れていることをチェックしてください。
+"""
 
 # ⑥ モデル呼び出し
 if st.button("見積もりを作成"):
@@ -43,13 +129,13 @@ if st.button("見積もりを作成"):
                 model="gpt-4o",
                 messages=[
                     {"role":"system", "content":"あなたは広告映像の見積もりアシスタントです。"},
-                    {"role":"user",   "content": prompt}
+                    {"role":"user",   "content":prompt}
                 ],
                 temperature=0.7,
             )
             result = resp.choices[0].message.content
 
-        st.markdown("✅ **見積もり結果**")
+        st.success("✅ 見積もり結果")
         st.components.v1.html(
             f"<div style='font-family:Arial;line-height:1.6'>{result}</div>",
             height=800
