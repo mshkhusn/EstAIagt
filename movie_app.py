@@ -99,14 +99,14 @@ prompt = f"""
 """
 
 # --- モデル実行 ---
-if st.button("💡 見積もりを作成"):
+if st.button("\ud83d\udca1 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中です..."):
         if model_choice == "Gemini":
             model = genai.GenerativeModel("gemini-2.0-flash")
             response = model.generate_content(prompt)
             result = response.text
         else:
-            response = openai.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "あなたは広告映像の見積もりアシスタントです。"},
@@ -115,7 +115,7 @@ if st.button("💡 見積もりを作成"):
             )
             result = response.choices[0].message.content
 
-        st.success("✅ 見積もり結果")
+        st.success("\u2705 見積もり結果")
         st.components.v1.html(
             f"""
             <div style='font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;'>
