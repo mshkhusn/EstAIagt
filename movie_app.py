@@ -2,20 +2,24 @@ import streamlit as st
 import google.generativeai as genai
 from openai import OpenAI
 
-# ① Secrets の読み込み
+# ─── 1. ページ設定は必ず一番最初 ───────────────────────────────
+st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
+# ────────────────────────────────────────────────────────────────
+
+# 2. Secrets の読み込み
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 
-# ② 各種クライアント初期化
+# 3. AI クライアント初期化
 genai.configure(api_key=GEMINI_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
+# ── デバッグ用：キーの読み込み確認（必要なら消してください） ─────────
 st.write("■ OPENAI_API_KEY (先頭10文字):", OPENAI_API_KEY[:10])
+# ────────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
-
-# ③ パスワード認証
+# 4. パスワード認証
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("認証が必要です")
@@ -23,7 +27,7 @@ if password != APP_PASSWORD:
 
 st.title("映像制作AIエージェント（Gemini / GPT 切替）")
 
-# ④ フォーム入力
+# 5. 入力フォーム
 st.header("制作条件の入力")
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
 final_duration = (
@@ -69,7 +73,7 @@ budget_hint   = st.text_input("参考予算（任意）")
 extra_notes   = st.text_area("その他備考（任意）")
 model_choice  = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o"])
 
-# ⑤ プロンプト生成（必ずボタン外で行い、prompt 変数を定義しておく）
+# 6. プロンプト生成（ボタン外で定義しておく）
 prompt = f"""
 あなたは広告制作費のプロフェッショナルな見積もりエージェントです。
 以下の条件に基づいて、映像制作に必要な費用を詳細に見積もってください。
@@ -119,7 +123,7 @@ prompt = f"""
 - 出力前に計算と合計を再確認し、整合性が取れていることをチェックしてください。
 """
 
-# ⑥ モデル呼び出し
+# 7. モデル呼び出し＆表示
 if st.button("見積もりを作成"):
     with st.spinner("AIが見積もりを作成中…"):
         if model_choice == "Gemini":
