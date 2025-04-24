@@ -2,6 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 from openai import OpenAI
 import re
+import pandas as pd
+from io import BytesIO
+
 
 # --- ページ設定 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
@@ -214,3 +217,31 @@ if st.button("💡 見積もりを作成"):
         if not is_correct:
             st.error(f"⚠️ 合計金額に不整合があります：表示 = {displayed_total:,}円 / 再計算 = {calc_total:,}円")
         st.components.v1.html(strip_code_fence(final), height=900, scrolling=True)
+# --- Excel変換処理 ---
+def convert_to_excel(estimate_text):
+    lines = estimate_text.strip().split("\n")
+    data = []
+    for line in lines:
+        match = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
+        if match:
+            item = match.group(1).strip()
+            unit_price = int(match.group(2).replace(",", ""))
+            quantity = int(match.group(3))
+            total = int(match.group(4).replace(",", ""))
+            data.append([item, unit_price, quantity, total])
+    df = pd.DataFrame(data, columns=["項目", "単価（円）", "数量", "金額（円）"])
+    return df
+
+# --- DataFrame → Excelバイナリ
+df = convert_to_excel(resB)
+buffer = BytesIO()
+df.to_excel(buffer, index=False, sheet_name="見積もり")
+buffer.seek(0)
+
+# --- ダウンロードボタン表示
+st.download_button(
+    label="📥 Excelでダウンロード",
+    data=buffer,
+    file_name="見積もり.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
