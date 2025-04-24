@@ -26,7 +26,7 @@ if "final_html" not in st.session_state:
     st.session_state["final_html"] = None
 
 # --- 認証 ---
-st.title("映像制作AIエージェント（3フェーズ＋HTML表示修正版）")
+st.title("映像制作AIエージェントβ")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("🔒 認証が必要です")
