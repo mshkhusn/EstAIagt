@@ -22,6 +22,8 @@ if "resA" not in st.session_state:
     st.session_state["resA"] = None
 if "resB" not in st.session_state:
     st.session_state["resB"] = None
+if "final_html" not in st.session_state:
+    st.session_state["final_html"] = None
 
 # --- 認証 ---
 st.title("映像制作AIエージェント（3フェーズ＋HTML表示修正版）")
@@ -162,7 +164,7 @@ def extract_and_validate_total(estimate_text):
                 return total_displayed, total_calc, total_displayed == total_calc
     return 0, total_calc, False
 
-# --- ボタン処理（見積もり一括処理をスピナー内に統合） ---
+# --- ボタン処理 ---
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中…"):
         resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text if model_choice == "Gemini" else openai_client.chat.completions.create(model=model, messages=[{"role": "user", "content": promptA}]).choices[0].message.content
@@ -174,23 +176,28 @@ if st.button("💡 見積もりを作成"):
 
         st.session_state["resA"] = resA
         st.session_state["resB"] = resB
+        st.session_state["final_html"] = final
 
-        st.success("✅ 見積もり結果")
+# --- 結果表示 ---
+if st.session_state["final_html"]:
+    st.success("✅ 見積もり結果")
+    if st.session_state["resB"]:
+        shown, calc, ok = extract_and_validate_total(st.session_state["resB"])
         if not ok:
             st.error(f"⚠️ 合計金額に不整合があります：表示 = {shown:,}円 / 再計算 = {calc:,}円")
-        st.components.v1.html(final.strip().removeprefix("```html").removesuffix("```"), height=900, scrolling=True)
 
-        def convert_to_excel(text):
-            data = []
-            for line in text.split("\n"):
-                m = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
-                if m:
-                    data.append([m.group(1), int(m.group(2).replace(",", "")), int(m.group(3)), int(m.group(4).replace(",", ""))])
-            return pd.DataFrame(data, columns=["項目", "単価（円）", "数量", "金額（円）"])
+    st.components.v1.html(st.session_state["final_html"].strip().removeprefix("```html").removesuffix("```"), height=900, scrolling=True)
 
-        df = convert_to_excel(resB)
-        buf = BytesIO()
-        df.to_excel(buf, index=False, sheet_name="見積もり")
-        buf.seek(0)
-        st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    def convert_to_excel(text):
+        data = []
+        for line in text.split("\n"):
+            m = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
+            if m:
+                data.append([m.group(1), int(m.group(2).replace(",", "")), int(m.group(3)), int(m.group(4).replace(",", ""))])
+        return pd.DataFrame(data, columns=["項目", "単価（円）", "数量", "金額（円）"])
 
+    df = convert_to_excel(st.session_state["resB"])
+    buf = BytesIO()
+    df.to_excel(buf, index=False, sheet_name="見積もり")
+    buf.seek(0)
+    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
