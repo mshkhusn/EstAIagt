@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 from openai import OpenAI
+import re
 
 # --- ページ設定 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
@@ -123,6 +124,27 @@ promptC_template = """
 - HTML構造は正確に
 """
 
+# --- 合計金額検算関数 ---
+def extract_and_validate_total(estimate_text):
+    lines = estimate_text.strip().split("\n")
+    item_lines = [line for line in lines if "＝" in line and "円" in line]
+    total_calc = 0
+    for line in item_lines:
+        match = re.search(r"単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
+        if match:
+            unit_price = int(match.group(1).replace(",", ""))
+            quantity = int(match.group(2))
+            calc_amount = unit_price * quantity
+            total_calc += calc_amount
+    total_displayed = 0
+    for line in lines:
+        if "合計" in line and "円" in line:
+            match_total = re.search(r"合計.*?([0-9,]+)円", line)
+            if match_total:
+                total_displayed = int(match_total.group(1).replace(",", ""))
+                break
+    return total_displayed, total_calc, total_displayed == total_calc
+
 # --- 実行 ---
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中…"):
@@ -148,6 +170,9 @@ if st.button("💡 見積もりを作成"):
             )
             resB = respB.choices[0].message.content
 
+        # 合計金額検算
+        displayed_total, calc_total, is_correct = extract_and_validate_total(resB)
+
         # Prompt C（HTML出力）
         promptC = promptC_template.format(items_a=resA, items_b=resB)
         if model_choice == "Gemini":
@@ -168,4 +193,7 @@ if st.button("💡 見積もりを作成"):
             return s
 
         st.success("✅ 見積もり結果")
+        if not is_correct:
+            st.error(f"⚠️ 合計金額に不整合があります：表示 = {displayed_total:,}円 / 再計算 = {calc_total:,}円")
         st.components.v1.html(strip_code_fence(final), height=900, scrolling=True)
+
