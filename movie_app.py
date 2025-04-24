@@ -52,7 +52,7 @@ usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", 
 usage_period = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）※予算を入れるとその金額に近づけて調整します。出力された見積もり金額が相場と異なると感じた場合は、参考予算を入力して再調整をお試しください。")
 extra_notes = st.text_area("その他備考（任意）※案件の概要やキャスティング手配の有無など、重視したいポイントなどをご記入いただくと、より精度の高い見積もりが可能になります")
-model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o", "GPT-4.1", "GPT-4o-mini"])
+model_choice = st.selectbox("使用するAIモデル　※Gemini、GPT-4o、GPT-4.1、GPT-4o-miniを選べます。", ["Gemini", "GPT-4o", "GPT-4.1", "GPT-4o-mini"])
 
 # --- プロンプト A ---
 promptA = f"""
