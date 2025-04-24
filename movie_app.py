@@ -138,111 +138,77 @@ promptC_template = """
 - HTML構造は正確に
 """
 
-# --- 合計金額検算関数 ---
+# --- 合計金額チェック関数 ---
 def extract_and_validate_total(estimate_text):
     lines = estimate_text.strip().split("\n")
-    item_lines = [line for line in lines if "＝" in line and "円" in line]
-    total_calc = 0
-    for line in item_lines:
-        match = re.search(r"単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
-        if match:
-            unit_price = int(match.group(1).replace(",", ""))
-            quantity = int(match.group(2))
-            calc_amount = unit_price * quantity
-            total_calc += calc_amount
-    total_displayed = 0
-    for line in lines:
-        if "合計" in line and "円" in line:
-            match_total = re.search(r"合計.*?([0-9,]+)円", line)
-            if match_total:
-                total_displayed = int(match_total.group(1).replace(",", ""))
-                break
-    return total_displayed, total_calc, total_displayed == total_calc
+    item_lines = [l for l in lines if "＝" in l and "円" in l]
+    total_calc = sum(
+        int(m.group(1).replace(",", "")) * int(m.group(2))
+        for l in item_lines if (m := re.search(r"単価([0-9,]+)円×数量([0-9]+)", l))
+    )
+    for l in lines:
+        if "合計" in l and "円" in l:
+            m = re.search(r"合計.*?([0-9,]+)円", l)
+            if m:
+                total_displayed = int(m.group(1).replace(",", ""))
+                return total_displayed, total_calc, total_displayed == total_calc
+    return 0, total_calc, False
 
-# --- 実行 ---
-if st.button("💡 見積もりを作成"):
+# --- 実行ボタン押下時 ---
+if st.button("\U0001f4a1 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中…"):
+        model = "gpt-4o" if model_choice == "GPT-4o" else "gpt-4o-mini" if model_choice == "GPT-4o-mini" else "gpt-4.1"
 
-        # モデル名分岐（Gemini 以外）
-        model = (
-            "gpt-4o" if model_choice == "GPT-4o" else
-            "gpt-4o-mini" if model_choice == "GPT-4o-mini" else
-            "gpt-4.1"
-        )
-
-        # Prompt A
         if model_choice == "Gemini":
             resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text
         else:
-            respA = openai_client.chat.completions.create(
+            resA = openai_client.chat.completions.create(
                 model=model,
-                messages=[{"role":"user","content":promptA}]
-            )
-            resA = respA.choices[0].message.content
+                messages=[{"role": "user", "content": promptA}]
+            ).choices[0].message.content
 
-        # Prompt B
         fullB = promptB + "\n" + resA
         if model_choice == "Gemini":
             resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text
         else:
-            respB = openai_client.chat.completions.create(
+            resB = openai_client.chat.completions.create(
                 model=model,
-                messages=[{"role":"user","content":fullB}]
-            )
-            resB = respB.choices[0].message.content
+                messages=[{"role": "user", "content": fullB}]
+            ).choices[0].message.content
 
-        # 合計金額検算
-        displayed_total, calc_total, is_correct = extract_and_validate_total(resB)
+        st.session_state["resA"] = resA
+        st.session_state["resB"] = resB
 
-        # Prompt C（HTML出力）
-        promptC = promptC_template.format(items_a=resA, items_b=resB)
-        if model_choice == "Gemini":
-            final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text
-        else:
-            respC = openai_client.chat.completions.create(
-                model=model,
-                messages=[{"role":"user","content":promptC}]
-            )
-            final = respC.choices[0].message.content
+# --- 出力ブロック（セッションチェック） ---
+if "resB" in st.session_state:
+    resA = st.session_state["resA"]
+    resB = st.session_state["resB"]
+    displayed_total, calc_total, is_correct = extract_and_validate_total(resB)
 
-        def strip_code_fence(s: str) -> str:
-            s = s.strip()
-            if s.startswith("```html"):
-                s = s[len("```html"):].lstrip()
-            if s.endswith("```"):
-                s = s[:-3].rstrip()
-            return s
+    promptC = promptC_template.format(items_a=resA, items_b=resB)
+    final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text if model_choice == "Gemini" else openai_client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": promptC}]
+    ).choices[0].message.content
 
-        st.success("✅ 見積もり結果")
-        if not is_correct:
-            st.error(f"⚠️ 合計金額に不整合があります：表示 = {displayed_total:,}円 / 再計算 = {calc_total:,}円")
-        st.components.v1.html(strip_code_fence(final), height=900, scrolling=True)
+    def strip_code_fence(s):
+        return s.strip().removeprefix("```html").removesuffix("```").strip()
 
-        # ↓↓↓ここからExcelダウンロード処理を追加（インデント注意）↓↓↓
+    st.success("✅ 見積もり結果")
+    if not is_correct:
+        st.error(f"⚠️ 合計金額に不整合があります：表示 = {displayed_total:,}円 / 再計算 = {calc_total:,}円")
+    st.components.v1.html(strip_code_fence(final), height=900, scrolling=True)
 
-        # --- Excel変換処理 ---
-        def convert_to_excel(estimate_text):
-            lines = estimate_text.strip().split("\n")
-            data = []
-            for line in lines:
-                match = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
-                if match:
-                    item = match.group(1).strip()
-                    unit_price = int(match.group(2).replace(",", ""))
-                    quantity = int(match.group(3))
-                    total = int(match.group(4).replace(",", ""))
-                    data.append([item, unit_price, quantity, total])
-            df = pd.DataFrame(data, columns=["項目", "単価（円）", "数量", "金額（円）"])
-            return df
+    def convert_to_excel(text):
+        data = []
+        for l in text.split("\n"):
+            m = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", l)
+            if m:
+                data.append([m.group(1), int(m.group(2).replace(",", "")), int(m.group(3)), int(m.group(4).replace(",", ""))])
+        return pd.DataFrame(data, columns=["項目", "単価（円）", "数量", "金額（円）"])
 
-        df = convert_to_excel(resB)
-        buffer = BytesIO()
-        df.to_excel(buffer, index=False, sheet_name="見積もり")
-        buffer.seek(0)
-
-        st.download_button(
-            label="📥 Excelでダウンロード",
-            data=buffer,
-            file_name="見積もり.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    df = convert_to_excel(resB)
+    buffer = BytesIO()
+    df.to_excel(buffer, index=False, sheet_name="見積もり")
+    buffer.seek(0)
+    st.download_button("📥 Excelでダウンロード", buffer, "見積もり.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
