@@ -52,7 +52,7 @@ usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", 
 usage_period = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("その他備考（任意）")
-model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o", "GPT-4.1"])
+model_choice = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o", "GPT-4.1", "GPT-4o-mini"])
 
 # --- プロンプト A ---
 promptA = f"""
@@ -149,12 +149,19 @@ def extract_and_validate_total(estimate_text):
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もりを作成中…"):
 
+        # モデル名分岐（Gemini 以外）
+        model = (
+            "gpt-4o" if model_choice == "GPT-4o" else
+            "gpt-4o-mini" if model_choice == "GPT-4o-mini" else
+            "gpt-4.1"
+        )
+
         # Prompt A
         if model_choice == "Gemini":
             resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text
         else:
             respA = openai_client.chat.completions.create(
-                model="gpt-4o" if model_choice == "GPT-4o" else "gpt-4.1",
+                model=model,
                 messages=[{"role":"user","content":promptA}]
             )
             resA = respA.choices[0].message.content
@@ -165,7 +172,7 @@ if st.button("💡 見積もりを作成"):
             resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text
         else:
             respB = openai_client.chat.completions.create(
-                model="gpt-4o" if model_choice == "GPT-4o" else "gpt-4.1",
+                model=model,
                 messages=[{"role":"user","content":fullB}]
             )
             resB = respB.choices[0].message.content
@@ -179,7 +186,7 @@ if st.button("💡 見積もりを作成"):
             final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text
         else:
             respC = openai_client.chat.completions.create(
-                model="gpt-4o" if model_choice == "GPT-4o" else "gpt-4.1",
+                model=model,
                 messages=[{"role":"user","content":promptC}]
             )
             final = respC.choices[0].message.content
@@ -196,4 +203,3 @@ if st.button("💡 見積もりを作成"):
         if not is_correct:
             st.error(f"⚠️ 合計金額に不整合があります：表示 = {displayed_total:,}円 / 再計算 = {calc_total:,}円")
         st.components.v1.html(strip_code_fence(final), height=900, scrolling=True)
-
