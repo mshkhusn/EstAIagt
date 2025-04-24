@@ -18,8 +18,10 @@ genai.configure(api_key=GEMINI_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # --- セッション状態の初期化 ---
-if "processing" not in st.session_state:
-    st.session_state["processing"] = False
+if "resA" not in st.session_state:
+    st.session_state["resA"] = None
+if "resB" not in st.session_state:
+    st.session_state["resB"] = None
 
 # --- 認証 ---
 st.title("映像制作AIエージェント（3フェーズ＋HTML表示修正版）")
@@ -64,6 +66,8 @@ usage_period = st.selectbox("使用期間", ["3ヶ月","6ヶ月", "1年", "2年"
 budget_hint = st.text_input("参考予算（任意）※予算を入れるとその金額に近づけて調整します。出力された見積もり金額が相場と異なると感じた場合は、参考予算を入力して再調整をお試しください。")
 extra_notes = st.text_area("その他備考（任意）※案件の概要やキャスティング手配の有無など、重視したいポイントなどをご記入いただくと、より精度の高い見積もりが可能になります")
 model_choice = st.selectbox("使用するAIモデル　※Gemini、GPT-4o、GPT-4.1、GPT-4o-miniを選べます。", ["Gemini", "GPT-4o", "GPT-4.1", "GPT-4o-mini"])
+
+model = "gpt-4o" if model_choice == "GPT-4o" else "gpt-4o-mini" if model_choice == "GPT-4o-mini" else "gpt-4.1"
 
 # --- プロンプト A ---
 promptA = f"""
@@ -158,59 +162,38 @@ def extract_and_validate_total(estimate_text):
                 return total_displayed, total_calc, total_displayed == total_calc
     return 0, total_calc, False
 
-# --- ボタンで処理開始 ---
+# --- ボタン処理 ---
 if st.button("💡 見積もりを作成"):
-    st.session_state["processing"] = True
-
-# --- 見積もり処理 ---
-if st.session_state.get("processing"):
     with st.spinner("AIが見積もりを作成中…"):
-        model = "gpt-4o" if model_choice == "GPT-4o" else "gpt-4o-mini" if model_choice == "GPT-4o-mini" else "gpt-4.1"
-        resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text if model_choice == "Gemini" else openai_client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": promptA}]
-        ).choices[0].message.content
-
+        resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text if model_choice == "Gemini" else openai_client.chat.completions.create(model=model, messages=[{"role": "user", "content": promptA}]).choices[0].message.content
         fullB = promptB + "\n" + resA
-        resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text if model_choice == "Gemini" else openai_client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": fullB}]
-        ).choices[0].message.content
-
-        # ここでセッションに保存して、processing を False に
+        resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text if model_choice == "Gemini" else openai_client.chat.completions.create(model=model, messages=[{"role": "user", "content": fullB}]).choices[0].message.content
         st.session_state["resA"] = resA
         st.session_state["resB"] = resB
-        st.session_state["processing"] = False
 
-# --- 出力表示 ---
-if "resB" in st.session_state:
+# --- 結果表示 ---
+if st.session_state["resB"]:
     resA = st.session_state["resA"]
     resB = st.session_state["resB"]
-    displayed_total, calc_total, is_correct = extract_and_validate_total(resB)
+    shown, calc, ok = extract_and_validate_total(resB)
     promptC = promptC_template.format(items_a=resA, items_b=resB)
-    final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text if model_choice == "Gemini" else openai_client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": promptC}]
-    ).choices[0].message.content
-
-    def strip_code_fence(s):
-        return s.strip().removeprefix("```html").removesuffix("```").strip()
+    final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text if model_choice == "Gemini" else openai_client.chat.completions.create(model=model, messages=[{"role": "user", "content": promptC}]).choices[0].message.content
 
     st.success("✅ 見積もり結果")
-    if not is_correct:
-        st.error(f"⚠️ 合計金額に不整合があります：表示 = {displayed_total:,}円 / 再計算 = {calc_total:,}円")
-    st.components.v1.html(strip_code_fence(final), height=900, scrolling=True)
+    if not ok:
+        st.error(f"⚠️ 合計金額に不整合があります：表示 = {shown:,}円 / 再計算 = {calc:,}円")
+    st.components.v1.html(final.strip().removeprefix("```html").removesuffix("```"), height=900, scrolling=True)
 
     def convert_to_excel(text):
         data = []
-        for l in text.split("\n"):
-            m = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", l)
+        for line in text.split("\n"):
+            m = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
             if m:
                 data.append([m.group(1), int(m.group(2).replace(",", "")), int(m.group(3)), int(m.group(4).replace(",", ""))])
         return pd.DataFrame(data, columns=["項目", "単価（円）", "数量", "金額（円）"])
 
     df = convert_to_excel(resB)
-    buffer = BytesIO()
-    df.to_excel(buffer, index=False, sheet_name="見積もり")
-    buffer.seek(0)
-    st.download_button("📥 Excelでダウンロード", buffer, "見積もり.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    buf = BytesIO()
+    df.to_excel(buf, index=False, sheet_name="見積もり")
+    buf.seek(0)
+    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
