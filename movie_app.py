@@ -4,7 +4,8 @@ from openai import OpenAI
 import re
 import pandas as pd
 from io import BytesIO
-
+from datetime import date
+from dateutil.relativedelta import relativedelta
 
 # --- ページ設定 ---
 st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
@@ -39,7 +40,7 @@ final_duration = st.text_input("尺の長さ（自由記入）") if video_durati
 num_versions = st.number_input("納品本数", min_value=1, max_value=10, value=1)
 shoot_days = st.number_input("撮影日数", min_value=1, max_value=10, value=2)
 edit_days = st.number_input("編集日数", min_value=1, max_value=10, value=3)
-delivery_date = st.date_input("納品希望日")
+delivery_date = st.date_input("納品希望日", value=date.today() + relativedelta(months=1))  
 cast_main = st.number_input("メインキャスト人数", 0, 10, 1)
 cast_extra = st.number_input("エキストラ人数", 0, 20, 0)
 talent_use = st.checkbox("タレント起用あり")
