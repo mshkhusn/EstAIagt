@@ -32,13 +32,17 @@ delivery_date = st.date_input("納品希望日")
 cast_main = st.number_input("メインキャスト人数", 0, 10, 1)
 cast_extra = st.number_input("エキストラ人数", 0, 20, 0)
 talent_use = st.checkbox("タレント起用あり")
-staff_roles = st.multiselect("必要なスタッフ", [
+default_roles = [
     "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター", "カメラマン", 
     "照明スタッフ", "スタイリスト", "ヘアメイク", "アシスタント"
-], default=[
-    "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター", "カメラマン", 
-    "照明スタッフ", "スタイリスト", "ヘアメイク", "アシスタント"
-])
+]
+selected_roles = st.multiselect("必要なスタッフ（選択式）", default_roles, default=default_roles)
+
+custom_roles_text = st.text_input("その他のスタッフ（カンマ区切りで自由に追加）")
+custom_roles = [role.strip() for role in custom_roles_text.split(",") if role.strip()]
+
+staff_roles = selected_roles + custom_roles
+
 shoot_location = st.text_input("撮影場所（例：都内スタジオ＋ロケ）")
 kizai = st.multiselect("撮影機材", ["4Kカメラ", "照明", "ドローン", "グリーンバック"], default=["4Kカメラ", "照明"])
 set_design_quality = st.selectbox("セット建て・美術装飾の規模", ["なし", "小（簡易装飾）", "中（通常レベル）", "大（本格セット）"])
