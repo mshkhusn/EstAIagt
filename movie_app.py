@@ -39,27 +39,38 @@ cast_extra       = st.number_input("エキストラ人数", 0, 20, 0)
 talent_use       = st.checkbox("タレント起用あり")
 staff_roles      = st.multiselect(
     "必要なスタッフ",
-    ["制作プロデューサー","制作プロジェクトマネージャー","ディレクター","カメラマン",
-     "照明スタッフ","スタイリスト","ヘアメイク","アシスタント"],
-    default=["制作プロデューサー","制作プロジェクトマネージャー","ディレクター","カメラマン",
-             "照明スタッフ","スタイリスト","ヘアメイク","アシスタント"]
+    [
+        "制作プロデューサー", "制作プロジェクトマネージャー",
+        "ディレクター", "カメラマン", "照明スタッフ",
+        "スタイリスト", "ヘアメイク", "アシスタント"
+    ],
+    default=[
+        "制作プロデューサー","制作プロジェクトマネージャー",
+        "ディレクター","カメラマン","照明スタッフ",
+        "スタイリスト","ヘアメイク","アシスタント"
+    ]
 )
 shoot_location     = st.text_input("撮影場所（例：都内スタジオ＋ロケ）")
-kizai              = st.multiselect("撮影機材", ["4Kカメラ","照明","ドローン","グリーンバック"],
-                                     default=["4Kカメラ","照明"])
-set_design_quality = st.selectbox("セット建て・美術装飾の規模",
-                                  ["なし","小（簡易装飾）","中（通常レベル）","大（本格セット）"])
+kizai              = st.multiselect(
+    "撮影機材",
+    ["4Kカメラ", "照明", "ドローン", "グリーンバック"],
+    default=["4Kカメラ", "照明"]
+)
+set_design_quality = st.selectbox(
+    "セット建て・美術装飾の規模",
+    ["なし", "小（簡易装飾）", "中（通常レベル）", "大（本格セット）"]
+)
 use_cg         = st.checkbox("CG・VFXあり")
 use_narration  = st.checkbox("ナレーション収録あり")
-use_music      = st.selectbox("音楽素材", ["既存ライセンス音源","オリジナル制作","未定"])
+use_music      = st.selectbox("音楽素材", ["既存ライセンス音源", "オリジナル制作", "未定"])
 ma_needed      = st.checkbox("MAあり")
-deliverables   = st.multiselect("納品形式", ["mp4（16:9）","mp4（1:1）","mp4（9:16）","ProRes"])
-subtitle_langs = st.multiselect("字幕言語", ["日本語","英語","その他"])
-usage_region   = st.selectbox("使用地域", ["日本国内","グローバル","未定"])
-usage_period   = st.selectbox("使用期間", ["6ヶ月","1年","2年","無期限","未定"])
+deliverables   = st.multiselect("納品形式", ["mp4（16:9）", "mp4（1:1）", "mp4（9:16）", "ProRes"])
+subtitle_langs = st.multiselect("字幕言語", ["日本語", "英語", "その他"])
+usage_region   = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
+usage_period   = st.selectbox("使用期間", ["6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint    = st.text_input("参考予算（任意）")
 extra_notes    = st.text_area("その他備考（任意）")
-model_choice   = st.selectbox("使用するAIモデル", ["Gemini","GPT-4o","GPT-4.1"])
+model_choice   = st.selectbox("使用するAIモデル", ["Gemini", "GPT-4o", "GPT-4.1"])
 
 # ─── 5. Prompt A: 項目出しフェーズ ───────────────────────────────
 promptA = f"""
@@ -137,9 +148,11 @@ if st.button("💡 見積もりを作成"):
             resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text
         else:
             respA = openai_client.chat.completions.create(
-                model="gpt-4o" if model_choice=="GPT-4o" else "gpt-4.1",
-                messages=[{"role":"system","content":"あなたは見積もりアシスタントです。"},
-                          {"role":"user","content":promptA}],
+                model="gpt-4o" if model_choice == "GPT-4o" else "gpt-4.1",
+                messages=[
+                    {"role":"system","content":"あなたは見積もりアシスタントです。"},
+                    {"role":"user","content":promptA},
+                ],
                 temperature=0.7,
             )
             resA = respA.choices[0].message.content
@@ -153,9 +166,11 @@ if st.button("💡 見積もりを作成"):
             resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text
         else:
             respB = openai_client.chat.completions.create(
-                model="gpt-4o" if model_choice=="GPT-4o" else "gpt-4.1",
-                messages=[{"role":"system","content":"あなたは計算アシスタントです。"},
-                          {"role":"user","content":fullB}],
+                model="gpt-4o" if model_choice == "GPT-4o" else "gpt-4.1",
+                messages=[
+                    {"role":"system","content":"あなたは計算アシスタントです。"},
+                    {"role":"user","content":fullB},
+                ],
                 temperature=0.7,
             )
             resB = respB.choices[0].message.content
@@ -166,10 +181,14 @@ if st.button("💡 見積もりを作成"):
             final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text
         else:
             respC = openai_client.chat.completions.create(
-                model="gpt-4o" if model_choice=="GPT-4o" else "gpt-4.1",
-                messages=[{"role":"system","content":"あなたは見積もりアシスタントです。"},
-                          {"role":"user","content":promptC}],
+                model="gpt-4o" if model_choice == "GPT-4o" else "gpt-4.1",
+                messages=[
+                    {"role":"system","content":"あなたは見積もりアシスタントです。"},
+                    {"role":"user","content":promptC},
+                ],
                 temperature=0.7,
+            )
+            final = respC.choices[0].message.content
 
         # ─── 9. コードフェンス除去関数 ─────────────────────────────────
         def strip_code_fence(s: str) -> str:
