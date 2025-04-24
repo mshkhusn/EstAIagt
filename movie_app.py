@@ -177,6 +177,7 @@ if st.session_state.get("processing"):
             messages=[{"role": "user", "content": fullB}]
         ).choices[0].message.content
 
+        # ここでセッションに保存して、processing を False に
         st.session_state["resA"] = resA
         st.session_state["resB"] = resB
         st.session_state["processing"] = False
