@@ -17,6 +17,10 @@ APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 genai.configure(api_key=GEMINI_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
+# --- セッション状態の初期化 ---
+if "processing" not in st.session_state:
+    st.session_state["processing"] = False
+
 # --- 認証 ---
 st.title("映像制作AIエージェント（3フェーズ＋HTML表示修正版）")
 password = st.text_input("パスワードを入力してください", type="password")
@@ -154,37 +158,34 @@ def extract_and_validate_total(estimate_text):
                 return total_displayed, total_calc, total_displayed == total_calc
     return 0, total_calc, False
 
-# --- 実行ボタン押下時 ---
-if st.button("\U0001f4a1 見積もりを作成"):
+# --- ボタンで処理開始 ---
+if st.button("💡 見積もりを作成"):
+    st.session_state["processing"] = True
+
+# --- 見積もり処理 ---
+if st.session_state.get("processing"):
     with st.spinner("AIが見積もりを作成中…"):
         model = "gpt-4o" if model_choice == "GPT-4o" else "gpt-4o-mini" if model_choice == "GPT-4o-mini" else "gpt-4.1"
-
-        if model_choice == "Gemini":
-            resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text
-        else:
-            resA = openai_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": promptA}]
-            ).choices[0].message.content
+        resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text if model_choice == "Gemini" else openai_client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": promptA}]
+        ).choices[0].message.content
 
         fullB = promptB + "\n" + resA
-        if model_choice == "Gemini":
-            resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text
-        else:
-            resB = openai_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": fullB}]
-            ).choices[0].message.content
+        resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text if model_choice == "Gemini" else openai_client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": fullB}]
+        ).choices[0].message.content
 
         st.session_state["resA"] = resA
         st.session_state["resB"] = resB
+        st.session_state["processing"] = False
 
-# --- 出力ブロック（セッションチェック） ---
+# --- 出力表示 ---
 if "resB" in st.session_state:
     resA = st.session_state["resA"]
     resB = st.session_state["resB"]
     displayed_total, calc_total, is_correct = extract_and_validate_total(resB)
-
     promptC = promptC_template.format(items_a=resA, items_b=resB)
     final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text if model_choice == "Gemini" else openai_client.chat.completions.create(
         model=model,
