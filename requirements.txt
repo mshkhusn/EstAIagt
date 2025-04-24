@@ -5,3 +5,4 @@ requests
 weasyprint
 openai>=1.3.7
 openpyxl
+relativedelta
