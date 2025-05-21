@@ -8,7 +8,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 # --- ページ設定 ---
-st.set_page_config(page_title="映像制作AIエージェント", layout="centered")
+st.set_page_config(page_title="映像制作概算見積もりAIエージェントプロトタイプ", layout="centered")
 
 # --- Secrets 読み込み ---
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
