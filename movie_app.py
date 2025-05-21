@@ -8,7 +8,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 # --- ページ設定 ---
-st.set_page_config(page_title="映像制作概算見積もりAIエージェントプロトタイプ", layout="centered")
+st.set_page_config(page_title="映像制作概算見積エージェントβ", layout="centered")
 
 # --- Secrets 読み込み ---
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -27,7 +27,7 @@ if "final_html" not in st.session_state:
     st.session_state["final_html"] = None
 
 # --- 認証 ---
-st.title("映像制作AIエージェントβ")
+st.title("映像制作概算見積エージェントβ")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("🔒 認証が必要です")
