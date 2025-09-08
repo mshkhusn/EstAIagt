@@ -4,11 +4,13 @@ import json
 import importlib
 from io import BytesIO
 from datetime import date
+from copy import copy
 
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 from dateutil.relativedelta import relativedelta
+from openpyxl import load_workbook
 
 # =========================
 # ページ設定
@@ -449,6 +451,131 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =========================
+# 会社Excelテンプレ機能
+# =========================
+TOKEN_ITEMS = "{{ITEMS_START}}"
+TOKEN_SUBTOTAL = "{{SUBTOTAL}}"
+TOKEN_TAX = "{{TAX}}"
+TOKEN_TOTAL = "{{TOTAL}}"
+
+def _find_cell_by_token(ws, token: str):
+    for row in ws.iter_rows(values_only=False):
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.strip() == token:
+                return cell
+    return None
+
+def _insert_rows_with_format(ws, start_row, count):
+    """start_rowの行の書式をコピーしつつ、直下にcount行挿入"""
+    if count <= 0:
+        return
+    ws.insert_rows(start_row+1, amount=count)
+    for i in range(count):
+        for col in range(1, ws.max_column+1):
+            cell_above = ws.cell(row=start_row, column=col)
+            cell_new = ws.cell(row=start_row+1+i, column=col)
+            if cell_above.has_style:
+                cell_new._style = copy(cell_above._style)
+
+def _write_items(ws, df_items: pd.DataFrame, start_row: int, start_col: int, prepared_rows: int):
+    """明細を書き込み。足りなければ行追加（書式コピー）"""
+    needed_rows = len(df_items)
+    if needed_rows > prepared_rows:
+        _insert_rows_with_format(ws, start_row + prepared_rows - 1, needed_rows - prepared_rows)
+
+    for i, (_, r) in enumerate(df_items.iterrows()):
+        row = start_row + i
+        ws.cell(row=row, column=start_col+0, value=r["category"])
+        ws.cell(row=row, column=start_col+1, value=r["task"])
+        ws.cell(row=row, column=start_col+2, value=int(r["unit_price"]))
+        ws.cell(row=row, column=start_col+3, value=float(r["qty"]))
+        ws.cell(row=row, column=start_col+4, value=r["unit"])
+        ws.cell(row=row, column=start_col+5, value=int(r["小計"]))
+
+def export_with_company_template(template_bytes: bytes,
+                                 df_items: pd.DataFrame,
+                                 meta: dict,
+                                 mode: str = "token",
+                                 fixed_config: dict | None = None):
+    """
+    mode: "token" or "fixed"
+      token: テンプレ内のトークン {{ITEMS_START}}, {{SUBTOTAL}}, {{TAX}}, {{TOTAL}} を検出して自動配置
+      fixed: fixed_config を使って固定セル配置
+    fixed_config 例:
+      {
+        "sheet_name": "Sheet1" or None(=active),
+        "start_row": 15, "start_col": 2, "prepared_rows": 10,
+        "subtotal_cell": "F40", "tax_cell": "F41", "total_cell": "F42"
+      }
+    """
+    wb = load_workbook(filename=BytesIO(template_bytes))
+    ws = wb[fixed_config["sheet_name"]] if (mode=="fixed" and fixed_config and fixed_config.get("sheet_name")) else wb.active
+
+    if mode == "token":
+        start = _find_cell_by_token(ws, TOKEN_ITEMS)
+        subtotal = _find_cell_by_token(ws, TOKEN_SUBTOTAL)
+        tax = _find_cell_by_token(ws, TOKEN_TAX)
+        total = _find_cell_by_token(ws, TOKEN_TOTAL)
+
+        if not all([start, subtotal, tax, total]):
+            st.error("テンプレ内のトークン（{{ITEMS_START}}, {{SUBTOTAL}}, {{TAX}}, {{TOTAL}}）のいずれかが見つかりません。固定セル方式に切り替えるか、テンプレにトークンを配置してください。")
+            return
+
+        # トークンセルを消去
+        start_row, start_col = start.row, start.column
+        prepared_rows = 10  # 既存の空行数（必要に応じて増やしてください）
+        for c in [start, subtotal, tax, total]:
+            c.value = None
+
+        _write_items(ws, df_items, start_row, start_col, prepared_rows)
+        ws.cell(row=subtotal.row, column=subtotal.column, value=int(meta["taxable"]))
+        ws.cell(row=tax.row, column=tax.column, value=int(meta["tax"]))
+        ws.cell(row=total.row, column=total.column, value=int(meta["total"]))
+
+        # 表示形式（#,##0）を単価・金額・合計欄へ
+        money_cols = [start_col+2, start_col+5]
+        for col in money_cols:
+            for i in range(len(df_items)):
+                ws.cell(row=start_row+i, column=col).number_format = '#,##0'
+        for cell in [ws.cell(row=subtotal.row, column=subtotal.column),
+                     ws.cell(row=tax.row, column=tax.column),
+                     ws.cell(row=total.row, column=total.column)]:
+            cell.number_format = '#,##0'
+
+    else:  # fixed
+        cfg = fixed_config or {}
+        start_row = int(cfg.get("start_row", 15))
+        start_col = int(cfg.get("start_col", 2))
+        prepared_rows = int(cfg.get("prepared_rows", 10))
+        subtotal_cell = cfg.get("subtotal_cell", "F40")
+        tax_cell = cfg.get("tax_cell", "F41")
+        total_cell = cfg.get("total_cell", "F42")
+
+        _write_items(ws, df_items, start_row, start_col, prepared_rows)
+        ws[subtotal_cell] = int(meta["taxable"])
+        ws[tax_cell] = int(meta["tax"])
+        ws[total_cell] = int(meta["total"])
+
+        # 表示形式
+        for i in range(len(df_items)):
+            ws.cell(row=start_row+i, column=start_col+2).number_format = '#,##0'
+            ws.cell(row=start_row+i, column=start_col+5).number_format = '#,##0'
+        for addr in [subtotal_cell, tax_cell, total_cell]:
+            ws[addr].number_format = '#,##0'
+
+    # ダウンロード
+    out = BytesIO()
+    wb.save(out)
+    out.seek(0)
+    st.download_button(
+        "📥 会社テンプレ（.xlsx）でダウンロード",
+        out,
+        "見積もり_会社テンプレ.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="dl_company_template"
+    )
+
+# =========================
 # 実行ボタン
 # =========================
 if st.button("💡 見積もりを作成"):
@@ -490,6 +617,49 @@ if st.session_state["final_html"]:
     st.success("✅ 見積もり結果（サーバ計算で整合性チェック済み）")
     st.components.v1.html(st.session_state["final_html"], height=900, scrolling=True)
     download_excel(st.session_state["df"], st.session_state["meta"])
+
+    st.markdown("---")
+    st.subheader("会社Excelテンプレで出力")
+    tmpl = st.file_uploader("会社見積テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
+
+    mode = st.radio("テンプレの指定方法", ["トークン検出（推奨）", "固定セル指定"], horizontal=True)
+    if tmpl is not None:
+        if mode == "トークン検出（推奨）":
+            st.caption("テンプレに `{{ITEMS_START}}`, `{{SUBTOTAL}}`, `{{TAX}}`, `{{TOTAL}}` を置いてください。")
+            export_with_company_template(
+                tmpl.read(),
+                st.session_state["df"],
+                st.session_state["meta"],
+                mode="token"
+            )
+        else:
+            with st.form("fixed_cells_form"):
+                sheet_name = st.text_input("シート名（未入力なら先頭シート）", "")
+                start_row = st.number_input("明細開始行（例: 15）", min_value=1, value=15, step=1)
+                start_col = st.number_input("明細開始列（A=1, B=2 ... 例: B列は2）", min_value=1, value=2, step=1)
+                prepared_rows = st.number_input("テンプレに準備済みの明細行数", min_value=1, value=10, step=1)
+                subtotal_cell = st.text_input("小計セル（例: F40）", "F40")
+                tax_cell = st.text_input("消費税セル（例: F41）", "F41")
+                total_cell = st.text_input("合計セル（例: F42）", "F42")
+                submitted = st.form_submit_button("この設定で出力")
+
+            if submitted:
+                cfg = {
+                    "sheet_name": sheet_name if sheet_name.strip() else None,
+                    "start_row": start_row,
+                    "start_col": start_col,
+                    "prepared_rows": prepared_rows,
+                    "subtotal_cell": subtotal_cell,
+                    "tax_cell": tax_cell,
+                    "total_cell": total_cell,
+                }
+                export_with_company_template(
+                    tmpl.read(),
+                    st.session_state["df"],
+                    st.session_state["meta"],
+                    mode="fixed",
+                    fixed_config=cfg
+                )
 
 # =========================
 # 開発者向けダイアグ
