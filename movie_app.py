@@ -395,27 +395,42 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =========================
-# 会社Excelテンプレ機能（崩れ対策版）
+# 会社Excelテンプレ機能：枠拡張（小計前に行挿入）＋Zebraカラー対応
 # =========================
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.styles import PatternFill
+from io import BytesIO
 from copy import copy
+import re
 
 TOKEN_ITEMS = "{{ITEMS_START}}"
 
-# 列マップ（あなたのテンプレ）
-COLUMN_MAP_FOR_YOUR_TEMPLATE = {
+# 列マップ（このテンプレ専用）
+COLMAP = {
     "task": "B",        # 項目
     "qty": "O",         # 数量
     "unit": "Q",        # 単位
     "unit_price": "S",  # 単価
     "amount": "W",      # 金額（数式）
-    # "category" は使っていないので省略でOK
 }
 
-def _col_to_idx(col):  # "B" -> 2
+# 固定枠定義（テンプレ仕様）
+BASE_START_ROW = 19
+BASE_END_ROW   = 31   # 19〜31 が既定
+BASE_CAPACITY  = BASE_END_ROW - BASE_START_ROW + 1
+BASE_SUBTOTAL_ROW = 32  # 初期小計行
+
+# Zebra適用範囲（B〜AA）
+DETAIL_START_COL = "B"
+DETAIL_END_COL   = "AA"
+
+def _col_to_idx(col):
     return col if isinstance(col, int) else column_index_from_string(col)
+
+DETAIL_START_IDX = _col_to_idx(DETAIL_START_COL)
+DETAIL_END_IDX   = _col_to_idx(DETAIL_END_COL)
 
 def _anchor_cell(ws, row, col):
     c = ws.cell(row=row, column=col)
@@ -424,6 +439,13 @@ def _anchor_cell(ws, row, col):
             if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
                 return ws.cell(row=rng.min_row, column=rng.min_col)
     return c
+
+def _find_items_start(ws):
+    for row in ws.iter_rows(values_only=False):
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.strip() == TOKEN_ITEMS:
+                return cell.row, cell.column
+    return None, None
 
 def _replicate_merged_row(ws, template_row, target_row):
     """template_row と同じ横方向の結合を target_row に複製"""
@@ -444,67 +466,113 @@ def _row_style_copy(ws, src_row, dst_row):
         if a.has_style:
             b._style = copy(a._style)
 
-def _count_prepared_rows(ws, start_row, task_col_idx, hard_cap=200):
-    """
-    すでに用意されている“空の明細行”の数を自動検出。
-    task列（B列）の値が空（またはNone）であれば“空き行”とみなします。
-    """
-    cnt = 0
-    for r in range(start_row, min(ws.max_row, start_row + hard_cap) + 1):
-        v = ws.cell(row=r, column=task_col_idx).value
-        if v in (None, ""):
-            cnt += 1
-        else:
-            break
-    return cnt
+def _extract_solid_fill(cell):
+    f = cell.fill
+    if f is None or f.fill_type != "solid":
+        return None
+    rgb = getattr(f.fgColor, "rgb", None)
+    if rgb and len(rgb) == 8:
+        return PatternFill(fill_type="solid", fgColor=rgb)
+    return None
+
+def _detect_zebra_fills(ws, start_row):
+    """19行目と20行目の色を見て交互色を決定"""
+    r1, r2 = start_row, start_row+1
+    c = DETAIL_START_IDX
+    f1 = _extract_solid_fill(ws.cell(row=r1, column=c))
+    f2 = _extract_solid_fill(ws.cell(row=r2, column=c))
+    if f1 is None:
+        f1 = PatternFill(fill_type="solid", fgColor="FFFFFFFF")
+    if f2 is None:
+        f2 = PatternFill(fill_type="solid", fgColor="FFF2F2F2")
+    return f1, f2
+
+def _apply_row_fill(ws, row, fill):
+    for col in range(DETAIL_START_IDX, DETAIL_END_IDX+1):
+        ws.cell(row=row, column=col).fill = fill
+
+def _apply_zebra_for_range(ws, start_row, end_row, f1, f2):
+    for r in range(start_row, end_row+1):
+        idx = (r - start_row) % 2
+        _apply_row_fill(ws, r, f1 if idx==0 else f2)
 
 def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
-    """金額セルが空なら =O{row}*S{row} を付与（列マップに合わせて生成）"""
     c = ws.cell(row=row, column=amount_col_idx)
-    if c.value in (None, ""):
-        q = ws.cell(row=row, column=qty_col_idx)
-        p = ws.cell(row=row, column=price_col_idx)
-        from openpyxl.utils import get_column_letter
+    v = c.value
+    if not (isinstance(v, str) and v.startswith("=")):
         qcol = get_column_letter(qty_col_idx)
         pcol = get_column_letter(price_col_idx)
         c.value = f"={qcol}{row}*{pcol}{row}"
         c.number_format = '#,##0'
 
-def _write_items_safely(ws, df_items, start_row, column_map):
-    # 列番号に正規化
-    cmap = {k: _col_to_idx(v) for k,v in column_map.items()}
-    task_col = cmap["task"]
-    qty_col  = cmap["qty"]
-    unit_col = cmap["unit"]
-    price_col= cmap["unit_price"]
-    amt_col  = cmap["amount"]
+def _update_subtotal_formula(ws, subtotal_row, end_row, amount_col_idx):
+    sub = ws.cell(row=subtotal_row, column=amount_col_idx)
+    ac = get_column_letter(amount_col_idx)
+    end_col = "AA"
+    sub.value = f"=SUM({ac}{BASE_START_ROW}:{end_col}{end_row})"
+    sub.number_format = '#,##0'
 
-    needed = len(df_items)
+def _write_company_with_growth(ws, df_items):
+    # トークン消去
+    r0, c0 = _find_items_start(ws)
+    if r0:
+        ws.cell(row=r0, column=c0).value = None
 
-    # 既存の空行数を自動検出（足りない場合のみ増やす）
-    prepared = _count_prepared_rows(ws, start_row, task_col)
-    lack = max(0, needed - prepared)
+    # 列番号
+    c_task = _col_to_idx(COLMAP["task"])
+    c_qty  = _col_to_idx(COLMAP["qty"])
+    c_unit = _col_to_idx(COLMAP["unit"])
+    c_price= _col_to_idx(COLMAP["unit_price"])
+    c_amt  = _col_to_idx(COLMAP["amount"])
 
+    n = len(df_items)
+    lack = max(0, n - BASE_CAPACITY)
+
+    # Zebra色検出
+    f1, f2 = _detect_zebra_fills(ws, BASE_START_ROW)
+
+    # 不足分は小計の直前に追加
     if lack > 0:
-        # テンプレの“ひな型行”= start_row+prepared-1（最後の空き行）をコピーして増設
-        template_row = start_row + prepared - 1
-        # 追加する行を一行ずつ作る（スタイル＋結合＋数式）
+        ws.insert_rows(BASE_SUBTOTAL_ROW, amount=lack)
+        template_row = BASE_END_ROW
         for i in range(lack):
-            insert_at = template_row + i + 1
-            ws.insert_rows(insert_at, amount=1)
-            _row_style_copy(ws, template_row, insert_at)
-            _replicate_merged_row(ws, template_row, insert_at)
-            _ensure_amount_formula(ws, insert_at, qty_col, price_col, amt_col)
+            rr = BASE_SUBTOTAL_ROW + i
+            _row_style_copy(ws, template_row, rr)
+            _replicate_merged_row(ws, template_row, rr)
+            _ensure_amount_formula(ws, rr, c_qty, c_price, c_amt)
+        _apply_zebra_for_range(ws, BASE_SUBTOTAL_ROW, BASE_SUBTOTAL_ROW+lack-1, f1, f2)
 
-    # データ書き込み
-    for i, (_, r) in enumerate(df_items.iterrows()):
-        row = start_row + i
-        _anchor_cell(ws, row, task_col).value  = str(r.get("task",""))
-        _anchor_cell(ws, row, qty_col).value   = float(r.get("qty", 0) or 0)
-        _anchor_cell(ws, row, unit_col).value  = str(r.get("unit",""))
-        _anchor_cell(ws, row, price_col).value = int(float(r.get("unit_price", 0) or 0))
-        # 金額列は数式を維持（既存 or 追加分なら上で自動付与）
-        _ensure_amount_formula(ws, row, qty_col, price_col, amt_col)
+    # 新しい終端
+    end_row = BASE_END_ROW + lack
+    subtotal_row = BASE_SUBTOTAL_ROW + lack
+
+    # 全範囲に zebra 再適用
+    _apply_zebra_for_range(ws, BASE_START_ROW, end_row, f1, f2)
+
+    # 値クリア
+    for r in range(BASE_START_ROW, end_row+1):
+        _anchor_cell(ws, r, c_task).value  = None
+        _anchor_cell(ws, r, c_qty).value   = None
+        _anchor_cell(ws, r, c_unit).value  = None
+        _anchor_cell(ws, r, c_price).value = None
+        _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
+
+    # 書き込み
+    cap_now = end_row - BASE_START_ROW + 1
+    if n > cap_now:
+        st.warning(f"テンプレ拡張後の枠（{cap_now}行）を超えました。{n-cap_now} 行は出力されません。")
+        n = cap_now
+
+    for i in range(n):
+        r = BASE_START_ROW + i
+        row = df_items.iloc[i]
+        _anchor_cell(ws, r, c_task).value  = str(row.get("task",""))
+        _anchor_cell(ws, r, c_qty).value   = float(row.get("qty", 0) or 0)
+        _anchor_cell(ws, r, c_unit).value  = str(row.get("unit",""))
+        _anchor_cell(ws, r, c_price).value = int(float(row.get("unit_price", 0) or 0))
+
+    # 小計更新
+    _update_subtotal_formula(ws, subtotal_row, end_row, c_amt)
 
 def export_with_company_template(template_bytes: bytes,
                                  df_items: pd.DataFrame,
@@ -513,33 +581,21 @@ def export_with_company_template(template_bytes: bytes,
                                  fixed_config: dict | None = None):
     """
     mode:
-      - "token": シート内の {{ITEMS_START}} を起点に自動差し込み
-      - "fixed": fixed_config = {"sheet_name":..., "start_row":19} の開始行指定
+      - "token": シート内の {{ITEMS_START}} を探して消去（開始行はテンプレ既定の19行想定）
+      - "fixed": fixed_config は受け取るが、このテンプレは開始行 19 固定前提で処理（将来拡張用）
     """
     wb = load_workbook(filename=BytesIO(template_bytes))
-    ws = wb[fixed_config["sheet_name"]] if (mode=="fixed" and fixed_config and fixed_config.get("sheet_name")) else wb.active
+    ws = wb.active
 
+    # token モード時は {{ITEMS_START}} を掃除するだけ（行は19固定のテンプレ）
     if mode == "token":
-        # 起点セルを探す
-        start_cell = None
-        for row in ws.iter_rows(values_only=False):
-            for cell in row:
-                if isinstance(cell.value, str) and cell.value.strip() == TOKEN_ITEMS:
-                    start_cell = cell
-                    break
-            if start_cell: break
-        if not start_cell:
-            st.error("テンプレに {{ITEMS_START}} が見つかりません。B19 など明細先頭セルに置いてください。")
-            return
-        start_row = start_cell.row
-        start_cell.value = None  # トークンを消す
-    else:
-        start_row = int((fixed_config or {}).get("start_row", 19))
+        r0, c0 = _find_items_start(ws)
+        if r0:
+            ws.cell(row=r0, column=c0).value = None
+    # fixed モードの指定が来ても、今回のテンプレは19固定なので無視（必要ならここでBASE_*を書き換える）
 
-    # 書き込み（結合維持・数式維持・不足時のみ増設）
-    _write_items_safely(ws, df_items, start_row, COLUMN_MAP_FOR_YOUR_TEMPLATE)
+    _write_company_with_growth(ws, df_items)
 
-    # ダウンロード
     out = BytesIO()
     wb.save(out)
     out.seek(0)
@@ -550,6 +606,7 @@ def export_with_company_template(template_bytes: bytes,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="dl_company_template"
     )
+
 
 # =========================
 # 実行ボタン
