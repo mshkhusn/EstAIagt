@@ -45,16 +45,6 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 if OPENAI_ORG_ID:
     os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
 
-# プロキシ（任意）
-proxy_url = (
-    st.secrets.get("OPENAI_PROXY")
-    or st.secrets.get("HTTPS_PROXY")
-    or st.secrets.get("HTTP_PROXY")
-)
-if proxy_url:
-    os.environ["HTTPS_PROXY"] = proxy_url
-    os.environ["HTTP_PROXY"] = proxy_url
-
 # OpenAI v1 クライアント
 openai_client = OpenAI()
 
