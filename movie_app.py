@@ -30,14 +30,12 @@ OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 
 genai.configure(api_key=GEMINI_API_KEY)
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 # =========================
 # OpenAI 初期化（安全な遅延生成＆多段フォールバック）
 # =========================
 from openai import OpenAI as _OpenAI
 
-# secrets → 環境（None対策）
 if OPENAI_API_KEY:
     os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 else:
@@ -45,8 +43,7 @@ else:
     st.stop()
 
 OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID", None)
-
-_openai_client_cache = None  # 遅延生成キャッシュ
+_openai_client_cache = None
 
 def get_openai():
     """環境差異に強い OpenAI クライアント生成（初回のみ）。"""
@@ -54,7 +51,7 @@ def get_openai():
     if _openai_client_cache is not None:
         return _openai_client_cache
 
-    # 1) まずは素のコンストラクタ（推奨経路）
+    # 1) 素のコンストラクタ
     try:
         if OPENAI_ORG_ID:
             _openai_client_cache = _OpenAI(organization=OPENAI_ORG_ID)
@@ -62,7 +59,7 @@ def get_openai():
             _openai_client_cache = _OpenAI()
         return _openai_client_cache
     except TypeError:
-        # 2) api_key を直接渡す（環境によってはこっちが通る）
+        # 2) api_key を直接渡す
         try:
             if OPENAI_ORG_ID:
                 _openai_client_cache = _OpenAI(api_key=OPENAI_API_KEY, organization=OPENAI_ORG_ID)
@@ -72,10 +69,10 @@ def get_openai():
         except TypeError:
             pass
 
-    # 3) httpx を手動で差し込む（古い httpx 環境での TypeError 回避）
+    # 3) httpx を明示（古い httpx の引数不整合対策）
     try:
         import httpx
-        http_client = httpx.Client(timeout=60.0)  # 互換性重視：引数は最小限
+        http_client = httpx.Client(timeout=60.0)
         if OPENAI_ORG_ID:
             _openai_client_cache = _OpenAI(http_client=http_client, organization=OPENAI_ORG_ID)
         else:
@@ -85,7 +82,6 @@ def get_openai():
         st.error(f"OpenAI クライアント初期化に失敗しました: {type(e).__name__}: {str(e)[:300]}")
         st.stop()
 
-# 表示用
 openai_version = getattr(importlib.import_module("openai"), "__version__", "1.x")
 USE_OPENAI_CLIENT_V1 = True
 
@@ -149,11 +145,11 @@ usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", 
 usage_period = st.selectbox("使用期間", ["3ヶ月", "6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）")
 
-# 備考 + ご指定の注意文
+# 備考
 extra_notes = st.text_area("備考（案件概要・要件・想定媒体・必須/除外事項などを自由記入）")
 st.caption("※備考に案件概要や条件を追記すると、不足項目の自動補完が働き、見積もりの精度が上がります。")
 
-# モデル選択肢に 2.0 Flash を追加
+# モデル選択
 model_choice = st.selectbox(
     "使用するAIモデル",
     ["Gemini 2.5 Flash", "Gemini 2.5 Pro", "Gemini 2.0 Flash", "gpt-4.1-mini", "gpt-4.1", "GPT-5"]
@@ -240,7 +236,7 @@ def _common_case_block() -> str:
 - 本数: {num_versions}本
 - 撮影日数: {shoot_days}日 / 編集日数: {edit_days}日
 - 納品希望日: {delivery_date.isoformat()}
-- キャスト: メイン{cast_main}人 / エキストラ{cast_extra}人 / タレント: {"あり" if talent_use else "なし"}
+- キャスト: メイン {cast_main} 人 / エキストラ {cast_extra} 人 / タレント: {"あり" if talent_use else "なし"}
 - スタッフ候補: {join_or(staff_roles, empty="未指定")}
 - 撮影場所: {shoot_location if shoot_location else "未定"}
 - 撮影機材: {join_or(kizai, empty="未指定")}
@@ -287,40 +283,7 @@ def _gemini_model_id_from_choice(choice: str) -> str:
     return "gemini-2.5-flash"
 
 def llm_generate_items_json(prompt: str) -> str:
-    """
-    Gemini / GPT いずれかの選択モデルで items JSON を生成。
-    ・Geminiは .text が空のとき candidates.parts[].text から復元。
-    ・Geminiは safety を BLOCK_NONE に設定（社内ポリシーに応じて調整可）。
-    """
-    def _robust_extract_gemini_text(resp) -> str:
-        try:
-            if hasattr(resp, "text") and resp.text:
-                return resp.text
-        except Exception:
-            pass
-        try:
-            cands = getattr(resp, "candidates", None) or []
-            for c in cands:
-                content = getattr(c, "content", None)
-                if not content:
-                    continue
-                parts = getattr(content, "parts", None) or []
-                buf = []
-                for p in parts:
-                    t = getattr(p, "text", None)
-                    if t:
-                        buf.append(t)
-                if buf:
-                    return "".join(buf)
-        except Exception:
-            pass
-        return ""
-
     try:
-        st.session_state["used_fallback"] = False
-        st.session_state["gemini_block_reason"] = None
-        st.session_state["model_used"] = None
-
         if model_choice.startswith("Gemini"):
             model_id = _gemini_model_id_from_choice(model_choice)
             model = genai.GenerativeModel(
@@ -332,59 +295,15 @@ def llm_generate_items_json(prompt: str) -> str:
                     "top_p": 0.9,
                     "max_output_tokens": 2500,
                 },
-                safety_settings=[
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUAL", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_TOXICITY", "threshold": "BLOCK_NONE"},
-                ],
             )
-            resp = model.generate_content(prompt)
-
-            # 可視化用：ブロック理由
-            try:
-                pf = getattr(resp, "prompt_feedback", None)
-                st.session_state["gemini_block_reason"] = getattr(pf, "block_reason", None) if pf else None
-            except Exception:
-                pass
-
-            res = _robust_extract_gemini_text(resp)
-
-            # 空なら JSON MIME を外してもう一度（2.5系の空返し回避策）
-            if not res or len(res.strip()) < 5:
-                model2 = genai.GenerativeModel(
-                    model_id,
-                    generation_config={
-                        # "response_mime_type": "application/json",  # 外す
-                        "candidate_count": 1,
-                        "temperature": 0.4,
-                        "top_p": 0.9,
-                        "max_output_tokens": 2500,
-                    },
-                    safety_settings=[
-                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_SEXUAL", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_TOXICITY", "threshold": "BLOCK_NONE"},
-                    ],
-                )
-                resp2 = model2.generate_content(prompt)
-                res = _robust_extract_gemini_text(resp2)
-
-            st.session_state["model_used"] = model_id
-
+            res = model.generate_content(prompt).text
         else:
-            # ==== GPT (OpenAI) v1専用 ====
             gpt_model = (
                 "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
                 else "gpt-4.1" if model_choice == "gpt-4.1"
                 else "gpt-5"
             )
-            resp = openai_client.chat.completions.create(
+            resp = get_openai().chat.completions.create(
                 model=gpt_model,
                 messages=[
                     {"role": "system", "content": "You MUST return a single valid JSON object only."},
@@ -397,35 +316,14 @@ def llm_generate_items_json(prompt: str) -> str:
             res = resp.choices[0].message.content or ""
 
         st.session_state["items_json_raw"] = res
-
-        if not res or len(res.strip()) < 5:
-            raise RuntimeError("LLM empty/short response")
-
-        parsed = robust_parse_items_json(res)
-        try:
-            if not json.loads(parsed).get("items"):
-                raise RuntimeError("Parsed items empty")
-        except Exception:
-            raise RuntimeError("Parsed items malformed")
-
-        return parsed
-
-    except Exception as e:
-        st.session_state["used_fallback"] = True
-        st.warning(
-            "⚠️ モデル応答の解析に失敗しました。固定のfallbackを使用します。\n"
-            f"reason={type(e).__name__}: {str(e)[:200]}"
-        )
-        fallback = {
-            "items":[
-                {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
-                {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
-                {"category":"編集費・MA費","task":"編集","qty":max(1, int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
-                {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
-            ]
-        }
-        st.session_state["items_json_raw"] = json.dumps(fallback, ensure_ascii=False)
-        return json.dumps(fallback, ensure_ascii=False)
+        return robust_parse_items_json(res)
+    except Exception:
+        return json.dumps({"items":[
+            {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
+            {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
+            {"category":"編集費・MA費","task":"編集","qty":max(1, int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
+            {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
+        ]}, ensure_ascii=False)
 
 def llm_normalize_items_json(items_json: str) -> str:
     try:
@@ -452,13 +350,12 @@ def llm_normalize_items_json(items_json: str) -> str:
             )
             res = model.generate_content(prompt).text
         else:
-            # ==== GPT (OpenAI) v1専用 ====
             gpt_model = (
                 "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
                 else "gpt-4.1" if model_choice == "gpt-4.1"
                 else "gpt-5"
             )
-            resp = openai_client.chat.completions.create(
+            resp = get_openai().chat.completions.create(
                 model=gpt_model,
                 messages=[
                     {"role": "system", "content": "You MUST return a single valid JSON object only."},
@@ -664,7 +561,7 @@ def _update_subtotal_formula(ws, subtotal_row, start_row, end_row, amount_col_id
         ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
 
 def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
-    # 金額列（W列）で最後に現れる SUM を小計アンカーとして採用
+    # 金額列（W列）で最後の SUM を小計アンカーとみなす
     last_r = None
     for r in range(1, ws.max_row + 1):
         v = ws.cell(row=r, column=amount_col_idx).value
@@ -808,7 +705,7 @@ if st.session_state["final_html"]:
 with st.expander("OpenAI 接続テスト（任意）", expanded=False):
     if st.button("▶︎ gpt-4.1-mini に簡易テスト送信"):
         try:
-            r = openai_client.chat.completions.create(
+            r = get_openai().chat.completions.create(
                 model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
                 response_format={"type": "json_object"},
