@@ -381,90 +381,29 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =========================
-# 会社Excelテンプレート出力（31=空白、32=小計を保持）
+# 会社Excelテンプレート出力（事前拡張テンプレ対応：挿入なし）
 # =========================
 TOKEN_ITEMS = "{{ITEMS_START}}"
 
+# 会社テンプレの列マッピング（このテンプレ前提）
 COLMAP = {
-    "task": "B",        # 項目
+    "task": "B",        # 項目（B:N結合の左端セルに書く）
     "qty": "O",         # 数量
     "unit": "Q",        # 単位
     "unit_price": "S",  # 単価
-    "amount": "W",      # 金額（=O×S）
+    "amount": "W",      # 金額（=O×S）結合の左上アンカー
 }
 
-BASE_START_ROW    = 19   # 明細開始
-BASE_END_ROW      = 30   # ← 31 は空行として温存
-BASE_BLANK_ROW    = 31   # ← 触らない空白行
-BASE_SUBTOTAL_ROW = 32   # ← 触らない小計行
+# 旧テンプレ互換用の定数（SUBTOTAL検出失敗時のみ使用）
+BASE_START_ROW    = 19   # 明細開始のフォールバック
+BASE_SUBTOTAL_ROW = 72   # 小計行のフォールバック（今回のテンプレではW72）
 
-DETAIL_START_COL = "B"
-DETAIL_END_COL   = "AA"
-DETAIL_START_IDX = column_index_from_string(DETAIL_START_COL)
-DETAIL_END_IDX   = column_index_from_string(DETAIL_END_COL)
-
-TASK_MERGE_LEFT  = column_index_from_string("B")
-TASK_MERGE_RIGHT = column_index_from_string("N")  # 明細の「項目」横マージ想定（B:N）
-
-def _anchor_cell(ws, row, col_idx):
-    c = ws.cell(row=row, column=col_idx)
-    if isinstance(c, MergedCell):
-        for rng in ws.merged_cells.ranges:
-            if rng.min_row <= row <= rng.max_row and rng.min_col <= col_idx <= rng.max_col:
-                return ws.cell(row=rng.min_row, column=rng.min_col)
-    return c
-
-def _find_items_start(ws):
+def _find_token(ws, token: str):
     for row in ws.iter_rows(values_only=False):
         for cell in row:
-            if isinstance(cell.value, str) and cell.value.strip() == TOKEN_ITEMS:
+            if isinstance(cell.value, str) and cell.value.strip() == token:
                 return cell.row, cell.column
     return None, None
-
-def _replicate_detail_merge_only(ws, template_row, target_row):
-    """横マージは B:N のブロックのみ複製。行全体や広域マージは無視。"""
-    for rng in list(ws.merged_cells.ranges):
-        if rng.min_row == rng.max_row == template_row:
-            if rng.min_col == TASK_MERGE_LEFT and rng.max_col == TASK_MERGE_RIGHT:
-                ws.merge_cells(start_row=target_row, start_column=TASK_MERGE_LEFT,
-                               end_row=target_row,   end_column=TASK_MERGE_RIGHT)
-
-def _row_style_copy(ws, src_row, dst_row):
-    ws.row_dimensions[dst_row].height = ws.row_dimensions[src_row].height
-    for col in range(1, ws.max_column+1):
-        a = ws.cell(row=src_row, column=col)
-        b = ws.cell(row=dst_row, column=col)
-        if a.has_style:
-            b._style = copy(a._style)
-
-def _extract_solid_fill(cell):
-    f = getattr(cell, "fill", None)
-    if not f or f.fill_type != "solid":
-        return None
-    color = getattr(f, "fgColor", None)
-    rgb = getattr(color, "rgb", None)
-    if isinstance(rgb, str) and len(rgb) == 8:
-        return PatternFill(fill_type="solid", fgColor=rgb)
-    return None
-
-def _detect_zebra_fills(ws, start_row):
-    c = DETAIL_START_IDX
-    f1 = _extract_solid_fill(ws.cell(row=start_row,     column=c))
-    f2 = _extract_solid_fill(ws.cell(row=start_row + 1, column=c))
-    if f1 is None:
-        f1 = PatternFill(fill_type="solid", fgColor="FFFFFFFF")
-    if f2 is None:
-        f2 = PatternFill(fill_type="solid", fgColor="FFF2F2F2")
-    return f1, f2
-
-def _apply_row_fill(ws, row, fill):
-    for col in range(DETAIL_START_IDX, DETAIL_END_IDX+1):
-        ws.cell(row=row, column=col).fill = fill
-
-def _apply_zebra_for_range(ws, start_row, end_row, f1, f2):
-    for r in range(start_row, end_row+1):
-        idx = (r - start_row) % 2
-        _apply_row_fill(ws, r, f1 if idx == 0 else f2)
 
 def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
     c = ws.cell(row=row, column=amount_col_idx)
@@ -475,18 +414,32 @@ def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
         c.value = f"={qcol}{row}*{pcol}{row}"
     c.number_format = '#,##0'
 
-def _update_subtotal_formula(ws, subtotal_row, end_row, amount_col_idx):
-    """小計セルのマージ左上アンカーへ式を書き込む"""
-    sub_anchor = _anchor_cell(ws, subtotal_row, amount_col_idx)
+def _update_subtotal_formula(ws, subtotal_row, start_row, end_row, amount_col_idx):
+    """小計セル（結合の左上アンカー）にSUM式を書き込む"""
     ac = get_column_letter(amount_col_idx)
-    sub_anchor.value = f"=SUM({ac}{BASE_START_ROW}:{ac}{end_row})"
-    sub_anchor.number_format = '#,##0'
+    if end_row < start_row:
+        # 明細0件のときは0
+        ws.cell(row=subtotal_row, column=amount_col_idx).value = 0
+        ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
+    else:
+        ws.cell(row=subtotal_row, column=amount_col_idx).value = f"=SUM({ac}{start_row}:{ac}{end_row})"
+        ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
 
-def _write_company_with_growth(ws, df_items):
-    # {{ITEMS_START}} は消すだけ（位置は使用しない）
-    r0, c0 = _find_items_start(ws)
+def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
+    """金額列（結合左端=amount_col_idx）で最初に見つかる SUM() 式セルを小計アンカーとみなす"""
+    for r in range(1, ws.max_row + 1):
+        v = ws.cell(row=r, column=amount_col_idx).value
+        if isinstance(v, str) and v.startswith("=") and "SUM(" in v.upper():
+            return r, amount_col_idx
+    return None, None
+
+def _write_company_preextended(ws, df_items: pd.DataFrame):
+    """事前拡張テンプレ前提：行挿入しない。既存枠の値だけを入れ替える。"""
+    # トークン位置
+    r0, c0 = _find_token(ws, TOKEN_ITEMS)
     if r0:
         ws.cell(row=r0, column=c0).value = None
+    start_row = r0 or BASE_START_ROW
 
     # 列番号
     c_task = column_index_from_string(COLMAP["task"])
@@ -495,67 +448,59 @@ def _write_company_with_growth(ws, df_items):
     c_price= column_index_from_string(COLMAP["unit_price"])
     c_amt  = column_index_from_string(COLMAP["amount"])
 
+    # 小計アンカー自動検出
+    sub_r, sub_c = _find_subtotal_anchor_auto(ws, c_amt)
+    if sub_r is None:
+        sub_r = BASE_SUBTOTAL_ROW
+        sub_c = c_amt
+
+    end_row = sub_r - 1
+    capacity = end_row - start_row + 1
     n = len(df_items)
-    base_capacity = BASE_END_ROW - BASE_START_ROW + 1  # 19〜30 = 12行
-    lack = max(0, n - base_capacity)
 
-    # 明細のZebra色
-    f1, f2 = _detect_zebra_fills(ws, BASE_START_ROW)
+    if capacity <= 0:
+        st.error("テンプレートの明細枠が不正です（小計行がITEMS_STARTより上にあります）。")
+        return
 
-    # 不足分は 30と31の間（=31の位置）に差し込み
-    if lack > 0:
-        ws.insert_rows(BASE_BLANK_ROW, amount=lack)
-        # 30行目の見た目とB:Nマージだけを新行にコピー
-        template_row = BASE_END_ROW
-        for i in range(lack):
-            rr = BASE_BLANK_ROW + i
-            _row_style_copy(ws, template_row, rr)
-            _replicate_detail_merge_only(ws, template_row, rr)
-            _ensure_amount_formula(ws, rr, c_qty, c_price, c_amt)
+    if n > capacity:
+        st.warning(f"テンプレの明細枠（{capacity}行）を超えました。先頭から{capacity}行のみを書き込みます。")
+        n = capacity
 
-    # 差し込み後の最終明細行と小計行
-    end_row = BASE_END_ROW + lack
-    subtotal_row = BASE_SUBTOTAL_ROW + lack  # 小計は自動で下にずれる
+    # 値だけクリア（スタイル/結合はテンプレ依存のまま）
+    for r in range(start_row, end_row + 1):
+        # 項目（結合左端セル）
+        cell_task = ws.cell(row=r, column=c_task)
+        if not isinstance(cell_task, MergedCell):
+            cell_task.value = None
 
-    # 明細範囲だけZebra再適用（空白31行と小計は触らない）
-    _apply_zebra_for_range(ws, BASE_START_ROW, end_row, f1, f2)
+        ws.cell(row=r, column=c_qty).value   = None
+        ws.cell(row=r, column=c_unit).value  = None
+        ws.cell(row=r, column=c_price).value = None
 
-    # 明細セルの値をクリア＆金額式補完（スタイルは保持）
-    for r in range(BASE_START_ROW, end_row+1):
-        _anchor_cell(ws, r, c_task).value  = None
-        _anchor_cell(ws, r, c_qty).value   = None
-        _anchor_cell(ws, r, c_unit).value  = None
-        _anchor_cell(ws, r, c_price).value = None
+        # 金額セル：式が無ければ補完
         _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
 
-    # 書き込み（枠内のみ）
-    cap_now = end_row - BASE_START_ROW + 1
-    if n > cap_now:
-        st.warning(f"テンプレ拡張後の枠（{cap_now}行）を超えました。{n-cap_now} 行は出力されません。")
-        n = cap_now
-
+    # 書き込み
     for i in range(n):
-        r = BASE_START_ROW + i
+        r = start_row + i
         row = df_items.iloc[i]
-        _anchor_cell(ws, r, c_task).value  = str(row.get("task",""))
-        _anchor_cell(ws, r, c_qty).value   = float(row.get("qty", 0) or 0)
-        _anchor_cell(ws, r, c_unit).value  = str(row.get("unit",""))
-        _anchor_cell(ws, r, c_price).value = int(float(row.get("unit_price", 0) or 0))
+        ws.cell(row=r, column=c_task).value  = str(row.get("task",""))
+        ws.cell(row=r, column=c_qty).value   = float(row.get("qty", 0) or 0)
+        ws.cell(row=r, column=c_unit).value  = str(row.get("unit",""))
+        ws.cell(row=r, column=c_price).value = int(float(row.get("unit_price", 0) or 0))
 
-    # 小計の式を更新（W19〜W{end_row}）
-    _update_subtotal_formula(ws, subtotal_row, end_row, c_amt)
+    # 小計式更新
+    last_detail_row = start_row + n - 1 if n > 0 else start_row - 1
+    _update_subtotal_formula(ws, sub_r, start_row, last_detail_row, c_amt)
 
 def export_with_company_template(template_bytes: bytes,
                                  df_items: pd.DataFrame,
                                  meta: dict):
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb.active
-    # トークンは掃除だけ
-    r0, c0 = _find_items_start(ws)
-    if r0:
-        ws.cell(row=r0, column=c0).value = None
 
-    _write_company_with_growth(ws, df_items)
+    # 行挿入なしの事前拡張テンプレに書き込む
+    _write_company_preextended(ws, df_items)
 
     out = BytesIO()
     wb.save(out)
@@ -607,7 +552,7 @@ if st.session_state["final_html"]:
     st.subheader("会社Excelテンプレで出力")
     tmpl = st.file_uploader("会社見積テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
     if tmpl is not None:
-        st.caption("テンプレに `{{ITEMS_START}}` を置いてください（例：B19）。31行は空白、32行は小計のまま保護します。")
+        st.caption("テンプレに `{{ITEMS_START}}` を明細1行目（例：B19）に置いてください。小計セルはW列のSUM式で自動検出されます（例：W72）。行挿入は行いません。")
         export_with_company_template(
             tmpl.read(),
             st.session_state["df"],
