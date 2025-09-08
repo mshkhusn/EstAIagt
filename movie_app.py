@@ -1,10 +1,13 @@
-import streamlit as st
-import google.generativeai as genai
-from openai import OpenAI
+# app.py
+import os
 import json
-import pandas as pd
 from io import BytesIO
 from datetime import date
+
+import streamlit as st
+import pandas as pd
+import google.generativeai as genai
+from openai import OpenAI
 from dateutil.relativedelta import relativedelta
 
 # =========================
@@ -19,15 +22,17 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 
+# APIキー設定
 genai.configure(api_key=GEMINI_API_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY   # openai==1.x は環境変数から取得
+openai_client = OpenAI()
 
 # =========================
 # 定数（税率・管理費・短納期）
 # =========================
 TAX_RATE = 0.10
-MGMT_FEE_CAP_RATE = 0.15   # TODO: 種別ごとに切替えるなら外部YAML化
-RUSH_K = 0.75              # accel = 1 + K * 短縮率
+MGMT_FEE_CAP_RATE = 0.15   # 種別で変える場合は外部YAML化推奨
+RUSH_K = 0.75              # rush係数: 1 + K * 短縮率
 
 # =========================
 # セッション状態
@@ -90,17 +95,11 @@ model_choice = st.selectbox("使用するAIモデル", ["Gemini 2.5 Pro", "GPT-5
 # ユーティリティ
 # =========================
 def rush_coeff(base_days: int, target_days: int) -> float:
-    """短納期係数を計算"""
+    """短納期係数を計算（target_days: 今日→納品日 / base_days: 撮影+編集+バッファ）"""
     if target_days >= base_days or base_days <= 0:
         return 1.0
     r = (base_days - target_days) / base_days
     return round(1 + RUSH_K * r, 2)
-
-def safe_int(x):
-    try:
-        return int(x)
-    except Exception:
-        return 0
 
 def build_prompt_json() -> str:
     """LLMへのプロンプト（JSONのみ出力させる）"""
@@ -165,7 +164,7 @@ def llm_generate_items_json(prompt: str) -> str:
             res = res.removeprefix("```").removesuffix("```").strip()
         return res
 
-    except Exception as e:
+    except Exception:
         # フォールバック（最小骨格）
         return json.dumps({"items":[
             {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
@@ -211,7 +210,6 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
         df_items.at[idx, "qty"] = 1
         df_items.at[idx, "小計"] = mgmt_final
     else:
-        # 行が無い場合は追加
         df_items = pd.concat([df_items, pd.DataFrame([{
             "category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":mgmt_final,"小計":mgmt_final
         }])], ignore_index=True)
@@ -233,20 +231,19 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
 def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     """カテゴリ見出し付きのHTMLテーブルを生成（安全にサーバ側で作成）"""
     def td_right(x): return f"<td style='text-align:right'>{x}</td>"
-    cols = ["カテゴリ","項目","単価","数量","単位","金額（円）"]
 
     html = []
     html.append("<p>以下は、映像制作にかかる各種費用をカテゴリごとに整理した概算見積書です。</p>")
     html.append(f"<p>短納期係数：{meta['rush_coeff']} ／ 管理費上限：{int(MGMT_FEE_CAP_RATE*100)}% ／ 消費税率：{int(TAX_RATE*100)}%</p>")
     html.append("<table border='1' cellspacing='0' cellpadding='6' style='border-collapse:collapse;width:100%'>")
-    html.append("<thead><tr>" + "".join([
-        "<th style='text-align:left'>カテゴリ</th>",
-        "<th style='text-align:left'>項目</th>",
-        "<th style='text-align:right'>単価</th>",
-        "<th style='text-align:left'>数量</th>",
-        "<th style='text-align:left'>単位</th>",
-        "<th style='text-align:right'>金額（円）</th>",
-    ]) + "</tr></thead>")
+    html.append("<thead><tr>"
+                "<th style='text-align:left'>カテゴリ</th>"
+                "<th style='text-align:left'>項目</th>"
+                "<th style='text-align:right'>単価</th>"
+                "<th style='text-align:left'>数量</th>"
+                "<th style='text-align:left'>単位</th>"
+                "<th style='text-align:right'>金額（円）</th>"
+                "</tr></thead>")
     html.append("<tbody>")
 
     current_cat = None
@@ -276,33 +273,61 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     return "\n".join(html)
 
 def download_excel(df_items: pd.DataFrame, meta: dict):
-    """Excel出力（列幅・合計行つき）"""
+    """Excel出力（xlsxwriter が無ければ openpyxl に自動フォールバック）"""
     out = df_items.copy()
     out = out[["category","task","unit_price","qty","unit","小計"]]
     out.columns = ["カテゴリ","項目","単価（円）","数量","単位","金額（円）"]
 
     buf = BytesIO()
-    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+
+    # 利用可能なエンジンを自動選択
+    try:
+        import xlsxwriter  # noqa: F401
+        engine = "xlsxwriter"
+    except ModuleNotFoundError:
+        engine = "openpyxl"
+
+    with pd.ExcelWriter(buf, engine=engine) as writer:
         out.to_excel(writer, index=False, sheet_name="見積もり")
-        wb = writer.book
-        ws = writer.sheets["見積もり"]
-        fmt_int = wb.add_format({"num_format": "#,##0"})
-        ws.set_column("A:B", 20)
-        ws.set_column("C:C", 14, fmt_int)
-        ws.set_column("D:D", 8)
-        ws.set_column("E:E", 8)
-        ws.set_column("F:F", 14, fmt_int)
 
-        # 合計の追記（値書き込み）
-        last_row = len(out) + 2  # header含め1-based
-        ws.write(last_row,   4, "小計（税抜）")   # E列(0-based col=4)
-        ws.write_number(last_row, 5, int(meta["taxable"]), fmt_int)
+        if engine == "xlsxwriter":
+            wb = writer.book
+            ws = writer.sheets["見積もり"]
+            fmt_int = wb.add_format({"num_format": "#,##0"})
+            ws.set_column("A:B", 20)
+            ws.set_column("C:C", 14, fmt_int)
+            ws.set_column("D:D", 8)
+            ws.set_column("E:E", 8)
+            ws.set_column("F:F", 14, fmt_int)
 
-        ws.write(last_row+1, 4, "消費税")
-        ws.write_number(last_row+1, 5, int(meta["tax"]), fmt_int)
+            last_row = len(out) + 2  # 1-based（ヘッダー込み）
+            ws.write(last_row,   4, "小計（税抜）")
+            ws.write_number(last_row,   5, int(meta["taxable"]), fmt_int)
+            ws.write(last_row+1, 4, "消費税")
+            ws.write_number(last_row+1, 5, int(meta["tax"]), fmt_int)
+            ws.write(last_row+2, 4, "合計")
+            ws.write_number(last_row+2, 5, int(meta["total"]), fmt_int)
 
-        ws.write(last_row+2, 4, "合計")
-        ws.write_number(last_row+2, 5, int(meta["total"]), fmt_int)
+        else:  # openpyxl
+            from openpyxl.utils import get_column_letter
+            ws = writer.book["見積もり"]
+            # 列幅
+            widths = {"A":20, "B":20, "C":14, "D":8, "E":8, "F":14}
+            for col, w in widths.items():
+                ws.column_dimensions[col].width = w
+            # 数値列の表示形式（#,##0）
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=3, max_col=3):
+                for cell in row: cell.number_format = '#,##0'
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=6, max_col=6):
+                for cell in row: cell.number_format = '#,##0'
+            # 合計の追記（値書き込み）
+            last_row = ws.max_row + 2
+            ws.cell(row=last_row,   column=5, value="小計（税抜）")
+            ws.cell(row=last_row,   column=6, value=int(meta["taxable"])).number_format = '#,##0'
+            ws.cell(row=last_row+1, column=5, value="消費税")
+            ws.cell(row=last_row+1, column=6, value=int(meta["tax"])).number_format = '#,##0'
+            ws.cell(row=last_row+2, column=5, value="合計")
+            ws.cell(row=last_row+2, column=6, value=int(meta["total"])).number_format = '#,##0'
 
     buf.seek(0)
     st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
