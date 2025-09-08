@@ -33,27 +33,61 @@ genai.configure(api_key=GEMINI_API_KEY)
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 # =========================
-# OpenAI 初期化（env経由・引数なしで安全に）
+# OpenAI 初期化（安全な遅延生成＆多段フォールバック）
 # =========================
 from openai import OpenAI as _OpenAI
 
-# secrets から環境へ（None対策）
+# secrets → 環境（None対策）
 if OPENAI_API_KEY:
     os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 else:
     st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
 
-# 企業アカウントの場合は org を渡す（無ければ渡さない）
 OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID", None)
 
-if OPENAI_ORG_ID:
-    openai_client = _OpenAI(organization=OPENAI_ORG_ID)  # api_key は環境変数から拾わせる
-else:
-    openai_client = _OpenAI()  # 引数なし
+_openai_client_cache = None  # 遅延生成キャッシュ
 
+def get_openai():
+    """環境差異に強い OpenAI クライアント生成（初回のみ）。"""
+    global _openai_client_cache
+    if _openai_client_cache is not None:
+        return _openai_client_cache
+
+    # 1) まずは素のコンストラクタ（推奨経路）
+    try:
+        if OPENAI_ORG_ID:
+            _openai_client_cache = _OpenAI(organization=OPENAI_ORG_ID)
+        else:
+            _openai_client_cache = _OpenAI()
+        return _openai_client_cache
+    except TypeError:
+        # 2) api_key を直接渡す（環境によってはこっちが通る）
+        try:
+            if OPENAI_ORG_ID:
+                _openai_client_cache = _OpenAI(api_key=OPENAI_API_KEY, organization=OPENAI_ORG_ID)
+            else:
+                _openai_client_cache = _OpenAI(api_key=OPENAI_API_KEY)
+            return _openai_client_cache
+        except TypeError:
+            pass
+
+    # 3) httpx を手動で差し込む（古い httpx 環境での TypeError 回避）
+    try:
+        import httpx
+        http_client = httpx.Client(timeout=60.0)  # 互換性重視：引数は最小限
+        if OPENAI_ORG_ID:
+            _openai_client_cache = _OpenAI(http_client=http_client, organization=OPENAI_ORG_ID)
+        else:
+            _openai_client_cache = _OpenAI(http_client=http_client)
+        return _openai_client_cache
+    except Exception as e:
+        st.error(f"OpenAI クライアント初期化に失敗しました: {type(e).__name__}: {str(e)[:300]}")
+        st.stop()
+
+# 表示用
 openai_version = getattr(importlib.import_module("openai"), "__version__", "1.x")
-USE_OPENAI_CLIENT_V1 = True  # 明示固定
+USE_OPENAI_CLIENT_V1 = True
 
 # =========================
 # 定数
