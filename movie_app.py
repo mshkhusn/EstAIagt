@@ -64,7 +64,7 @@ RUSH_K = 0.75
 # =========================
 # セッション
 # =========================
-for k in ["items_json_raw", "items_json", "df", "meta", "final_html"]:
+for k in ["items_json_raw", "items_json", "df", "meta", "final_html", "used_fallback"]:
     if k not in st.session_state:
         st.session_state[k] = None
 
@@ -252,7 +252,37 @@ def _gemini_model_id_from_choice(choice: str) -> str:
     return "gemini-2.5-flash"
 
 def llm_generate_items_json(prompt: str) -> str:
+    def _robust_extract_gemini_text(resp) -> str:
+        """
+        Geminiの返却で .text が空になるケースに備え、candidates → content → parts.text から復元。
+        どれも取れなければ '' を返す。
+        """
+        try:
+            if hasattr(resp, "text") and resp.text:
+                return resp.text
+        except Exception:
+            pass
+        try:
+            cands = getattr(resp, "candidates", None) or []
+            for c in cands:
+                content = getattr(c, "content", None)
+                if not content:
+                    continue
+                parts = getattr(content, "parts", None) or []
+                buf = []
+                for p in parts:
+                    t = getattr(p, "text", None)
+                    if t:
+                        buf.append(t)
+                if buf:
+                    return "".join(buf)
+        except Exception:
+            pass
+        return ""
+
     try:
+        st.session_state["used_fallback"] = False  # リセット
+
         if model_choice.startswith("Gemini"):
             model_id = _gemini_model_id_from_choice(model_choice)
             model = genai.GenerativeModel(
@@ -265,7 +295,8 @@ def llm_generate_items_json(prompt: str) -> str:
                     "max_output_tokens": 2500,
                 },
             )
-            res = model.generate_content(prompt).text
+            resp = model.generate_content(prompt)
+            res = _robust_extract_gemini_text(resp)
         else:
             gpt_model = (
                 "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
@@ -283,7 +314,7 @@ def llm_generate_items_json(prompt: str) -> str:
                     temperature=0.6,
                     max_tokens=4000,
                 )
-                res = resp.choices[0].message.content
+                res = resp.choices[0].message.content or ""
             else:
                 resp = openai_client.ChatCompletion.create(
                     model=gpt_model,
@@ -294,17 +325,40 @@ def llm_generate_items_json(prompt: str) -> str:
                     temperature=0.6,
                     max_tokens=4000,
                 )
-                res = resp["choices"][0]["message"]["content"]
+                res = resp["choices"][0]["message"]["content"] or ""
 
+        # 生出力保存（デバッグ用）
         st.session_state["items_json_raw"] = res
-        return robust_parse_items_json(res)
-    except Exception:
-        return json.dumps({"items":[
-            {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
-            {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
-            {"category":"編集費・MA費","task":"編集","qty":max(1, int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
-            {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
-        ]}, ensure_ascii=False)
+
+        # 空・極端に短い応答は失敗扱い → fallback
+        if not res or len(res.strip()) < 5:
+            raise RuntimeError("LLM empty/short response")
+
+        parsed = robust_parse_items_json(res)
+
+        # items が空/不正なら失敗扱い → fallback
+        try:
+            if not json.loads(parsed).get("items"):
+                raise RuntimeError("Parsed items empty")
+        except Exception:
+            raise RuntimeError("Parsed items malformed")
+
+        return parsed
+
+    except Exception as e:
+        st.session_state["used_fallback"] = True
+        st.warning(f"⚠️ モデル応答の解析に失敗しました（{type(e).__name__}）。固定のfallbackを使用します。")
+
+        fallback = {
+            "items":[
+                {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
+                {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
+                {"category":"編集費・MA費","task":"編集","qty":max(1, int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
+                {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
+            ]
+        }
+        st.session_state["items_json_raw"] = json.dumps(fallback, ensure_ascii=False)
+        return json.dumps(fallback, ensure_ascii=False)
 
 def llm_normalize_items_json(items_json: str) -> str:
     try:
@@ -554,10 +608,16 @@ def _update_subtotal_formula(ws, subtotal_row, start_row, end_row, amount_col_id
         ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
 
 def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
+    # 金額列（W列）で最後に現れる SUM を小計アンカーとして採用
+    last_r = None
     for r in range(1, ws.max_row + 1):
         v = ws.cell(row=r, column=amount_col_idx).value
-        if isinstance(v, str) and v.startswith("=") and "SUM(" in v.upper():
-            return r, amount_col_idx
+        if isinstance(v, str):
+            s = v.strip().upper()
+            if s.startswith("=") and "SUM(" in s:
+                last_r = r
+    if last_r is not None:
+        return last_r, amount_col_idx
     return None, None
 
 def _write_preextended(ws, df_items: pd.DataFrame):
@@ -660,6 +720,13 @@ if st.button("💡 見積もりを作成"):
 # 表示 & ダウンロード
 # =========================
 if st.session_state["final_html"]:
+    # まず状態を表示（モデル/正規化/フォールバック）
+    st.info({
+        "model_choice": model_choice,
+        "normalize_pass": do_normalize_pass,
+        "used_fallback": bool(st.session_state.get("used_fallback")),
+    })
+
     st.success("✅ 見積もり結果（サーバ計算で整合性チェック済み）")
     st.components.v1.html(st.session_state["final_html"], height=900, scrolling=True)
     download_excel(st.session_state["df"], st.session_state["meta"])
@@ -674,6 +741,10 @@ if st.session_state["final_html"]:
             st.session_state["df"],
             st.session_state["meta"]
         )
+
+    # 生RAW出力を常設（いつでも確認できる）
+    with st.expander("デバッグ：モデル生出力（RAW）", expanded=False):
+        st.code(st.session_state.get("items_json_raw", "(no raw)"))
 
 # =========================
 # 開発者向け
