@@ -118,9 +118,10 @@ budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("備考（案件概要・要件・想定媒体・必須/除外事項などを自由記入）")
 st.caption("※備考に案件概要や条件を追記すると、不足項目の自動補完が働き、見積もりの精度が上がります。")
 
+# モデル選択肢に 2.0 Flash を追加
 model_choice = st.selectbox(
     "使用するAIモデル",
-    ["Gemini 2.5 Flash", "Gemini 2.5 Pro", "gpt-4.1-mini", "gpt-4.1", "GPT-5"]
+    ["Gemini 2.5 Flash", "Gemini 2.5 Pro", "Gemini 2.0 Flash", "gpt-4.1-mini", "gpt-4.1", "GPT-5"]
 )
 do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 do_infer_from_notes = st.checkbox("備考から不足項目を推論して補完（推奨）", value=True)
@@ -197,7 +198,7 @@ def robust_parse_items_json(raw: str) -> str:
     obj["items"] = items
     return json.dumps(obj, ensure_ascii=False)
 
-# ---------- プロンプト（GPT-5: 細分化強化 / 備考から補完） ----------
+# ---------- プロンプト ----------
 def _common_case_block() -> str:
     return f"""【案件条件】
 - 尺: {final_duration}
@@ -220,13 +221,11 @@ def _inference_block() -> str:
     if not do_infer_from_notes:
         return ""
     return """
-- 備考や案件概要、一般的な広告映像制作の慣行から、未指定の必須/付随項目を**推論して必ず補完**すること。
-  例: 企画構成、ロケハン、許認可申請、スタジオ/ロケ費、車両/機材搬入出、撮影助手、録音、DIT、メイキング、スチール、データ管理、CG/VFX、カラコレ、納品データ変換、権利処理、管理費など。
+- 備考や案件概要、一般的な広告映像制作の慣行から、未指定の必須/付随項目を推論して適宜補完すること。
 """
 
 def build_prompt_json() -> str:
-    if model_choice == "GPT-5":
-        return f"""
+    return f"""
 あなたは広告映像制作の見積り項目を作成するエキスパートです。
 以下の条件を満たし、**JSONのみ**を返してください。
 
@@ -236,77 +235,26 @@ def build_prompt_json() -> str:
 - JSON 1オブジェクト、ルートは items 配列のみ。
 - 各要素キー: category / task / qty / unit / unit_price / note
 - category は「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」いずれか。
-- **省略・統合を禁止**。粒度を細かく、必ず細分化すること。
-  例: 「制作人件費」は制作P/PM/ディレクター/カメラ/撮影助手/照明/録音/スタイリスト/ヘアメイク/美術/大道具/小道具/制作進行/ロケコーディネーター 等に分ける。
-  例: 「撮影費」はスタジオ/ロケ/機材（カメラ/レンズ/照明/音声/ドローン/グリーンバック）等に分ける。
-  例: 「編集費・MA費」はオフライン/オンライン/カラコレ/VFX・CG/字幕/MA/ナレ収録/楽曲ライセンスor作曲 等に分ける。
 {_inference_block()}
-- **最低でも 15 行以上**（管理費を除く）を出力。未知は妥当値で補完。
 - qty, unit は妥当な値（日/式/人/時間/カット等）。単価は日本の広告映像相場の一般レンジで推定。
 - 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
 - 合計/税/HTMLなどは出力しない。
 """
-    else:
-        return f"""
-あなたは広告映像制作の見積り項目を作成するエキスパートです。
-以下の条件を満たし、**JSONのみ**を返してください。
 
-{_common_case_block()}
-
-【出力仕様】
-- JSON 1オブジェクト、ルートは items 配列のみ。
-- 各要素キー: category / task / qty / unit / unit_price / note
-- category は「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」いずれか。
-{_inference_block()}
-- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
-- 合計/税/HTMLなどは出力しない。
-"""
-
-def build_normalize_prompt(items_json: str, preserve_detail: bool = False) -> str:
-    if preserve_detail:
-        return f"""
-次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
-- スキーマ外キー削除、欠損補完（qty/unit/unit_price/note）
-- **同義項目の統合や削減は禁止**（既存の粒度を保つ）
-- category を次のいずれかへ正規化：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
-- 単位表記のゆれ（人日/日/式/本/時間/カット等）を正規化
-- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）
-【入力JSON】
-{items_json}
-"""
-    return f"""
-次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
-- スキーマ外キー削除、欠損補完
-- category 正規化（制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費）
-- 単位正規化、同義項目統合、管理費は固定1行
-【入力JSON】
-{items_json}
-"""
-
-# ---------- LLM 呼び出し（JSON強制 & ロバストパース） ----------
-def call_gpt_json(prompt: str) -> str:
-    if USE_OPENAI_CLIENT_V1:
-        resp = openai_client.chat.completions.create(
-            model="gpt-5",
-            messages=[{"role": "system", "content": "You MUST return a single valid JSON object only."},
-                      {"role":"user","content":prompt}],
-            response_format={"type":"json_object"},
-            temperature=0.6,
-        )
-        return resp.choices[0].message.content
-    else:
-        resp = openai_client.ChatCompletion.create(
-            model="gpt-5",
-            messages=[{"role":"system","content":"You MUST return a single valid JSON object only."},
-                      {"role":"user","content":prompt}],
-            temperature=0.6,
-        )
-        return resp["choices"][0]["message"]["content"]
+# ---------- LLM 呼び出し ----------
+def _gemini_model_id_from_choice(choice: str) -> str:
+    if "2.5 Flash" in choice:
+        return "gemini-2.5-flash"
+    if "2.5 Pro" in choice:
+        return "gemini-2.5-pro"
+    if "2.0 Flash" in choice:
+        return "gemini-2.0-flash"
+    return "gemini-2.5-flash"
 
 def llm_generate_items_json(prompt: str) -> str:
     try:
         if model_choice.startswith("Gemini"):
-            model_id = "gemini-2.5-flash" if "Flash" in model_choice else "gemini-2.5-pro"
+            model_id = _gemini_model_id_from_choice(model_choice)
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
@@ -314,12 +262,11 @@ def llm_generate_items_json(prompt: str) -> str:
                     "candidate_count": 1,
                     "temperature": 0.4,
                     "top_p": 0.9,
-                    "max_output_tokens": 2500,  # 省略防止
+                    "max_output_tokens": 2500,
                 },
             )
             res = model.generate_content(prompt).text
         else:
-            # GPT系
             gpt_model = (
                 "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
                 else "gpt-4.1" if model_choice == "gpt-4.1"
@@ -334,7 +281,7 @@ def llm_generate_items_json(prompt: str) -> str:
                     ],
                     response_format={"type": "json_object"},
                     temperature=0.6,
-                    max_tokens=4000,  # 省略防止
+                    max_tokens=4000,
                 )
                 res = resp.choices[0].message.content
             else:
@@ -352,7 +299,6 @@ def llm_generate_items_json(prompt: str) -> str:
         st.session_state["items_json_raw"] = res
         return robust_parse_items_json(res)
     except Exception:
-        # 最低限のフォールバック
         return json.dumps({"items":[
             {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
             {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
@@ -362,11 +308,17 @@ def llm_generate_items_json(prompt: str) -> str:
 
 def llm_normalize_items_json(items_json: str) -> str:
     try:
-        preserve = (model_choice == "GPT-5")
-        prompt = build_normalize_prompt(items_json, preserve_detail=preserve)
-
+        prompt = f"""
+次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
+- スキーマ外キー削除、欠損補完（qty/unit/unit_price/note）
+- category 正規化（制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費）
+- 単位表記のゆれを正規化
+- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）
+【入力JSON】
+{items_json}
+"""
         if model_choice.startswith("Gemini"):
-            model_id = "gemini-2.5-flash" if "Flash" in model_choice else "gemini-2.5-pro"
+            model_id = _gemini_model_id_from_choice(model_choice)
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
@@ -374,7 +326,7 @@ def llm_normalize_items_json(items_json: str) -> str:
                     "candidate_count": 1,
                     "temperature": 0.4,
                     "top_p": 0.9,
-                    "max_output_tokens": 2000,  # 正規化は少し小さめでもOK
+                    "max_output_tokens": 2000,
                 },
             )
             res = model.generate_content(prompt).text
@@ -486,14 +438,19 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
         if cat != current_cat:
             html.append(f"<tr><td colspan='6' style='text-align:left;background:#f6f6f6;font-weight:bold'>{cat}</td></tr>")
             current_cat = cat
+        unit_price_str = f"{int(r.get('unit_price',0)):,}"
+        qty_str = str(r.get('qty',''))
+        unit_str = r.get('unit','')
+        amount_str = f"{int(r.get('小計',0)):,}"
+        task_str = r.get('task','')
         html.append(
             "<tr>"
             f"<td>{cat}</td>"
-            f"<td>{r.get('task','')}</td>"
-            f"{td_right(f'{int(r.get('unit_price',0)):,}')}"
-            f"<td>{str(r.get('qty',''))}</td>"
-            f"<td>{r.get('unit','')}</td>"
-            f"{td_right(f'{int(r.get('小計',0)):,}')}"
+            f"<td>{task_str}</td>"
+            f"{td_right(unit_price_str)}"
+            f"<td>{qty_str}</td>"
+            f"<td>{unit_str}</td>"
+            f"{td_right(amount_str)}"
             "</tr>"
         )
     html.append("</tbody></table>")
@@ -615,7 +572,7 @@ def _write_preextended(ws, df_items: pd.DataFrame):
     c_price= column_index_from_string(COLMAP["unit_price"])
     c_amt  = column_index_from_string(COLMAP["amount"])
 
-    sub_r, sub_c = _find_subtotal_anchor_auto(ws, c_amt)
+    sub_r, _ = _find_subtotal_anchor_auto(ws, c_amt)
     if sub_r is None:
         sub_r = BASE_SUBTOTAL_ROW
     end_row = sub_r - 1
