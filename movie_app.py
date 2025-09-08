@@ -20,6 +20,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 
 # ===== OpenAI v1 SDK =====
 from openai import OpenAI
+import httpx  # ← 追加
 
 # =========================
 # ページ設定
@@ -45,8 +46,21 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 if OPENAI_ORG_ID:
     os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
 
-# OpenAI v1 クライアント
-openai_client = OpenAI()
+# ★ プロキシ設定ブロックは削除（TypeError回避のため）
+# 以前の以下のコードは削除してください：
+# proxy_url = (
+#     st.secrets.get("OPENAI_PROXY")
+#     or st.secrets.get("HTTPS_PROXY")
+#     or st.secrets.get("HTTP_PROXY")
+# )
+# if proxy_url:
+#     os.environ["HTTPS_PROXY"] = proxy_url
+#     os.environ["HTTP_PROXY"] = proxy_url
+
+# OpenAI v1 クライアント（httpx.Client を明示して渡す）
+openai_client = OpenAI(
+    http_client=httpx.Client(timeout=60.0)
+)
 
 # バージョン表示
 try:
