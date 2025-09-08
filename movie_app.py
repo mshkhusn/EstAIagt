@@ -10,7 +10,7 @@ import pandas as pd
 import google.generativeai as genai
 from dateutil.relativedelta import relativedelta
 
-# openpyxl / Excel ユーティリティ
+# ===== openpyxl / Excel =====
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.utils import column_index_from_string, get_column_letter
@@ -23,24 +23,22 @@ from copy import copy
 st.set_page_config(page_title="映像制作概算見積エージェント vNext", layout="centered")
 
 # =========================
-# Secrets 読み込み
+# Secrets
 # =========================
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 
-# APIキー設定
 genai.configure(api_key=GEMINI_API_KEY)
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY  # v1系でもv0系でも害なし
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 # =========================
-# OpenAI 初期化（v1系/0系 両対応）
+# OpenAI 初期化（v1/v0 両対応）
 # =========================
-USE_OPENAI_CLIENT_V1 = False   # True: v1系 OpenAI(), False: v0系 openai.*
+USE_OPENAI_CLIENT_V1 = False
 openai_client = None
 openai_version = "unknown"
 try:
-    # v1.x 系
     from openai import OpenAI as _OpenAI
     openai_client = _OpenAI()
     USE_OPENAI_CLIENT_V1 = True
@@ -50,7 +48,6 @@ try:
     except Exception:
         openai_version = "1.x"
 except Exception:
-    # v0.x 系
     import openai as _openai
     _openai.api_key = OPENAI_API_KEY
     openai_client = _openai
@@ -58,14 +55,14 @@ except Exception:
     openai_version = getattr(openai_client, "__version__", "0.x")
 
 # =========================
-# 定数（税率・管理費・短納期）
+# 定数
 # =========================
 TAX_RATE = 0.10
-MGMT_FEE_CAP_RATE = 0.15   # 種別で変えるなら外部YAML化推奨
-RUSH_K = 0.75              # rush係数: 1 + K * 短縮率
+MGMT_FEE_CAP_RATE = 0.15
+RUSH_K = 0.75
 
 # =========================
-# セッション状態
+# セッション
 # =========================
 for k in ["items_json", "df", "meta", "final_html"]:
     if k not in st.session_state:
@@ -81,7 +78,7 @@ if password != APP_PASSWORD:
     st.stop()
 
 # =========================
-# ユーザー入力
+# 入力
 # =========================
 st.header("制作条件の入力")
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
@@ -118,7 +115,6 @@ usage_period = st.selectbox("使用期間", ["3ヶ月", "6ヶ月", "1年", "2年
 budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("その他備考（任意）")
 
-# === モデル選択（Gemini 2.5 Pro / GPT-5） & オプション ===
 model_choice = st.selectbox("使用するAIモデル", ["Gemini 2.5 Pro", "GPT-5"])
 do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 
@@ -131,13 +127,12 @@ def join_or(value_list, empty="なし", sep=", "):
     return sep.join(map(str, value_list))
 
 def rush_coeff(base_days: int, target_days: int) -> float:
-    """短納期係数を計算（target_days: 今日→納品日 / base_days: 撮影+編集+バッファ）"""
     if target_days >= base_days or base_days <= 0:
         return 1.0
     r = (base_days - target_days) / base_days
     return round(1 + RUSH_K * r, 2)
 
-# ---------- プロンプト（厳格版） ----------
+# ---------- プロンプト ----------
 def build_prompt_json() -> str:
     staff_roles_str = join_or(staff_roles, empty="未指定")
     kizai_str = join_or(kizai, empty="未指定")
@@ -149,13 +144,13 @@ def build_prompt_json() -> str:
 
     return f"""
 あなたは広告映像制作の見積り項目を作成するエキスパートです。
-以下の「案件条件」と「出力仕様・ルール」を満たし、**JSONのみ**を返してください。
+以下の条件を満たし、**JSONのみ**を返してください。
 
 【案件条件】
 - 尺: {final_duration}
 - 本数: {num_versions}本
 - 撮影日数: {shoot_days}日 / 編集日数: {edit_days}日
-- 納品希望日: {delivery_date.isoformat()}  （短納期係数や税計算は**サーバ側で行う**ため出力しない）
+- 納品希望日: {delivery_date.isoformat()}
 - キャスト: メイン{cast_main}人 / エキストラ{cast_extra}人 / タレント: {"あり" if talent_use else "なし"}
 - スタッフ候補: {staff_roles_str}
 - 撮影場所: {shoot_location_str}
@@ -166,34 +161,27 @@ def build_prompt_json() -> str:
 - 字幕: {subtitle_langs_str}
 - 使用地域: {usage_region} / 使用期間: {usage_period}
 - 参考予算: {budget_hint_or_none}
-- 備考メモ: {extra_notes_or_none}
+- 備考: {extra_notes_or_none}
 
 【出力仕様】
-- 返答は **JSON 1オブジェクトのみ**。前後に説明やマークダウンは不要。
-- ルートキーは "items"（配列）のみ。
-- 各要素は次のキーのみを持つ（順不同可・追加キー禁止）:
-  - "category": string  # 「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」
-  - "task": string
-  - "qty": number
-  - "unit": string
-  - "unit_price": number
-  - "note": string
-- **禁止**: 合計/小計/税/短納期係数の計算、HTML、コードフェンス。
-- **管理費は固定金額の1行のみ**（category="管理費", task="管理費（固定）", qty=1, unit="式"）。目安は**全体5–10%**。
+- JSON 1オブジェクト、ルートは items 配列のみ。
+- 各要素キー: category / task / qty / unit / unit_price / note
+- category は「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」いずれか。
+- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
+- 合計/税/HTMLなどは出力しない。
 """
 
-# ---------- 正規化パス用プロンプト ----------
 def build_normalize_prompt(items_json: str) -> str:
     return f"""
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
-- スキーマ外キー削除、欠損は補完
-- カテゴリ正規化（制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費）
+- スキーマ外キー削除、欠損補完
+- category 正規化（制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費）
 - 単位正規化、同義項目統合、管理費は固定1行
 【入力JSON】
 {items_json}
 """
 
-# ---------- OpenAI呼び出し（v1/v0 両対応） ----------
+# ---------- OpenAI 呼び出し ----------
 def call_gpt_json(prompt: str) -> str:
     if USE_OPENAI_CLIENT_V1:
         resp = openai_client.chat.completions.create(
@@ -208,7 +196,6 @@ def call_gpt_json(prompt: str) -> str:
         )
         return resp["choices"][0]["message"]["content"]
 
-# ---------- LLM項目生成 ----------
 def llm_generate_items_json(prompt: str) -> str:
     try:
         if model_choice == "Gemini 2.5 Pro":
@@ -223,6 +210,7 @@ def llm_generate_items_json(prompt: str) -> str:
             res = res.removeprefix("```").removesuffix("```").strip()
         return res
     except Exception:
+        # フォールバック
         return json.dumps({"items":[
             {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
             {"category":"撮影費","task":"カメラマン","qty":shoot_days,"unit":"日","unit_price":80000,"note":"fallback"},
@@ -230,7 +218,6 @@ def llm_generate_items_json(prompt: str) -> str:
             {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
         ]}, ensure_ascii=False)
 
-# ---------- LLM正規化 ----------
 def llm_normalize_items_json(items_json: str) -> str:
     try:
         prompt = build_normalize_prompt(items_json)
@@ -248,7 +235,7 @@ def llm_normalize_items_json(items_json: str) -> str:
     except Exception:
         return items_json
 
-# ---------- DataFrame/計算/HTML/Excel ----------
+# ---------- 計算 ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
     data = json.loads(items_json)
     items = data.get("items", [])
@@ -316,7 +303,6 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
                 "<th style='text-align:right'>金額（円）</th>"
                 "</tr></thead>")
     html.append("<tbody>")
-
     current_cat = None
     for _, r in df_items.iterrows():
         cat = r.get("category","")
@@ -395,30 +381,30 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =========================
-# 会社Excelテンプレ機能（31=空白・32=小計 を保持）
+# 会社Excelテンプレート出力（31=空白、32=小計を保持）
 # =========================
 TOKEN_ITEMS = "{{ITEMS_START}}"
 
-# 列マップ（このテンプレ専用）
 COLMAP = {
     "task": "B",        # 項目
     "qty": "O",         # 数量
     "unit": "Q",        # 単位
     "unit_price": "S",  # 単価
-    "amount": "W",      # 金額（=O×S）数式セル
+    "amount": "W",      # 金額（=O×S）
 }
 
-# 固定枠定義（テンプレ仕様）
-BASE_START_ROW   = 19   # 明細開始
-BASE_END_ROW     = 30   # ← 19〜30 が初期明細枠（31は常に空白）
-BASE_BLANK_ROW   = 31   # ← 触らない空白行（常に小計の直前）
-BASE_SUBTOTAL_ROW= 32   # ← 小計行（触らない）
+BASE_START_ROW    = 19   # 明細開始
+BASE_END_ROW      = 30   # ← 31 は空行として温存
+BASE_BLANK_ROW    = 31   # ← 触らない空白行
+BASE_SUBTOTAL_ROW = 32   # ← 触らない小計行
 
-# Zebra 適用範囲（B〜AA）
 DETAIL_START_COL = "B"
 DETAIL_END_COL   = "AA"
 DETAIL_START_IDX = column_index_from_string(DETAIL_START_COL)
 DETAIL_END_IDX   = column_index_from_string(DETAIL_END_COL)
+
+TASK_MERGE_LEFT  = column_index_from_string("B")
+TASK_MERGE_RIGHT = column_index_from_string("N")  # 明細の「項目」横マージ想定（B:N）
 
 def _anchor_cell(ws, row, col_idx):
     c = ws.cell(row=row, column=col_idx)
@@ -435,14 +421,13 @@ def _find_items_start(ws):
                 return cell.row, cell.column
     return None, None
 
-def _replicate_merged_row(ws, template_row, target_row):
-    to_add = []
+def _replicate_detail_merge_only(ws, template_row, target_row):
+    """横マージは B:N のブロックのみ複製。行全体や広域マージは無視。"""
     for rng in list(ws.merged_cells.ranges):
         if rng.min_row == rng.max_row == template_row:
-            to_add.append((rng.min_col, rng.max_col))
-    for mc, xc in to_add:
-        ws.merge_cells(start_row=target_row, start_column=mc,
-                       end_row=target_row,   end_column=xc)
+            if rng.min_col == TASK_MERGE_LEFT and rng.max_col == TASK_MERGE_RIGHT:
+                ws.merge_cells(start_row=target_row, start_column=TASK_MERGE_LEFT,
+                               end_row=target_row,   end_column=TASK_MERGE_RIGHT)
 
 def _row_style_copy(ws, src_row, dst_row):
     ws.row_dimensions[dst_row].height = ws.row_dimensions[src_row].height
@@ -460,16 +445,16 @@ def _extract_solid_fill(cell):
     rgb = getattr(color, "rgb", None)
     if isinstance(rgb, str) and len(rgb) == 8:
         return PatternFill(fill_type="solid", fgColor=rgb)
-    return None  # indexed/theme は解決しない
+    return None
 
 def _detect_zebra_fills(ws, start_row):
     c = DETAIL_START_IDX
     f1 = _extract_solid_fill(ws.cell(row=start_row,     column=c))
     f2 = _extract_solid_fill(ws.cell(row=start_row + 1, column=c))
     if f1 is None:
-        f1 = PatternFill(fill_type="solid", fgColor="FFFFFFFF")   # 白
+        f1 = PatternFill(fill_type="solid", fgColor="FFFFFFFF")
     if f2 is None:
-        f2 = PatternFill(fill_type="solid", fgColor="FFF2F2F2")   # 薄グレー
+        f2 = PatternFill(fill_type="solid", fgColor="FFF2F2F2")
     return f1, f2
 
 def _apply_row_fill(ws, row, fill):
@@ -479,7 +464,7 @@ def _apply_row_fill(ws, row, fill):
 def _apply_zebra_for_range(ws, start_row, end_row, f1, f2):
     for r in range(start_row, end_row+1):
         idx = (r - start_row) % 2
-        _apply_row_fill(ws, r, f1 if idx==0 else f2)
+        _apply_row_fill(ws, r, f1 if idx == 0 else f2)
 
 def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
     c = ws.cell(row=row, column=amount_col_idx)
@@ -491,12 +476,14 @@ def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
     c.number_format = '#,##0'
 
 def _update_subtotal_formula(ws, subtotal_row, end_row, amount_col_idx):
+    """小計セルのマージ左上アンカーへ式を書き込む"""
+    sub_anchor = _anchor_cell(ws, subtotal_row, amount_col_idx)
     ac = get_column_letter(amount_col_idx)
-    ws.cell(row=subtotal_row, column=amount_col_idx).value = f"=SUM({ac}{BASE_START_ROW}:{ac}{end_row})"
-    ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
+    sub_anchor.value = f"=SUM({ac}{BASE_START_ROW}:{ac}{end_row})"
+    sub_anchor.number_format = '#,##0'
 
 def _write_company_with_growth(ws, df_items):
-    # {{ITEMS_START}} があれば消去（場所は利用しない）
+    # {{ITEMS_START}} は消すだけ（位置は使用しない）
     r0, c0 = _find_items_start(ws)
     if r0:
         ws.cell(row=r0, column=c0).value = None
@@ -509,31 +496,31 @@ def _write_company_with_growth(ws, df_items):
     c_amt  = column_index_from_string(COLMAP["amount"])
 
     n = len(df_items)
-    base_capacity = BASE_END_ROW - BASE_START_ROW + 1  # 19〜30 の12行
+    base_capacity = BASE_END_ROW - BASE_START_ROW + 1  # 19〜30 = 12行
     lack = max(0, n - base_capacity)
 
-    # Zebra色検出
+    # 明細のZebra色
     f1, f2 = _detect_zebra_fills(ws, BASE_START_ROW)
 
-    # 不足分は 31（空白）に差し込む → 空白と小計は自動で下へ移動
+    # 不足分は 30と31の間（=31の位置）に差し込み
     if lack > 0:
         ws.insert_rows(BASE_BLANK_ROW, amount=lack)
-        # 直上の 30 行目の見た目を雛形にコピー
+        # 30行目の見た目とB:Nマージだけを新行にコピー
         template_row = BASE_END_ROW
         for i in range(lack):
-            rr = BASE_BLANK_ROW + i  # 差し込まれた新しい明細行
+            rr = BASE_BLANK_ROW + i
             _row_style_copy(ws, template_row, rr)
-            _replicate_merged_row(ws, template_row, rr)
+            _replicate_detail_merge_only(ws, template_row, rr)
             _ensure_amount_formula(ws, rr, c_qty, c_price, c_amt)
 
-    # 差し込み後の終端行/小計行を再計算
-    end_row = BASE_END_ROW + lack              # 最終明細行
-    subtotal_row = BASE_SUBTOTAL_ROW + lack    # 小計行（ずれた位置）
+    # 差し込み後の最終明細行と小計行
+    end_row = BASE_END_ROW + lack
+    subtotal_row = BASE_SUBTOTAL_ROW + lack  # 小計は自動で下にずれる
 
-    # 19〜end_row まで zebra 再適用（31 の空白行や小計は触らない）
+    # 明細範囲だけZebra再適用（空白31行と小計は触らない）
     _apply_zebra_for_range(ws, BASE_START_ROW, end_row, f1, f2)
 
-    # 値クリア（スタイル保持・数式補完）
+    # 明細セルの値をクリア＆金額式補完（スタイルは保持）
     for r in range(BASE_START_ROW, end_row+1):
         _anchor_cell(ws, r, c_task).value  = None
         _anchor_cell(ws, r, c_qty).value   = None
@@ -541,7 +528,7 @@ def _write_company_with_growth(ws, df_items):
         _anchor_cell(ws, r, c_price).value = None
         _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
 
-    # 明細書き込み（枠に収まる分のみ）
+    # 書き込み（枠内のみ）
     cap_now = end_row - BASE_START_ROW + 1
     if n > cap_now:
         st.warning(f"テンプレ拡張後の枠（{cap_now}行）を超えました。{n-cap_now} 行は出力されません。")
@@ -555,21 +542,18 @@ def _write_company_with_growth(ws, df_items):
         _anchor_cell(ws, r, c_unit).value  = str(row.get("unit",""))
         _anchor_cell(ws, r, c_price).value = int(float(row.get("unit_price", 0) or 0))
 
-    # 小計セルの式を更新（W19〜W{end_row}）
+    # 小計の式を更新（W19〜W{end_row}）
     _update_subtotal_formula(ws, subtotal_row, end_row, c_amt)
 
 def export_with_company_template(template_bytes: bytes,
                                  df_items: pd.DataFrame,
-                                 meta: dict,
-                                 mode: str = "token",
-                                 fixed_config: dict | None = None):
+                                 meta: dict):
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb.active
-    # tokenモード：{{ITEMS_START}} を消しておくだけ（行番号は固定運用）
-    if mode == "token":
-        r0, c0 = _find_items_start(ws)
-        if r0:
-            ws.cell(row=r0, column=c0).value = None
+    # トークンは掃除だけ
+    r0, c0 = _find_items_start(ws)
+    if r0:
+        ws.cell(row=r0, column=c0).value = None
 
     _write_company_with_growth(ws, df_items)
 
@@ -585,7 +569,7 @@ def export_with_company_template(template_bytes: bytes,
     )
 
 # =========================
-# 実行ボタン
+# 実行
 # =========================
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もり項目を作成中…"):
@@ -622,34 +606,16 @@ if st.session_state["final_html"]:
     st.markdown("---")
     st.subheader("会社Excelテンプレで出力")
     tmpl = st.file_uploader("会社見積テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
-
-    mode = st.radio("テンプレの指定方法", ["トークン検出（推奨）", "固定セル指定"], horizontal=True)
     if tmpl is not None:
-        if mode == "トークン検出（推奨）":
-            st.caption("テンプレに `{{ITEMS_START}}` を置いてください（例：B19）。31行は常に空白、32行は小計の想定です。")
-            export_with_company_template(
-                tmpl.read(),
-                st.session_state["df"],
-                st.session_state["meta"],
-                mode="token"
-            )
-        else:
-            with st.form("fixed_cells_form"):
-                sheet_name = st.text_input("シート名（未入力なら先頭シート）", "")
-                start_row = st.number_input("明細開始行（固定: 19）", min_value=1, value=19, step=1)
-                start_col = st.number_input("明細開始列（A=1, B=2 ... 例: B列は2）", min_value=1, value=2, step=1)
-                prepared_rows = st.number_input("初期明細行数（固定: 12＝19〜30）", min_value=1, value=12, step=1)
-                submitted = st.form_submit_button("この設定で出力")
-            if submitted:
-                export_with_company_template(
-                    tmpl.read(),
-                    st.session_state["df"],
-                    st.session_state["meta"],
-                    mode="token"
-                )
+        st.caption("テンプレに `{{ITEMS_START}}` を置いてください（例：B19）。31行は空白、32行は小計のまま保護します。")
+        export_with_company_template(
+            tmpl.read(),
+            st.session_state["df"],
+            st.session_state["meta"]
+        )
 
 # =========================
-# 開発者向けダイアグ
+# 開発者向け
 # =========================
 with st.expander("開発者向け情報（バージョン確認）", expanded=False):
     st.write({
