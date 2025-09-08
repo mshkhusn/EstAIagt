@@ -64,12 +64,12 @@ RUSH_K = 0.75
 # ===== 必須出現タクソノミー（網羅アンカー） =====
 DETAIL_TAXONOMY = {
     "制作人件費": [
-        "制作プロデューサー","PM","制作進行","ディレクター",
-        "カメラマン","撮影助手","照明","録音","DIT",
+        "制作プロデューサー","制作プロジェクトマネージャー","制作進行","ディレクター",
+        "アシスタントディレクター","カメラマン","撮影助手","照明","録音","DIT",
         "スタイリスト","ヘアメイク","美術デザイナー","大道具","小道具","ロケコーディネーター"
     ],
     "企画": [
-        "企画構成","絵コンテ/コンテ","台本作成","ロケハン","許認可申請"
+        "企画構成","演出コンテ制作費","絵コンテ/コンテ","台本作成","ロケハン費","撮影許認可申請費"
     ],
     "撮影費": [
         "スタジオ費","ロケ費","車両/搬入出","カメラ機材","レンズ","照明機材","音声機材","ドローン","グリーンバック"
@@ -97,6 +97,106 @@ MIN_PER_CATEGORY = {
     "編集費・MA費": 5,
     "諸経費": 3
 }
+
+# ====== 相場レンジ（1日 or 1式単価の目安） ======
+RATE_TABLE = {
+    # 制作人件費
+    "制作プロデューサー": {"unit":"日","low":70000,"mid":90000,"high":120000},
+    "制作プロジェクトマネージャー": {"unit":"日","low":60000,"mid":80000,"high":100000},
+    "制作進行": {"unit":"日","low":50000,"mid":65000,"high":80000},
+    "ディレクター": {"unit":"日","low":90000,"mid":120000,"high":150000},
+    "アシスタントディレクター": {"unit":"日","low":50000,"mid":60000,"high":75000},
+    "カメラマン": {"unit":"日","low":70000,"mid":90000,"high":120000},
+    "撮影助手": {"unit":"日","low":35000,"mid":45000,"high":60000},
+    "照明": {"unit":"日","low":60000,"mid":80000,"high":100000},
+    "録音": {"unit":"日","low":55000,"mid":70000,"high":90000},
+    "DIT": {"unit":"日","low":45000,"mid":60000,"high":80000},
+    "スタイリスト": {"unit":"日","low":55000,"mid":70000,"high":90000},
+    "ヘアメイク": {"unit":"日","low":50000,"mid":65000,"high":80000},
+    "美術デザイナー": {"unit":"日","low":65000,"mid":80000,"high":110000},
+    "大道具": {"unit":"日","low":35000,"mid":45000,"high":60000},
+    "小道具": {"unit":"日","low":30000,"mid":40000,"high":55000},
+    "ロケコーディネーター": {"unit":"日","low":50000,"mid":65000,"high":85000},
+
+    # 企画
+    "企画構成": {"unit":"式","low":70000,"mid":90000,"high":130000},
+    "演出コンテ制作費": {"unit":"式","low":50000,"mid":70000,"high":100000},
+    "絵コンテ/コンテ": {"unit":"式","low":50000,"mid":70000,"high":100000},
+    "台本作成": {"unit":"式","low":50000,"mid":70000,"high":100000},
+    "ロケハン費": {"unit":"日","low":40000,"mid":50000,"high":70000},
+    "撮影許認可申請費": {"unit":"式","low":20000,"mid":30000,"high":60000},
+
+    # 撮影費
+    "スタジオ費": {"unit":"日","low":60000,"mid":80000,"high":150000},
+    "ロケ費": {"unit":"日","low":50000,"mid":70000,"high":120000},
+    "車両/搬入出": {"unit":"日","low":30000,"mid":40000,"high":60000},
+    "カメラ機材": {"unit":"日","low":50000,"mid":80000,"high":120000},
+    "レンズ": {"unit":"日","low":20000,"mid":40000,"high":80000},
+    "照明機材": {"unit":"日","low":40000,"mid":60000,"high":90000},
+    "音声機材": {"unit":"日","low":20000,"mid":30000,"high":60000},
+    "ドローン": {"unit":"日","low":80000,"mid":100000,"high":150000},
+    "グリーンバック": {"unit":"日","low":30000,"mid":40000,"high":70000},
+
+    # 出演関連費
+    "キャスト（メイン）": {"unit":"人","low":30000,"mid":50000,"high":100000},
+    "エキストラ": {"unit":"人","low":8000,"mid":12000,"high":20000},
+    "タレント使用料（該当時）": {"unit":"式","low":200000,"mid":400000,"high":1000000},
+    "キャスティング費": {"unit":"式","low":50000,"mid":70000,"high":120000},
+    "衣装/フィッティング": {"unit":"式","low":20000,"mid":30000,"high":60000},
+    "交通/ケータリング": {"unit":"日","low":15000,"mid":20000,"high":40000},
+
+    # 編集・MA
+    "オフライン編集": {"unit":"日","low":60000,"mid":80000,"high":120000},
+    "オンライン編集": {"unit":"日","low":70000,"mid":90000,"high":140000},
+    "カラコレ/グレーディング": {"unit":"日","low":60000,"mid":80000,"high":120000},
+    "VFX/CG": {"unit":"日","low":80000,"mid":100000,"high":160000},
+    "モーショングラフィックス": {"unit":"日","low":70000,"mid":90000,"high":140000},
+    "字幕制作": {"unit":"式","low":20000,"mid":30000,"high":60000},
+    "MA": {"unit":"日","low":50000,"mid":70000,"high":100000},
+    "ナレーション収録/スタジオ": {"unit":"式","low":50000,"mid":70000,"high":120000},
+    "BGMライセンス/作曲": {"unit":"式","low":40000,"mid":60000,"high":120000},
+
+    # 諸経費
+    "データ管理/バックアップ": {"unit":"式","low":15000,"mid":20000,"high":40000},
+    "予備日": {"unit":"日","low":50000,"mid":60000,"high":80000},
+    "保険": {"unit":"式","low":10000,"mid":15000,"high":30000},
+    "雑費/通信費": {"unit":"式","low":8000,"mid":12000,"high":20000},
+    "納品データ変換/複数書き出し": {"unit":"式","low":15000,"mid":20000,"high":40000},
+}
+
+CATEGORY_DEFAULT_UNIT = {
+    "制作人件費": "日",
+    "企画": "式",
+    "撮影費": "日",
+    "出演関連費": "人",
+    "編集費・MA費": "日",
+    "諸経費": "式",
+    "管理費": "式",
+}
+
+# ====== 補正係数 ======
+MARKET_MULT = {
+    "日本全国平均": 1.00,
+    "首都圏（東京近郊）": 1.15,
+    "地方都市": 0.90,
+}
+CREW_GRADE_MULT = {
+    "スタンダード": 1.00,
+    "ジュニア": 0.90,
+    "シニア": 1.20,
+}
+SCALE_MULT = {
+    "小": 0.90,
+    "中": 1.00,
+    "大": 1.20,
+}
+FEATURE_MULT = {
+    "CG": 1.10,
+    "タレント": 1.15,
+    "多数版書き出し": 1.05,
+}
+
+GLOBAL_FALLBACK_UNIT_PRICE = 30000  # 最終保険
 
 # =========================
 # セッション
@@ -151,9 +251,18 @@ usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", 
 usage_period = st.selectbox("使用期間", ["3ヶ月", "6ヶ月", "1年", "2年", "無期限", "未定"])
 budget_hint = st.text_input("参考予算（任意）")
 
-# 備考 + ご指定の注意文
+# 備考 + 注意文
 extra_notes = st.text_area("備考（案件概要・要件・想定媒体・必須/除外事項などを自由記入）")
 st.caption("※備考に案件概要や条件を追記すると、不足項目の自動補完が働き、見積もりの精度が上がります。")
+
+# 相場調整パラメータ
+col1, col2, col3 = st.columns(3)
+with col1:
+    market = st.selectbox("相場地域", list(MARKET_MULT.keys()), index=0)
+with col2:
+    crew_grade = st.selectbox("人材グレード", list(CREW_GRADE_MULT.keys()), index=0)
+with col3:
+    scale = st.selectbox("制作規模", list(SCALE_MULT.keys()), index=1)
 
 model_choice = st.selectbox("使用するAIモデル", ["Gemini 2.5 Pro", "GPT-5"])
 do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
@@ -172,6 +281,24 @@ def rush_coeff(base_days: int, target_days: int) -> float:
         return 1.0
     r = (base_days - target_days) / base_days
     return round(1 + RUSH_K * r, 2)
+
+# ----- 数値ユーティリティ（カンマ・円マーク・全角対応） -----
+def _to_float(v, default=0.0):
+    if v is None:
+        return float(default)
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v)
+    s = s.replace("￥", "").replace("¥", "").replace(",", "").replace("，", "").strip()
+    z2h = str.maketrans("０１２３４５６７８９．－", "0123456789.-")
+    s = s.translate(z2h)
+    try:
+        return float(s)
+    except Exception:
+        return float(default)
+
+def _to_int(v, default=0):
+    return int(round(_to_float(v, default)))
 
 # ---------- JSON ロバストパース ----------
 JSON_ITEMS_FALLBACK = {"items": []}
@@ -231,7 +358,31 @@ def robust_parse_items_json(raw: str) -> str:
     obj["items"] = items
     return json.dumps(obj, ensure_ascii=False)
 
-# ---------- プロンプト（GPT-5: 細分化強化 / 備考から補完 / 網羅アンカー） ----------
+# ---------- 相場推定 ----------
+def estimate_unit_price(task: str, category: str,
+                        use="mid",
+                        has_cg=False, has_talent=False,
+                        deliverables_cnt=1,
+                        market_key="日本全国平均",
+                        grade_key="スタンダード",
+                        scale_key="中") -> tuple[int, str]:
+    base = RATE_TABLE.get(task)
+    if not base:
+        return (GLOBAL_FALLBACK_UNIT_PRICE, CATEGORY_DEFAULT_UNIT.get(category, "式"))
+    unit = base["unit"]
+    price = base.get(use, base["mid"])
+    price *= MARKET_MULT.get(market_key, 1.0)
+    price *= CREW_GRADE_MULT.get(grade_key, 1.0)
+    price *= SCALE_MULT.get(scale_key, 1.0)
+    if has_cg:
+        price *= FEATURE_MULT["CG"]
+    if has_talent:
+        price *= FEATURE_MULT["タレント"]
+    if deliverables_cnt and deliverables_cnt > 1:
+        price *= FEATURE_MULT["多数版書き出し"]
+    return (int(round(price, -2)), unit)
+
+# ---------- プロンプト ----------
 def _common_case_block() -> str:
     return f"""【案件条件】
 - 尺: {final_duration}
@@ -278,11 +429,14 @@ def build_prompt_json() -> str:
 - 以下の**網羅アンカー**を最低限カバー（該当すれば各カテゴリから複数行を必ず含める）:
 {taxonomy_hint}
 {_inference_block()}
+- 単価は一般的な日本の相場レンジ（low/mid/highの中央値相当）で推定し、0や未設定は入れないこと。
+- qty は 0 禁止（>0）、unit_price は 0/負の値禁止。未確定でも妥当な推定値を入れること。
 - qty/unit は現実的な単位（日/人/式/時間/カット等）、単価は日本の広告映像の一般レンジで推定。
 - 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
 - 合計/税/HTMLなどは出力しない。
 """
     else:
+        # Gemini も網羅アンカー＋統合禁止＋最低行数を適用
         return f"""
 あなたは広告映像制作の見積り項目を作成するエキスパートです。
 以下の条件を満たし、**JSONのみ**を返してください。
@@ -293,7 +447,14 @@ def build_prompt_json() -> str:
 - JSON 1オブジェクト、ルートは items 配列のみ。
 - 各要素キー: category / task / qty / unit / unit_price / note
 - category は「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」いずれか。
+- **省略・統合の禁止**（似た名称でもまとめず個別行にする）。
+- **管理費を除いて最低 20 行以上**を出力。未知は妥当値で補完。
+- 以下の**網羅アンカー**を最低限カバー（該当すれば各カテゴリから複数行を必ず含める）:
+{taxonomy_hint}
 {_inference_block()}
+- 単価は一般的な日本の相場レンジ（low/mid/highの中央値相当）で推定し、0や未設定は入れないこと。
+- qty は 0 禁止（>0）、unit_price は 0/負の値禁止。未確定でも妥当な推定値を入れること。
+- qty/unit は現実的な単位（日/人/式/時間/カット等）、単価は日本の広告映像の一般レンジで推定。
 - 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
 - 合計/税/HTMLなどは出力しない。
 """
@@ -302,7 +463,7 @@ def build_normalize_prompt(items_json: str, preserve_detail: bool = False) -> st
     if preserve_detail:
         return f"""
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
-- スキーマ外キー削除、欠損補完（qty/unit/unit_price/note）
+- スキーマ外キー削除、欠損補完（qty/unit/unit_price/note）。qty=0やunit_price<=0は禁止。妥当値で補完。
 - **同義項目の統合や削減は禁止**（既存の粒度を保つ）
 - category を次のいずれかへ正規化：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
 - 単位表記のゆれ（人日/日/式/本/時間/カット等）を正規化
@@ -351,7 +512,11 @@ def llm_generate_items_json(prompt: str) -> str:
         if model_choice == "Gemini 2.5 Pro":
             model = genai.GenerativeModel(
                 "gemini-2.5-pro",
-                generation_config={"response_mime_type": "application/json"}
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "candidate_count": 1,
+                    "max_output_tokens": 1600,
+                }
             )
             res = model.generate_content(prompt).text
         else:
@@ -390,30 +555,33 @@ def _count_by_category(df: pd.DataFrame):
     return df[df["category"] != "管理費"].groupby("category")["task"].count().to_dict()
 
 def expand_if_sparse(items_json_str: str) -> str:
-    """不足していたら GPT-5 に“追記専用”で拡張JSONを返してもらう。"""
+    """不足していたら“追記専用”で最大3回まで拡張。既存行は削除・上書きしない。"""
+    def _needs_more(df: pd.DataFrame):
+        if df.empty:
+            return True, list(MIN_PER_CATEGORY.keys())
+        non_mgmt = df[df["category"] != "管理費"]
+        need_total = len(non_mgmt) < MIN_TOTAL_ITEMS
+        counts = _count_by_category(df)
+        need_cats = [cat for cat, mn in MIN_PER_CATEGORY.items() if counts.get(cat, 0) < mn]
+        return (need_total or bool(need_cats)), need_cats
+
     try:
         df = df_from_items_json(items_json_str)
     except Exception:
         return items_json_str
 
-    non_mgmt = df[df["category"] != "管理費"]
-    need_total = len(non_mgmt) < MIN_TOTAL_ITEMS
-
-    need_cats = []
-    counts = _count_by_category(df)
-    for cat, min_needed in MIN_PER_CATEGORY.items():
-        if counts.get(cat, 0) < min_needed:
-            need_cats.append(cat)
-
-    if not need_total and not need_cats:
-        return items_json_str  # 十分に詳細
+    need, need_cats = _needs_more(df)
+    if not need:
+        return items_json_str
 
     taxonomy_hint = "\n".join(
         f"- {cat}: " + ", ".join(DETAIL_TAXONOMY[cat]) for cat in DETAIL_TAXONOMY if cat != "管理費"
     )
-    need_cats_str = ", ".join(need_cats) if need_cats else "全カテゴリ"
 
-    prompt = f"""
+    attempts = 0
+    while attempts < 3 and need:
+        need_cats_str = ", ".join(need_cats) if need_cats else "全カテゴリ"
+        prompt = f"""
 次のJSON（現状の見積り）を**ベースに**、不足している項目を**追記のみ**して返してください。
 - 既存項目は削除・統合・上書き禁止。**追記で拡張**すること。
 - **管理費以外の合計行数が最低 {MIN_TOTAL_ITEMS} 行**になるまで追加。
@@ -426,28 +594,74 @@ def expand_if_sparse(items_json_str: str) -> str:
 【現状JSON】
 {items_json_str}
 """
-    try:
-        expanded = call_gpt_json(prompt)
-        return robust_parse_items_json(expanded)
-    except Exception:
-        return items_json_str
+        try:
+            expanded = call_gpt_json(prompt)
+            items_json_str = robust_parse_items_json(expanded)
+            df = df_from_items_json(items_json_str)
+            need, need_cats = _needs_more(df)
+        except Exception:
+            break
+        attempts += 1
 
-# ---------- 計算 ----------
+    return items_json_str
+
+# ---------- df 生成（ゼロ禁止＋相場推定で補完） ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
     data = json.loads(items_json)
     items = data.get("items", [])
-    norm = []
-    for x in items:
-        norm.append({
-            "category": str(x.get("category","")),
-            "task": str(x.get("task","")),
-            "qty": float(x.get("qty", 0) or 0),
-            "unit": str(x.get("unit","")),
-            "unit_price": int(float(x.get("unit_price", 0) or 0)),
-            "note": str(x.get("note","")),
-        })
-    return pd.DataFrame(norm)
+    rows = []
 
+    has_cg = bool(use_cg)
+    has_talent = bool(talent_use)
+    deliverables_cnt = max(1, len(deliverables))
+
+    for x in items:
+        cat  = str(x.get("category","")).strip()
+        task = str(x.get("task","")).strip()
+        qty  = _to_float(x.get("qty", 0), 0)
+        unit = str(x.get("unit","")).strip()
+        price = _to_int(x.get("unit_price", 0), 0)
+        note = str(x.get("note","")).strip()
+
+        # 数量のデフォルト
+        if qty <= 0:
+            if cat == "出演関連費" and ("エキストラ" in task):
+                qty = max(1, cast_extra or 1)
+            elif cat == "出演関連費" and ("キャスト" in task):
+                qty = max(1, cast_main or 1)
+            else:
+                qty = 1.0
+
+        # 単価が無い/0なら相場から推定
+        if price <= 0:
+            price, unit_guess = estimate_unit_price(
+                task, cat,
+                use="mid",
+                has_cg=has_cg, has_talent=has_talent,
+                deliverables_cnt=deliverables_cnt,
+                market_key=market,
+                grade_key=crew_grade,
+                scale_key=scale
+            )
+            if not unit:
+                unit = unit_guess
+
+        # 単位が空なら相場表/カテゴリ既定で補完
+        if not unit:
+            unit = RATE_TABLE.get(task, {}).get("unit") or CATEGORY_DEFAULT_UNIT.get(cat, "式")
+
+        rows.append({
+            "category": cat or "",
+            "task": task or "",
+            "qty": float(qty),
+            "unit": unit,
+            "unit_price": int(max(1, price)),
+            "note": note,
+        })
+
+    return pd.DataFrame(rows)
+
+# ---------- 計算 ----------
 def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
     accel = rush_coeff(base_days, target_days)
     df_items = df_items.copy()
@@ -703,9 +917,8 @@ if st.button("💡 見積もりを作成"):
         if do_normalize_pass:
             items_json_str = llm_normalize_items_json(items_json_str)
 
-        # ↓ ここで薄ければ追記（再プロンプトで拡張）
-        if model_choice == "GPT-5":
-            items_json_str = expand_if_sparse(items_json_str)
+        # ★ モデルに関わらず、不足なら追記専用で拡張（最大3回）
+        items_json_str = expand_if_sparse(items_json_str)
 
         try:
             df_items = df_from_items_json(items_json_str)
@@ -759,4 +972,7 @@ with st.expander("開発者向け情報（バージョン確認）", expanded=Fa
         "model_choice": model_choice,
         "min_total_items": MIN_TOTAL_ITEMS,
         "min_per_category": MIN_PER_CATEGORY,
+        "market": market,
+        "crew_grade": crew_grade,
+        "scale": scale,
     })
