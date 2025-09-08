@@ -132,36 +132,54 @@ def rush_coeff(base_days: int, target_days: int) -> float:
     r = (base_days - target_days) / base_days
     return round(1 + RUSH_K * r, 2)
 
-# ---------- プロンプト ----------
-def build_prompt_json() -> str:
-    staff_roles_str = join_or(staff_roles, empty="未指定")
-    kizai_str = join_or(kizai, empty="未指定")
-    deliverables_str = join_or(deliverables, empty="未指定")
-    subtitle_langs_str = join_or(subtitle_langs, empty="なし")
-    shoot_location_str = shoot_location if shoot_location else "未定"
-    budget_hint_or_none = budget_hint if budget_hint else "未設定"
-    extra_notes_or_none = extra_notes if extra_notes else "特になし"
-
-    return f"""
-あなたは広告映像制作の見積り項目を作成するエキスパートです。
-以下の条件を満たし、**JSONのみ**を返してください。
-
-【案件条件】
+# ---------- プロンプト（GPT-5は細分化を強制） ----------
+def _common_case_block() -> str:
+    return f"""【案件条件】
 - 尺: {final_duration}
 - 本数: {num_versions}本
 - 撮影日数: {shoot_days}日 / 編集日数: {edit_days}日
 - 納品希望日: {delivery_date.isoformat()}
 - キャスト: メイン{cast_main}人 / エキストラ{cast_extra}人 / タレント: {"あり" if talent_use else "なし"}
-- スタッフ候補: {staff_roles_str}
-- 撮影場所: {shoot_location_str}
-- 撮影機材: {kizai_str}
+- スタッフ候補: {join_or(staff_roles, empty="未指定")}
+- 撮影場所: {shoot_location if shoot_location else "未定"}
+- 撮影機材: {join_or(kizai, empty="未指定")}
 - 美術装飾: {set_design_quality}
 - CG: {"あり" if use_cg else "なし"} / ナレーション: {"あり" if use_narration else "なし"} / 音楽: {use_music} / MA: {"あり" if ma_needed else "なし"}
-- 納品形式: {deliverables_str}
-- 字幕: {subtitle_langs_str}
+- 納品形式: {join_or(deliverables, empty="未定")}
+- 字幕: {join_or(subtitle_langs, empty="なし")}
 - 使用地域: {usage_region} / 使用期間: {usage_period}
-- 参考予算: {budget_hint_or_none}
-- 備考: {extra_notes_or_none}
+- 参考予算: {budget_hint if budget_hint else "未設定"}
+- 備考: {extra_notes if extra_notes else "特になし"}"""
+
+def build_prompt_json() -> str:
+    # GPT-5 だけ「統合禁止・最低行数」を強化
+    if model_choice == "GPT-5":
+        return f"""
+あなたは広告映像制作の見積り項目を作成するエキスパートです。
+以下の条件を満たし、**JSONのみ**を返してください。
+
+{_common_case_block()}
+
+【出力仕様】
+- JSON 1オブジェクト、ルートは items 配列のみ。
+- 各要素キー: category / task / qty / unit / unit_price / note
+- category は「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」いずれか。
+- **省略・統合を禁止**。粒度を細かく、必ず細分化すること。
+  例: 「制作人件費」は「制作プロデューサー」「PM」「ディレクター」「カメラマン」「撮影助手」「照明」「録音」「スタイリスト」「ヘアメイク」「美術」「大/小道具」「制作進行」「ロケコーディネーター」など個別化。
+  例: 「撮影費」は「スタジオ費」「ロケ費」「機材（カメラ/レンズ/照明/音声/グリーンバック/ドローン）」などに分ける。
+  例: 「編集費・MA費」は「オフライン編集」「オンライン編集（カラコレ含む）」「VFX/CG」「字幕制作」「MA」「ナレーション収録/スタジオ」「BGMライセンス or 作曲」などに分ける。
+- **最低でも 15 行以上**（管理費を除く）を出力。想定が不明なときは一般的な必要項目を補完してでも分解する。
+- qty, unit は妥当な値を設定（例：日/式/人/カット等）。単価は日本の広告映像相場の一般レンジで推定。
+- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
+- 合計/税/HTMLなどは出力しない。
+"""
+    else:
+        # 既存（Geminiなど）向けの標準プロンプト
+        return f"""
+あなたは広告映像制作の見積り項目を作成するエキスパートです。
+以下の条件を満たし、**JSONのみ**を返してください。
+
+{_common_case_block()}
 
 【出力仕様】
 - JSON 1オブジェクト、ルートは items 配列のみ。
@@ -171,7 +189,20 @@ def build_prompt_json() -> str:
 - 合計/税/HTMLなどは出力しない。
 """
 
-def build_normalize_prompt(items_json: str) -> str:
+def build_normalize_prompt(items_json: str, preserve_detail: bool = False) -> str:
+    # GPT-5 のときは「統合禁止」で正規化（スキーマ補正のみ）
+    if preserve_detail:
+        return f"""
+次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
+- スキーマ外キー削除、欠損補完（qty/unit/unit_price/note）
+- **同義項目の統合や削減は禁止**（既存の粒度を保つ）
+- category は次のいずれかに正規化：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
+- 単位表記のゆれ（人日/日/式/本/カット等）を正規化
+- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）に揃える
+【入力JSON】
+{items_json}
+"""
+    # 既存の正規化（統合可）
     return f"""
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
 - スキーマ外キー削除、欠損補完
@@ -220,7 +251,9 @@ def llm_generate_items_json(prompt: str) -> str:
 
 def llm_normalize_items_json(items_json: str) -> str:
     try:
-        prompt = build_normalize_prompt(items_json)
+        # GPT-5 選択時は「粒度保持」正規化、それ以外は従来
+        preserve = (model_choice == "GPT-5")
+        prompt = build_normalize_prompt(items_json, preserve_detail=preserve)
         if model_choice == "Gemini 2.5 Pro":
             model = genai.GenerativeModel("gemini-2.5-pro")
             res = model.generate_content(prompt).text
@@ -385,18 +418,18 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
 # =========================
 TOKEN_ITEMS = "{{ITEMS_START}}"
 
-# 会社テンプレの列マッピング（このテンプレ前提）
+# 列マッピング（このテンプレ前提）
 COLMAP = {
-    "task": "B",        # 項目（B:N結合の左端セルに書く）
+    "task": "B",        # 項目（B:N結合の左端セル）
     "qty": "O",         # 数量
     "unit": "Q",        # 単位
     "unit_price": "S",  # 単価
     "amount": "W",      # 金額（=O×S）結合の左上アンカー
 }
 
-# 旧テンプレ互換用の定数（SUBTOTAL検出失敗時のみ使用）
-BASE_START_ROW    = 19   # 明細開始のフォールバック
-BASE_SUBTOTAL_ROW = 72   # 小計行のフォールバック（今回のテンプレではW72）
+# フォールバック（SUBTOTAL自動検出失敗時のみ使用）
+BASE_START_ROW    = 19
+BASE_SUBTOTAL_ROW = 72
 
 def _find_token(ws, token: str):
     for row in ws.iter_rows(values_only=False):
@@ -415,10 +448,8 @@ def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
     c.number_format = '#,##0'
 
 def _update_subtotal_formula(ws, subtotal_row, start_row, end_row, amount_col_idx):
-    """小計セル（結合の左上アンカー）にSUM式を書き込む"""
     ac = get_column_letter(amount_col_idx)
     if end_row < start_row:
-        # 明細0件のときは0
         ws.cell(row=subtotal_row, column=amount_col_idx).value = 0
         ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
     else:
@@ -426,7 +457,7 @@ def _update_subtotal_formula(ws, subtotal_row, start_row, end_row, amount_col_id
         ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
 
 def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
-    """金額列（結合左端=amount_col_idx）で最初に見つかる SUM() 式セルを小計アンカーとみなす"""
+    # 金額列（結合左端=amount_col_idx）で最初の SUM() を小計アンカーとみなす
     for r in range(1, ws.max_row + 1):
         v = ws.cell(row=r, column=amount_col_idx).value
         if isinstance(v, str) and v.startswith("=") and "SUM(" in v.upper():
@@ -434,8 +465,7 @@ def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
     return None, None
 
 def _write_company_preextended(ws, df_items: pd.DataFrame):
-    """事前拡張テンプレ前提：行挿入しない。既存枠の値だけを入れ替える。"""
-    # トークン位置
+    # ITEMS_START を起点に
     r0, c0 = _find_token(ws, TOKEN_ITEMS)
     if r0:
         ws.cell(row=r0, column=c0).value = None
@@ -448,7 +478,7 @@ def _write_company_preextended(ws, df_items: pd.DataFrame):
     c_price= column_index_from_string(COLMAP["unit_price"])
     c_amt  = column_index_from_string(COLMAP["amount"])
 
-    # 小計アンカー自動検出
+    # 小計アンカーを自動検出
     sub_r, sub_c = _find_subtotal_anchor_auto(ws, c_amt)
     if sub_r is None:
         sub_r = BASE_SUBTOTAL_ROW
@@ -466,18 +496,14 @@ def _write_company_preextended(ws, df_items: pd.DataFrame):
         st.warning(f"テンプレの明細枠（{capacity}行）を超えました。先頭から{capacity}行のみを書き込みます。")
         n = capacity
 
-    # 値だけクリア（スタイル/結合はテンプレ依存のまま）
+    # 値のみクリア（結合/罫線/塗りはテンプレ依存のまま）
     for r in range(start_row, end_row + 1):
-        # 項目（結合左端セル）
         cell_task = ws.cell(row=r, column=c_task)
         if not isinstance(cell_task, MergedCell):
             cell_task.value = None
-
         ws.cell(row=r, column=c_qty).value   = None
         ws.cell(row=r, column=c_unit).value  = None
         ws.cell(row=r, column=c_price).value = None
-
-        # 金額セル：式が無ければ補完
         _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
 
     # 書き込み
@@ -498,8 +524,6 @@ def export_with_company_template(template_bytes: bytes,
                                  meta: dict):
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb.active
-
-    # 行挿入なしの事前拡張テンプレに書き込む
     _write_company_preextended(ws, df_items)
 
     out = BytesIO()
@@ -552,7 +576,7 @@ if st.session_state["final_html"]:
     st.subheader("会社Excelテンプレで出力")
     tmpl = st.file_uploader("会社見積テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
     if tmpl is not None:
-        st.caption("テンプレに `{{ITEMS_START}}` を明細1行目（例：B19）に置いてください。小計セルはW列のSUM式で自動検出されます（例：W72）。行挿入は行いません。")
+        st.caption("テンプレに `{{ITEMS_START}}` を明細1行目（例：B19）に置いてください。小計セルはW列SUM式で自動検出（例：W72）。行挿入は行いません。")
         export_with_company_template(
             tmpl.read(),
             st.session_state["df"],
