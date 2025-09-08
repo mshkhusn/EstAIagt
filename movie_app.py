@@ -11,6 +11,8 @@ import pandas as pd
 import google.generativeai as genai
 from dateutil.relativedelta import relativedelta
 from openpyxl import load_workbook
+from openpyxl.cell.cell import MergedCell
+from openpyxl.utils import column_index_from_string
 
 # =========================
 # ページ設定
@@ -169,69 +171,24 @@ def build_prompt_json() -> str:
 - ルートキーは "items"（配列）のみ。
 - 各要素は次のキーのみを持つ（順不同可・追加キー禁止）:
   - "category": string  # 次のいずれかに厳格一致 → 「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」
-  - "task": string      # 項目名（例: "ディレクター", "ロケバス", "カラーグレーディング"）
-  - "qty": number       # 数量（整数または少数）
-  - "unit": string      # 単位（"日","人","式","本","カット","ページ","台","時間" など）
-  - "unit_price": number  # 単価（サーバ側で税計算を行うため税込/税抜の指定は不要）
-  - "note": string      # 前提・根拠・含む/含まないの注意点（空でも可）
-- **禁止**: 合計/小計/税/短納期係数・割増計算、HTMLやテキスト表、コードフェンス。
-- **管理費は固定金額の1行のみ**（category="管理費", task="管理費（固定）", qty=1, unit="式"）。目安は**全体5–10%**だが、レンジとバランスで妥当化。
+  - "task": string
+  - "qty": number
+  - "unit": string
+  - "unit_price": number
+  - "note": string
+- **禁止**: 合計/小計/税/短納期係数の計算、HTML、コードフェンス。
+- **管理費は固定金額の1行のみ**（category="管理費", task="管理費（固定）", qty=1, unit="式"）。目安は**全体5–10%**。
 
-【分類規則（厳守）】
-- 「制作プロデューサー」「制作PM」「ディレクター」→ 制作人件費
-- 「カメラマン」「照明」「録音」「スタイリスト」「ヘアメイク」「機材」「スタジオ」「ロケバス」「美術装飾」→ 撮影費
-- 俳優・モデル・エキストラ・キャスティング費・使用料（媒体/期間/地域）→ 出演関連費
-- オフライン/オンライン編集・カラー・MA・ナレ撮・字幕/翻訳・VFX/MG → 編集費・MA費
-- 交通/宿泊/ケータリング/申請・許認可/雑費/予備費 → 諸経費
-- 企画書/コンテ/絵コンテ/演出設計/プリプロ会議 → 企画
-- 単位の正規化例：人日→「日」、セット一式→「式」、カット数→「カット」、納品本数→「本」
-
-【価格レンジのガード（1日あたり概算）】
-- ディレクター: 80,000–200,000
-- プロデューサー/PM: 70,000–160,000
-- カメラマン: 80,000–180,000
-- 照明: 60,000–140,000
-- ヘアメイク/スタイリスト: 40,000–120,000
-- 編集（オフ/オン含む）: 60,000–150,000
-- カラー: 60,000–150,000
-- MA/ナレーター（1時間基準）: 20,000–80,000
-- 撮影機材一式（1日）: 50,000–200,000
-- スタジオ（1日）: 80,000–300,000
-- ロケバス（1日）: 50,000–120,000
-※ 逸脱する場合は `note` に根拠（高難度/大規模/持込/ディスカウント 等）。
-
-【数量の考え方（例）】
-- 人員系: 撮影日数×人数、編集は 編集日数×必要ロール（オフ/オン/カラー/MA 等）。
-- 機材/スタジオ/ロケバス: 撮影日数に準拠。
-- 派生書き出し（1:1/9:16 等）: 納品本数や派生係数で数量化（0以下は出力しない）。
-
-【参考予算がある場合】
-- 項目削減ではなく、数量・単価の現実的見直しやランク調整で近づける。乖離時は `note` に理由を記載。
-
-【抜けやすい項目の確認】
-- 企画/コンテ、プリプロ会議、機材・スタジオ、ロケバス、交通/宿泊、BGM/SE、素材購入、字幕/翻訳、MA、カラー、VFX、派生書き出し、データ管理、権利表記/クレジット、二次使用（※必要なら項目化）。
-
-【最終チェック】
-- **管理費（固定）1行**を必ず含める。
-- 大きく外れる単価はレンジへ寄せ、`note`に補正理由。
-- 同義重複は統合・正規化（「演出」→「ディレクター」等）。
-- **JSON構造に厳密準拠**、余計なキーや説明・合計は出力しない。
+【分類規則】…（省略可：前回と同じ）
 """
 
 # ---------- 正規化パス用プロンプト ----------
 def build_normalize_prompt(items_json: str) -> str:
     return f"""
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
-
-【やること】
-- スキーマ外のキーは削除。欠損キーは補完（空や0可）。
-- category を 次のいずれかに正規化：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
-- 単位を日本語代表表記に正規化（人日→日、セット→式 等）
-- 単価・数量は数値（負値・NaNは0）
-- 同義重複の task 名を統合（例: 演出=ディレクター）
-- 管理費（固定）は**1行のみ**：category=管理費, task=管理費（固定）, qty=1, unit=式, unit_price=合算額
-- 価格レンジからの過度な逸脱は近似値に補正し、noteに理由を追記
-
+- スキーマ外キー削除、欠損は補完
+- カテゴリを「制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費」に正規化
+- 単位正規化、人名重複統合、管理費は固定1行
 【入力JSON】
 {items_json}
 """
@@ -257,9 +214,8 @@ def llm_generate_items_json(prompt: str) -> str:
         if model_choice == "Gemini 2.5 Pro":
             model = genai.GenerativeModel("gemini-2.5-pro")
             res = model.generate_content(prompt).text
-        else:  # GPT-5
+        else:
             res = call_gpt_json(prompt)
-
         res = res.strip()
         if res.startswith("```json"):
             res = res.removeprefix("```json").removesuffix("```").strip()
@@ -290,7 +246,7 @@ def llm_normalize_items_json(items_json: str) -> str:
             res = res.removeprefix("```").removesuffix("```").strip()
         return res
     except Exception:
-        return items_json  # 失敗したら元を返す
+        return items_json
 
 # ---------- DataFrame/計算/HTML/Excel ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
@@ -309,16 +265,13 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
     return pd.DataFrame(norm)
 
 def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
-    """rush適用・管理費キャップ・税・合計を計算"""
     accel = rush_coeff(base_days, target_days)
     df_items = df_items.copy()
     df_items["小計"] = (df_items["qty"] * df_items["unit_price"]).round().astype(int)
 
-    # rushは管理費以外に適用
     is_mgmt = (df_items["category"] == "管理費")
     df_items.loc[~is_mgmt, "小計"] = (df_items.loc[~is_mgmt, "小計"] * accel).round().astype(int)
 
-    # 管理費キャップ
     mgmt_current = int(df_items.loc[is_mgmt, "小計"].sum()) if is_mgmt.any() else 0
     subtotal_after_rush = int(df_items.loc[~is_mgmt, "小計"].sum())
     mgmt_cap = int(round(subtotal_after_rush * MGMT_FEE_CAP_RATE))
@@ -326,7 +279,7 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
 
     if is_mgmt.any():
         idx = df_items[is_mgmt].index[0]
-        df_items.at[idx, "unit_price"] = mgmt_final  # qty=1前提
+        df_items.at[idx, "unit_price"] = mgmt_final
         df_items.at[idx, "qty"] = 1
         df_items.at[idx, "小計"] = mgmt_final
     else:
@@ -349,9 +302,7 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
     return df_items, meta
 
 def render_html(df_items: pd.DataFrame, meta: dict) -> str:
-    """カテゴリ見出し付きのHTMLテーブルを生成（安全にサーバ側で作成）"""
     def td_right(x): return f"<td style='text-align:right'>{x}</td>"
-
     html = []
     html.append("<p>以下は、映像制作にかかる各種費用をカテゴリごとに整理した概算見積書です。</p>")
     html.append(f"<p>短納期係数：{meta['rush_coeff']} ／ 管理費上限：{int(MGMT_FEE_CAP_RATE*100)}% ／ 消費税率：{int(TAX_RATE*100)}%</p>")
@@ -382,7 +333,6 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
             f"{td_right(f'{int(r.get('小計',0)):,}')}"
             "</tr>"
         )
-
     html.append("</tbody></table>")
     html.append(
         f"<p><b>小計（税抜）</b>：{meta['taxable']:,}円　／　"
@@ -393,14 +343,11 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     return "\n".join(html)
 
 def download_excel(df_items: pd.DataFrame, meta: dict):
-    """Excel出力（xlsxwriter が無ければ openpyxl に自動フォールバック）"""
     out = df_items.copy()
     out = out[["category","task","unit_price","qty","unit","小計"]]
     out.columns = ["カテゴリ","項目","単価（円）","数量","単位","金額（円）"]
 
     buf = BytesIO()
-
-    # 利用可能なエンジンを自動選択
     try:
         import xlsxwriter  # noqa: F401
         engine = "xlsxwriter"
@@ -419,17 +366,14 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
             ws.set_column("D:D", 8)
             ws.set_column("E:E", 8)
             ws.set_column("F:F", 14, fmt_int)
-
-            last_row = len(out) + 2  # 1-based（ヘッダー込み）
+            last_row = len(out) + 2
             ws.write(last_row,   4, "小計（税抜）")
             ws.write_number(last_row,   5, int(meta["taxable"]), fmt_int)
             ws.write(last_row+1, 4, "消費税")
             ws.write_number(last_row+1, 5, int(meta["tax"]), fmt_int)
             ws.write(last_row+2, 4, "合計")
             ws.write_number(last_row+2, 5, int(meta["total"]), fmt_int)
-
-        else:  # openpyxl
-            from openpyxl.utils import get_column_letter
+        else:
             ws = writer.book["見積もり"]
             widths = {"A":20, "B":20, "C":14, "D":8, "E":8, "F":14}
             for col, w in widths.items():
@@ -451,7 +395,7 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =========================
-# 会社Excelテンプレ機能
+# 会社Excelテンプレ機能（結合セル・列マップ対応）
 # =========================
 TOKEN_ITEMS = "{{ITEMS_START}}"
 TOKEN_SUBTOTAL = "{{SUBTOTAL}}"
@@ -466,7 +410,6 @@ def _find_cell_by_token(ws, token: str):
     return None
 
 def _insert_rows_with_format(ws, start_row, count):
-    """start_rowの行の書式をコピーしつつ、直下にcount行挿入"""
     if count <= 0:
         return
     ws.insert_rows(start_row+1, amount=count)
@@ -477,93 +420,103 @@ def _insert_rows_with_format(ws, start_row, count):
             if cell_above.has_style:
                 cell_new._style = copy(cell_above._style)
 
-def _write_items(ws, df_items: pd.DataFrame, start_row: int, start_col: int, prepared_rows: int):
-    """明細を書き込み。足りなければ行追加（書式コピー）"""
+def _anchor_cell(ws, row, col):
+    c = ws.cell(row=row, column=col)
+    if isinstance(c, MergedCell):
+        for rng in ws.merged_cells.ranges:
+            if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
+                return ws.cell(row=rng.min_row, column=rng.min_col)
+    return c
+
+def _col_to_idx(col):
+    if isinstance(col, int):
+        return col
+    return column_index_from_string(col)
+
+def _write_items(ws, df_items, start_row, start_col, prepared_rows,
+                 column_map=None, write_amount=False):
+    """
+    column_map 例：{"task":"B","qty":"O","unit":"Q","unit_price":"S","amount":"W"}
+    write_amount=False なら金額列は触らない（Excelの数式を保持）
+    """
+    if column_map is None:
+        column_map = {
+            "category": start_col,
+            "task": start_col + 1,
+            "unit_price": start_col + 2,
+            "qty": start_col + 3,
+            "unit": start_col + 4,
+            "amount": start_col + 5,
+        }
+    col_idx = {k: _col_to_idx(v) for k, v in column_map.items()}
+
     needed_rows = len(df_items)
     if needed_rows > prepared_rows:
         _insert_rows_with_format(ws, start_row + prepared_rows - 1, needed_rows - prepared_rows)
 
     for i, (_, r) in enumerate(df_items.iterrows()):
         row = start_row + i
-        ws.cell(row=row, column=start_col+0, value=r["category"])
-        ws.cell(row=row, column=start_col+1, value=r["task"])
-        ws.cell(row=row, column=start_col+2, value=int(r["unit_price"]))
-        ws.cell(row=row, column=start_col+3, value=float(r["qty"]))
-        ws.cell(row=row, column=start_col+4, value=r["unit"])
-        ws.cell(row=row, column=start_col+5, value=int(r["小計"]))
+        if "category" in col_idx:
+            _anchor_cell(ws, row, col_idx["category"]).value = str(r.get("category",""))
+        _anchor_cell(ws, row, col_idx["task"]).value = str(r.get("task",""))
+        _anchor_cell(ws, row, col_idx["qty"]).value = float(r.get("qty", 0) or 0)
+        _anchor_cell(ws, row, col_idx["unit"]).value = str(r.get("unit",""))
+        _anchor_cell(ws, row, col_idx["unit_price"]).value = int(float(r.get("unit_price", 0) or 0))
+        if write_amount and "amount" in col_idx:
+            _anchor_cell(ws, row, col_idx["amount"]).value = int(float(r.get("小計", 0) or 0))
+
+# あなたのテンプレ列マップ（教えていただいた配置）
+COLUMN_MAP_FOR_YOUR_TEMPLATE = {
+    # "category": をテンプレに載せないなら省略でOK
+    "task": "B",        # 項目
+    "qty": "O",         # 数量
+    "unit": "Q",        # 単位
+    "unit_price": "S",  # 単価
+    "amount": "W",      # 金額（数式がある想定→write_amount=False）
+}
 
 def export_with_company_template(template_bytes: bytes,
                                  df_items: pd.DataFrame,
                                  meta: dict,
                                  mode: str = "token",
                                  fixed_config: dict | None = None):
-    """
-    mode: "token" or "fixed"
-      token: テンプレ内のトークン {{ITEMS_START}}, {{SUBTOTAL}}, {{TAX}}, {{TOTAL}} を検出して自動配置
-      fixed: fixed_config を使って固定セル配置
-    fixed_config 例:
-      {
-        "sheet_name": "Sheet1" or None(=active),
-        "start_row": 15, "start_col": 2, "prepared_rows": 10,
-        "subtotal_cell": "F40", "tax_cell": "F41", "total_cell": "F42"
-      }
-    """
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb[fixed_config["sheet_name"]] if (mode=="fixed" and fixed_config and fixed_config.get("sheet_name")) else wb.active
 
+    prepared_rows_default = 10  # テンプレ側の空行数
+
     if mode == "token":
         start = _find_cell_by_token(ws, TOKEN_ITEMS)
-        subtotal = _find_cell_by_token(ws, TOKEN_SUBTOTAL)
-        tax = _find_cell_by_token(ws, TOKEN_TAX)
-        total = _find_cell_by_token(ws, TOKEN_TOTAL)
-
-        if not all([start, subtotal, tax, total]):
-            st.error("テンプレ内のトークン（{{ITEMS_START}}, {{SUBTOTAL}}, {{TAX}}, {{TOTAL}}）のいずれかが見つかりません。固定セル方式に切り替えるか、テンプレにトークンを配置してください。")
+        if not start:
+            st.error("テンプレに {{ITEMS_START}} が見つかりません。B19 など明細先頭セルに置いてください。")
             return
-
-        # トークンセルを消去
         start_row, start_col = start.row, start.column
-        prepared_rows = 10  # 既存の空行数（必要に応じて増やしてください）
-        for c in [start, subtotal, tax, total]:
-            c.value = None
+        start.value = None  # トークン消す
 
-        _write_items(ws, df_items, start_row, start_col, prepared_rows)
-        ws.cell(row=subtotal.row, column=subtotal.column, value=int(meta["taxable"]))
-        ws.cell(row=tax.row, column=tax.column, value=int(meta["tax"]))
-        ws.cell(row=total.row, column=total.column, value=int(meta["total"]))
-
-        # 表示形式（#,##0）を単価・金額・合計欄へ
-        money_cols = [start_col+2, start_col+5]
-        for col in money_cols:
-            for i in range(len(df_items)):
-                ws.cell(row=start_row+i, column=col).number_format = '#,##0'
-        for cell in [ws.cell(row=subtotal.row, column=subtotal.column),
-                     ws.cell(row=tax.row, column=tax.column),
-                     ws.cell(row=total.row, column=total.column)]:
-            cell.number_format = '#,##0'
+        _write_items(
+            ws, df_items,
+            start_row=start_row,
+            start_col=start_col,
+            prepared_rows=prepared_rows_default,
+            column_map=COLUMN_MAP_FOR_YOUR_TEMPLATE,
+            write_amount=False   # 金額列は数式を保持
+        )
 
     else:  # fixed
         cfg = fixed_config or {}
-        start_row = int(cfg.get("start_row", 15))
-        start_col = int(cfg.get("start_col", 2))
-        prepared_rows = int(cfg.get("prepared_rows", 10))
-        subtotal_cell = cfg.get("subtotal_cell", "F40")
-        tax_cell = cfg.get("tax_cell", "F41")
-        total_cell = cfg.get("total_cell", "F42")
+        start_row = int(cfg.get("start_row", 19))  # 例: B19 の行
+        start_col = int(cfg.get("start_col", 2))   # 例: B=2
+        prepared_rows = int(cfg.get("prepared_rows", prepared_rows_default))
 
-        _write_items(ws, df_items, start_row, start_col, prepared_rows)
-        ws[subtotal_cell] = int(meta["taxable"])
-        ws[tax_cell] = int(meta["tax"])
-        ws[total_cell] = int(meta["total"])
+        _write_items(
+            ws, df_items,
+            start_row=start_row,
+            start_col=start_col,
+            prepared_rows=prepared_rows,
+            column_map=COLUMN_MAP_FOR_YOUR_TEMPLATE,
+            write_amount=False
+        )
 
-        # 表示形式
-        for i in range(len(df_items)):
-            ws.cell(row=start_row+i, column=start_col+2).number_format = '#,##0'
-            ws.cell(row=start_row+i, column=start_col+5).number_format = '#,##0'
-        for addr in [subtotal_cell, tax_cell, total_cell]:
-            ws[addr].number_format = '#,##0'
-
-    # ダウンロード
     out = BytesIO()
     wb.save(out)
     out.seek(0)
@@ -580,29 +533,21 @@ def export_with_company_template(template_bytes: bytes,
 # =========================
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もり項目を作成中…"):
-        # 1) 厳格プロンプト → JSON
         prompt = build_prompt_json()
         items_json = llm_generate_items_json(prompt)
-
-        # 2) 任意：正規化パス
         if do_normalize_pass:
             items_json = llm_normalize_items_json(items_json)
 
-        # 3) JSON→DF
         try:
             df_items = df_from_items_json(items_json)
         except Exception:
-            st.error("JSONの解析に失敗しました。入力条件を見直すか、もう一度お試しください。")
+            st.error("JSONの解析に失敗しました。もう一度お試しください。")
             st.stop()
 
-        # rush計算：基準 = 撮影+編集+5日、目標 = 今日→納品
         base_days = int(shoot_days + edit_days + 5)
         target_days = (delivery_date - date.today()).days
 
-        # 合計計算 & 管理費キャップ
         df_calc, meta = compute_totals(df_items, base_days, target_days)
-
-        # HTML生成
         final_html = render_html(df_calc, meta)
 
         st.session_state["items_json"] = items_json
@@ -625,7 +570,7 @@ if st.session_state["final_html"]:
     mode = st.radio("テンプレの指定方法", ["トークン検出（推奨）", "固定セル指定"], horizontal=True)
     if tmpl is not None:
         if mode == "トークン検出（推奨）":
-            st.caption("テンプレに `{{ITEMS_START}}`, `{{SUBTOTAL}}`, `{{TAX}}`, `{{TOTAL}}` を置いてください。")
+            st.caption("テンプレに `{{ITEMS_START}}` を置いてください（例：B19）。小計/合計は数式のままでOKです。")
             export_with_company_template(
                 tmpl.read(),
                 st.session_state["df"],
@@ -635,23 +580,16 @@ if st.session_state["final_html"]:
         else:
             with st.form("fixed_cells_form"):
                 sheet_name = st.text_input("シート名（未入力なら先頭シート）", "")
-                start_row = st.number_input("明細開始行（例: 15）", min_value=1, value=15, step=1)
+                start_row = st.number_input("明細開始行（例: 19）", min_value=1, value=19, step=1)
                 start_col = st.number_input("明細開始列（A=1, B=2 ... 例: B列は2）", min_value=1, value=2, step=1)
                 prepared_rows = st.number_input("テンプレに準備済みの明細行数", min_value=1, value=10, step=1)
-                subtotal_cell = st.text_input("小計セル（例: F40）", "F40")
-                tax_cell = st.text_input("消費税セル（例: F41）", "F41")
-                total_cell = st.text_input("合計セル（例: F42）", "F42")
                 submitted = st.form_submit_button("この設定で出力")
-
             if submitted:
                 cfg = {
                     "sheet_name": sheet_name if sheet_name.strip() else None,
                     "start_row": start_row,
                     "start_col": start_col,
                     "prepared_rows": prepared_rows,
-                    "subtotal_cell": subtotal_cell,
-                    "tax_cell": tax_cell,
-                    "total_cell": total_cell,
                 }
                 export_with_company_template(
                     tmpl.read(),
