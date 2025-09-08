@@ -41,9 +41,10 @@ else:
     st.stop()
 
 # =========================
-# OpenAI 初期化（v1 / envベース・互換性重視）
+# OpenAI 初期化（v1→0.x 自動フォールバック / 互換性重視）
 # =========================
-from openai import OpenAI as _OpenAI
+import importlib
+from openai import OpenAI as _OpenAI  # v1 が入っていればインポートは通る
 
 # secrets → 環境変数
 if OPENAI_API_KEY:
@@ -52,7 +53,7 @@ else:
     st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
 
-# 代理店/社内プロキシがある場合はここで環境へ流す（SDKが自動で拾う）
+# プロキシは環境変数に流すだけ（SDK が自動で拾う）
 proxy_url = (
     st.secrets.get("OPENAI_PROXY")
     or st.secrets.get("HTTPS_PROXY")
@@ -62,24 +63,40 @@ if proxy_url:
     os.environ["HTTPS_PROXY"] = proxy_url
     os.environ["HTTP_PROXY"] = proxy_url
 
-# org はあれば渡す／無ければ渡さない
 OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID")
-try:
-    if OPENAI_ORG_ID:
-        openai_client = _OpenAI(organization=OPENAI_ORG_ID)
-    else:
-        openai_client = _OpenAI()
-except TypeError:
-    # 古いSDK向けのフォールバック（organization未対応など）
-    openai_client = _OpenAI()
 
-# バージョン表示用
+USE_OPENAI_CLIENT_V1 = False
+openai_client = None
+
+# --- まず v1 を試す ---
+try:
+    client_kwargs = {}
+    if OPENAI_ORG_ID:
+        client_kwargs["organization"] = OPENAI_ORG_ID
+    openai_client = _OpenAI(**client_kwargs)   # ここで TypeError なら v1 が壊れている
+    USE_OPENAI_CLIENT_V1 = True
+except Exception as e:
+    # v1 が初期化できなければ 0.x にフォールバック
+    try:
+        import openai as _openai
+        _openai.api_key = OPENAI_API_KEY
+        if OPENAI_ORG_ID:
+            try:
+                _openai.organization = OPENAI_ORG_ID
+            except Exception:
+                pass
+        openai_client = _openai
+        USE_OPENAI_CLIENT_V1 = False
+        st.warning(f"OpenAI v1 初期化に失敗したため 0.x へフォールバックしました: {type(e).__name__}")
+    except Exception as e2:
+        st.error(f"OpenAI クライアントの初期化に失敗しました: {type(e2).__name__}: {str(e2)[:200]}")
+        st.stop()
+
+# バージョン表示
 try:
     openai_version = importlib.import_module("openai").__version__
 except Exception:
-    openai_version = "1.x"
-
-USE_OPENAI_CLIENT_V1 = True
+    openai_version = "unknown"
 
 # =========================
 # 定数
