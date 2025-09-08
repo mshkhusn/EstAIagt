@@ -1,4 +1,4 @@
-# app.py
+# app.py (OpenAI v1 専用版)
 import os
 import re
 import json
@@ -18,6 +18,9 @@ from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.utils import column_index_from_string, get_column_letter
 
+# ===== OpenAI v1 SDK =====
+from openai import OpenAI
+
 # =========================
 # ページ設定
 # =========================
@@ -31,21 +34,18 @@ OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 OPENAI_ORG_ID  = st.secrets.get("OPENAI_ORG_ID", None)
 
+# Gemini 初期化
 genai.configure(api_key=GEMINI_API_KEY)
 
-# OpenAI: 環境変数へ投入（無ければ停止）
-if OPENAI_API_KEY:
-    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-else:
+# OpenAI 環境変数（明示）
+if not OPENAI_API_KEY:
     st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+if OPENAI_ORG_ID:
+    os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
 
-# =========================
-# OpenAI 初期化（v1→0.x 自動フォールバック / 互換性重視）
-# =========================
-from openai import OpenAI as _OpenAI  # v1 が入っていればインポートは通る
-
-# プロキシは環境変数に流すだけ（SDK が自動で拾う）
+# プロキシ（任意）
 proxy_url = (
     st.secrets.get("OPENAI_PROXY")
     or st.secrets.get("HTTPS_PROXY")
@@ -55,32 +55,11 @@ if proxy_url:
     os.environ["HTTPS_PROXY"] = proxy_url
     os.environ["HTTP_PROXY"] = proxy_url
 
-USE_OPENAI_CLIENT_V1 = False
-openai_client = None
-
-# --- まず v1 を試す ---
-try:
-    client_kwargs = {}
-    if OPENAI_ORG_ID:
-        client_kwargs["organization"] = OPENAI_ORG_ID
-    openai_client = _OpenAI(**client_kwargs)   # ここで TypeError なら v1 が壊れている
-    USE_OPENAI_CLIENT_V1 = True
-except Exception as e:
-    # v1 が初期化できなければ 0.x にフォールバック
-    try:
-        import openai as _openai
-        _openai.api_key = OPENAI_API_KEY
-        if OPENAI_ORG_ID:
-            try:
-                _openai.organization = OPENAI_ORG_ID
-            except Exception:
-                pass
-        openai_client = _openai
-        USE_OPENAI_CLIENT_V1 = False
-        st.warning(f"OpenAI v1 初期化に失敗したため 0.x へフォールバックしました: {type(e).__name__}")
-    except Exception as e2:
-        st.error(f"OpenAI クライアントの初期化に失敗しました: {type(e2).__name__}: {str(e2)[:200]}")
-        st.stop()
+# OpenAI v1 クライアント
+openai_client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    organization=OPENAI_ORG_ID if OPENAI_ORG_ID else None,
+)
 
 # バージョン表示
 try:
@@ -179,10 +158,6 @@ def rush_coeff(base_days: int, target_days: int) -> float:
 
 # ---------- 予算パース（税抜） ----------
 def parse_budget_hint_jpy(s: str) -> Optional[int]:
-    """
-    '500万', '800万円', '5,000,000', '1200 万円', '1.2億' などを整数の円へ。
-    失敗時 None。
-    """
     if not s:
         return None
     t = str(s).strip().replace(",", "").replace(" ", "")
@@ -323,8 +298,8 @@ def _map_openai_model(choice: str) -> str:
 # ---------- LLM 呼び出し ----------
 def llm_generate_items_json(prompt: str) -> str:
     """
-    Gemini / GPT いずれかの選択モデルで items JSON を生成。
-    ・Geminiは .text が空のとき candidates.parts[].text から復元。
+    選択モデルで items JSON を生成。
+    Geminiは .text が空のとき candidates.parts[].text から復元。
     """
     def _robust_extract_gemini_text(resp) -> str:
         try:
@@ -376,25 +351,16 @@ def llm_generate_items_json(prompt: str) -> str:
                 ],
             )
             resp = model.generate_content(prompt)
-
             try:
                 pf = getattr(resp, "prompt_feedback", None)
                 st.session_state["gemini_block_reason"] = getattr(pf, "block_reason", None) if pf else None
             except Exception:
                 pass
-
             res = _robust_extract_gemini_text(resp)
-
-            # 空なら JSON MIME を外して再試行
             if not res or len(res.strip()) < 5:
                 model2 = genai.GenerativeModel(
                     model_id,
-                    generation_config={
-                        "candidate_count": 1,
-                        "temperature": 0.4,
-                        "top_p": 0.9,
-                        "max_output_tokens": 2500,
-                    },
+                    generation_config={"candidate_count": 1, "temperature": 0.4, "top_p": 0.9, "max_output_tokens": 2500},
                     safety_settings=[
                         {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
                         {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
@@ -404,38 +370,21 @@ def llm_generate_items_json(prompt: str) -> str:
                 )
                 resp2 = model2.generate_content(prompt)
                 res = _robust_extract_gemini_text(resp2)
-
             st.session_state["model_used"] = model_id
 
         else:
-            # ==== GPT (OpenAI) ====
             gpt_model = _map_openai_model(model_choice)
-            if USE_OPENAI_CLIENT_V1:
-                resp = openai_client.chat.completions.create(
-                    model=gpt_model,
-                    messages=[
-                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.2,
-                    max_tokens=8000,
-                )
-                res = resp.choices[0].message.content or ""
-            else:
-                # openai 0.x 互換
-                resp = openai_client.ChatCompletion.create(
-                    model=gpt_model,
-                    messages=[
-                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.2,
-                    max_tokens=8000,
-                )
-                # 0.x には response_format が無いので、プロンプトでJSON限定を強める
-                res = resp["choices"][0]["message"]["content"] or ""
-
+            resp = openai_client.chat.completions.create(
+                model=gpt_model,
+                messages=[
+                    {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                    {"role": "user", "content": prompt},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+                max_tokens=8000,
+            )
+            res = resp.choices[0].message.content or ""
             st.session_state["model_used"] = gpt_model
 
         st.session_state["items_json_raw"] = res
@@ -455,10 +404,8 @@ def llm_generate_items_json(prompt: str) -> str:
     except Exception as e:
         st.session_state["used_fallback"] = True
         st.session_state["fallback_reason"] = f"{type(e).__name__}: {str(e)[:200]}"
-        st.warning(
-            "⚠️ モデル応答の解析に失敗しました。固定のfallbackを使用します。\n"
-            f"reason={type(e).__name__}: {str(e)[:200]}"
-        )
+        st.warning("⚠️ モデル応答の解析に失敗しました。固定のfallbackを使用します。\n"
+                   f"reason={type(e).__name__}: {str(e)[:200]}")
         fallback = {
             "items":[
                 {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
@@ -496,29 +443,17 @@ def llm_normalize_items_json(items_json: str) -> str:
             res = model.generate_content(prompt).text
         else:
             gpt_model = _map_openai_model(model_choice)
-            if USE_OPENAI_CLIENT_V1:
-                resp = openai_client.chat.completions.create(
-                    model=gpt_model,
-                    messages=[
-                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.2,
-                    max_tokens=4000,
-                )
-                res = resp.choices[0].message.content or ""
-            else:
-                resp = openai_client.ChatCompletion.create(
-                    model=gpt_model,
-                    messages=[
-                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.2,
-                    max_tokens=4000,
-                )
-                res = resp["choices"][0]["message"]["content"] or ""
+            resp = openai_client.chat.completions.create(
+                model=gpt_model,
+                messages=[
+                    {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                    {"role": "user", "content": prompt},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+                max_tokens=4000,
+            )
+            res = resp.choices[0].message.content or ""
 
         return robust_parse_items_json(res)
     except Exception:
@@ -585,20 +520,14 @@ def scale_prices_to_budget(df_items: pd.DataFrame,
                            low: float = 0.6,
                            high: float = 1.6,
                            round_to: int = 100) -> pd.DataFrame:
-    """
-    参考予算＝税抜き小計に近づくよう、管理費以外の単価を一括スケール。
-    管理費は compute_totals() 内で「上限=非管理費15%」として再計算される想定。
-    """
     df_now, meta_now = compute_totals(df_items, base_days, target_days)
     nonmgmt_after_rush = float(meta_now["subtotal_after_rush_excl_mgmt"])
     if nonmgmt_after_rush <= 0:
         return df_items.copy()
 
-    # 税抜き小計 = 非管理費 after rush × (1 + MGMT_FEE_CAP_RATE)
     desired_nonmgmt_after_rush = target_taxable_jpy / (1.0 + MGMT_FEE_CAP_RATE)
-
     s = desired_nonmgmt_after_rush / nonmgmt_after_rush
-    s = max(low, min(high, s))  # 変動幅を抑制
+    s = max(low, min(high, s))
 
     df_scaled = df_items.copy()
     is_mgmt = (df_scaled["category"] == "管理費")
@@ -715,13 +644,7 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
 # DD見積書テンプレ出力（事前拡張テンプレ対応：行挿入なし）
 # =========================
 TOKEN_ITEMS = "{{ITEMS_START}}"
-COLMAP = {
-    "task": "B",        # 項目（B:N結合の左端セル）
-    "qty": "O",         # 数量
-    "unit": "Q",        # 単位
-    "unit_price": "S",  # 単価
-    "amount": "W",      # 金額（=O×S）結合の左上アンカー
-}
+COLMAP = {"task": "B", "qty": "O", "unit": "Q", "unit_price": "S", "amount": "W"}
 BASE_START_ROW    = 19
 BASE_SUBTOTAL_ROW = 72
 
@@ -751,7 +674,6 @@ def _update_subtotal_formula(ws, subtotal_row, start_row, end_row, amount_col_id
         ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
 
 def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
-    # 金額列（W列）で最後に現れる SUM を小計アンカーとして採用
     last_r = None
     for r in range(1, ws.max_row + 1):
         v = ws.cell(row=r, column=amount_col_idx).value
@@ -809,13 +731,10 @@ def _write_preextended(ws, df_items: pd.DataFrame):
     last_detail_row = start_row + n - 1 if n > 0 else start_row - 1
     _update_subtotal_formula(ws, sub_r, start_row, last_detail_row, c_amt)
 
-def export_with_template(template_bytes: bytes,
-                         df_items: pd.DataFrame,
-                         meta: dict):
+def export_with_template(template_bytes: bytes, df_items: pd.DataFrame, meta: dict):
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb.active
     _write_preextended(ws, df_items)
-
     out = BytesIO()
     wb.save(out)
     out.seek(0)
@@ -895,11 +814,7 @@ if st.session_state["final_html"]:
     tmpl = st.file_uploader("DD見積書テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
     if tmpl is not None:
         st.caption("テンプレに `{{ITEMS_START}}` を明細1行目（例：B19）に置いてください。小計セルはW列のSUM式で自動検出（例：W72）。行挿入は行いません。")
-        export_with_template(
-            tmpl.read(),
-            st.session_state["df"],
-            st.session_state["meta"]
-        )
+        export_with_template(tmpl.read(), st.session_state["df"], st.session_state["meta"])
 
     with st.expander("デバッグ：モデル生出力（RAW）", expanded=False):
         st.code(st.session_state.get("items_json_raw", "(no raw)"))
@@ -910,28 +825,19 @@ if st.session_state["final_html"]:
 with st.expander("OpenAI 接続テスト（任意）", expanded=False):
     if st.button("▶︎ gpt-4.1-mini に簡易テスト送信"):
         try:
-            if USE_OPENAI_CLIENT_V1:
-                r = openai_client.chat.completions.create(
-                    model="gpt-4.1-mini",
-                    messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
-                    response_format={"type": "json_object"},
-                    max_tokens=100,
-                )
-                st.code(r.choices[0].message.content or "(empty)")
-            else:
-                r = openai_client.ChatCompletion.create(
-                    model="gpt-4.1-mini",
-                    messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
-                    max_tokens=100,
-                )
-                st.code(r["choices"][0]["message"]["content"] or "(empty)")
+            r = openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
+                response_format={"type": "json_object"},
+                max_tokens=100,
+            )
+            st.code(r.choices[0].message.content or "(empty)")
         except Exception as e:
             st.error(f"OpenAI呼び出しで例外: {type(e).__name__}: {str(e)[:300]}")
 
 with st.expander("開発者向け情報（バージョン確認）", expanded=False):
     st.write({
         "openai_version": openai_version,
-        "use_openai_client_v1": USE_OPENAI_CLIENT_V1,
         "infer_from_notes": do_infer_from_notes,
         "normalize_pass": do_normalize_pass,
         "model_choice": model_choice,
