@@ -10,9 +10,11 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 from dateutil.relativedelta import relativedelta
+
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.styles import PatternFill
 
 # =========================
 # ページ設定
@@ -28,7 +30,7 @@ APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 
 # APIキー設定
 genai.configure(api_key=GEMINI_API_KEY)
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY  # v1系でもv0系でも害なし
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY  # v1系/0系どちらでもOK
 
 # =========================
 # OpenAI 初期化（v1系/0系 両対応）
@@ -59,7 +61,7 @@ except Exception:
 # 定数（税率・管理費・短納期）
 # =========================
 TAX_RATE = 0.10
-MGMT_FEE_CAP_RATE = 0.15   # 種別で変えるなら外部YAML化推奨
+MGMT_FEE_CAP_RATE = 0.15   # 管理費上限（税抜小計に対する%）
 RUSH_K = 0.75              # rush係数: 1 + K * 短縮率
 
 # =========================
@@ -171,24 +173,69 @@ def build_prompt_json() -> str:
 - ルートキーは "items"（配列）のみ。
 - 各要素は次のキーのみを持つ（順不同可・追加キー禁止）:
   - "category": string  # 次のいずれかに厳格一致 → 「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」
-  - "task": string
-  - "qty": number
-  - "unit": string
-  - "unit_price": number
-  - "note": string
-- **禁止**: 合計/小計/税/短納期係数の計算、HTML、コードフェンス。
+  - "task": string      # 項目名（例: "ディレクター", "ロケバス", "カラーグレーディング"）
+  - "qty": number       # 数量（整数/少数）
+  - "unit": string      # 単位（"日","人","式","本","カット","ページ","台","時間" など）
+  - "unit_price": number  # 単価（税抜/税込の明記不要。サーバ側で税計算）
+  - "note": string      # 前提・根拠・含む/含まないの注意点（空でも可）
+- **禁止**: 合計/小計/税/短納期係数・割増計算、HTMLやテーブル、コードフェンス。
 - **管理費は固定金額の1行のみ**（category="管理費", task="管理費（固定）", qty=1, unit="式"）。目安は**全体5–10%**。
 
-【分類規則】…（省略可：前回と同じ）
+【分類規則（厳守）】
+- 「制作プロデューサー」「制作PM」「ディレクター」→ 制作人件費
+- 「カメラマン」「照明」「録音」「スタイリスト」「ヘアメイク」「機材」「スタジオ」「ロケバス」「美術装飾」→ 撮影費
+- 俳優・モデル・エキストラ・キャスティング費・使用料（媒体/期間/地域）→ 出演関連費
+- オフライン/オンライン編集・カラー・MA・ナレ撮・字幕/翻訳・VFX/MG → 編集費・MA費
+- 交通/宿泊/ケータリング/申請・許認可/雑費/予備費 → 諸経費
+- 企画書/コンテ/絵コンテ/演出設計/プリプロ会議 → 企画
+- 単位の正規化例：人日→「日」、セット一式→「式」、カット数→「カット」、納品本数→「本」
+
+【価格レンジのガード（1日あたり概算）】
+- ディレクター: 80,000–200,000
+- プロデューサー/PM: 70,000–160,000
+- カメラマン: 80,000–180,000
+- 照明: 60,000–140,000
+- ヘアメイク/スタイリスト: 40,000–120,000
+- 編集（オフ/オン含む）: 60,000–150,000
+- カラー: 60,000–150,000
+- MA/ナレーター（1時間基準）: 20,000–80,000
+- 撮影機材一式（1日）: 50,000–200,000
+- スタジオ（1日）: 80,000–300,000
+- ロケバス（1日）: 50,000–120,000
+※ 逸脱する場合は note に根拠（高難度/大規模/持込/ディスカウント 等）。
+
+【数量の考え方（例）】
+- 人員系: 撮影日数×人数、編集は 編集日数×必要ロール（オフ/オン/カラー/MA 等）。
+- 機材/スタジオ/ロケバス: 撮影日数に準拠。
+- 派生書き出し（1:1/9:16 等）: 納品本数や派生係数で数量化。
+
+【参考予算がある場合】
+- 項目削減ではなく、数量・単価の現実的見直しやランク調整で近づける。乖離時は note に理由を記載。
+
+【抜けやすい項目の確認】
+- 企画/コンテ、プリプロ会議、機材・スタジオ、ロケバス、交通/宿泊、BGM/SE、素材購入、字幕/翻訳、MA、カラー、VFX、派生書き出し、データ管理、権利表記/クレジット、二次使用（必要なら項目化）。
+
+【最終チェック】
+- **管理費（固定）1行**を必ず含める。
+- 大きく外れる単価はレンジへ寄せ、noteに補正理由。
+- 同義重複は統合・正規化（「演出」→「ディレクター」等）。
+- **JSON構造に厳密準拠**、余計なキーや説明・合計は出力しない。
 """
 
 # ---------- 正規化パス用プロンプト ----------
 def build_normalize_prompt(items_json: str) -> str:
     return f"""
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
-- スキーマ外キー削除、欠損は補完
-- カテゴリを「制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費」に正規化
-- 単位正規化、人名重複統合、管理費は固定1行
+
+【やること】
+- スキーマ外のキーは削除。欠損キーは補完（空や0可）。
+- category を 次のいずれかに正規化：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
+- 単位を日本語代表表記に正規化（人日→日、セット→式 等）
+- 単価・数量は数値（負値・NaNは0）
+- 同義重複の task 名を統合（例: 演出=ディレクター）
+- 管理費（固定）は**1行のみ**：category=管理費, task=管理費（固定）, qty=1, unit=式, unit_price=合算額
+- 価格レンジからの過度な逸脱は近似値に補正し、noteに理由を追記
+
 【入力JSON】
 {items_json}
 """
@@ -216,6 +263,7 @@ def llm_generate_items_json(prompt: str) -> str:
             res = model.generate_content(prompt).text
         else:
             res = call_gpt_json(prompt)
+
         res = res.strip()
         if res.startswith("```json"):
             res = res.removeprefix("```json").removesuffix("```").strip()
@@ -223,6 +271,7 @@ def llm_generate_items_json(prompt: str) -> str:
             res = res.removeprefix("```").removesuffix("```").strip()
         return res
     except Exception:
+        # フォールバック（最低限動作）
         return json.dumps({"items":[
             {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
             {"category":"撮影費","task":"カメラマン","qty":shoot_days,"unit":"日","unit_price":80000,"note":"fallback"},
@@ -246,7 +295,7 @@ def llm_normalize_items_json(items_json: str) -> str:
             res = res.removeprefix("```").removesuffix("```").strip()
         return res
     except Exception:
-        return items_json
+        return items_json  # 失敗したら元を返す
 
 # ---------- DataFrame/計算/HTML/Excel ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
@@ -265,13 +314,16 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
     return pd.DataFrame(norm)
 
 def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
+    """rush適用・管理費キャップ・税・合計を計算"""
     accel = rush_coeff(base_days, target_days)
     df_items = df_items.copy()
     df_items["小計"] = (df_items["qty"] * df_items["unit_price"]).round().astype(int)
 
+    # rushは管理費以外に適用
     is_mgmt = (df_items["category"] == "管理費")
     df_items.loc[~is_mgmt, "小計"] = (df_items.loc[~is_mgmt, "小計"] * accel).round().astype(int)
 
+    # 管理費キャップ
     mgmt_current = int(df_items.loc[is_mgmt, "小計"].sum()) if is_mgmt.any() else 0
     subtotal_after_rush = int(df_items.loc[~is_mgmt, "小計"].sum())
     mgmt_cap = int(round(subtotal_after_rush * MGMT_FEE_CAP_RATE))
@@ -279,7 +331,7 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
 
     if is_mgmt.any():
         idx = df_items[is_mgmt].index[0]
-        df_items.at[idx, "unit_price"] = mgmt_final
+        df_items.at[idx, "unit_price"] = mgmt_final  # qty=1前提
         df_items.at[idx, "qty"] = 1
         df_items.at[idx, "小計"] = mgmt_final
     else:
@@ -303,6 +355,7 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
 
 def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     def td_right(x): return f"<td style='text-align:right'>{x}</td>"
+
     html = []
     html.append("<p>以下は、映像制作にかかる各種費用をカテゴリごとに整理した概算見積書です。</p>")
     html.append(f"<p>短納期係数：{meta['rush_coeff']} ／ 管理費上限：{int(MGMT_FEE_CAP_RATE*100)}% ／ 消費税率：{int(TAX_RATE*100)}%</p>")
@@ -320,6 +373,11 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     current_cat = None
     for _, r in df_items.iterrows():
         cat = r.get("category","")
+        unit_price_i = int(r.get("unit_price", 0))
+        qty_s = str(r.get("qty", ""))
+        unit_s = r.get("unit","")
+        subtotal_i = int(r.get("小計",0))
+
         if cat != current_cat:
             html.append(f"<tr><td colspan='6' style='text-align:left;background:#f6f6f6;font-weight:bold'>{cat}</td></tr>")
             current_cat = cat
@@ -327,12 +385,13 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
             "<tr>"
             f"<td>{cat}</td>"
             f"<td>{r.get('task','')}</td>"
-            f"{td_right(f'{int(r.get('unit_price',0)):,}')}"
-            f"<td>{str(r.get('qty',''))}</td>"
-            f"<td>{r.get('unit','')}</td>"
-            f"{td_right(f'{int(r.get('小計',0)):,}')}"
+            f"{td_right(f'{unit_price_i:,}')}"
+            f"<td>{qty_s}</td>"
+            f"<td>{unit_s}</td>"
+            f"{td_right(f'{subtotal_i:,}')}"
             "</tr>"
         )
+
     html.append("</tbody></table>")
     html.append(
         f"<p><b>小計（税抜）</b>：{meta['taxable']:,}円　／　"
@@ -343,6 +402,7 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     return "\n".join(html)
 
 def download_excel(df_items: pd.DataFrame, meta: dict):
+    """通常Excel（汎用）出力"""
     out = df_items.copy()
     out = out[["category","task","unit_price","qty","unit","小計"]]
     out.columns = ["カテゴリ","項目","単価（円）","数量","単位","金額（円）"]
@@ -366,13 +426,15 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
             ws.set_column("D:D", 8)
             ws.set_column("E:E", 8)
             ws.set_column("F:F", 14, fmt_int)
-            last_row = len(out) + 2
+
+            last_row = len(out) + 2  # 1-based
             ws.write(last_row,   4, "小計（税抜）")
             ws.write_number(last_row,   5, int(meta["taxable"]), fmt_int)
             ws.write(last_row+1, 4, "消費税")
             ws.write_number(last_row+1, 5, int(meta["tax"]), fmt_int)
             ws.write(last_row+2, 4, "合計")
             ws.write_number(last_row+2, 5, int(meta["total"]), fmt_int)
+
         else:
             ws = writer.book["見積もり"]
             widths = {"A":20, "B":20, "C":14, "D":8, "E":8, "F":14}
@@ -397,14 +459,6 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
 # =========================
 # 会社Excelテンプレ機能：枠拡張（小計前に行挿入）＋Zebraカラー対応
 # =========================
-from openpyxl import load_workbook
-from openpyxl.cell.cell import MergedCell
-from openpyxl.utils import column_index_from_string, get_column_letter
-from openpyxl.styles import PatternFill
-from io import BytesIO
-from copy import copy
-import re
-
 TOKEN_ITEMS = "{{ITEMS_START}}"
 
 # 列マップ（このテンプレ専用）
@@ -596,17 +650,16 @@ def export_with_company_template(template_bytes: bytes,
     """
     mode:
       - "token": シート内の {{ITEMS_START}} を探して消去（開始行はテンプレ既定の19行想定）
-      - "fixed": fixed_config は受け取るが、このテンプレは開始行 19 固定前提で処理（将来拡張用）
+      - "fixed": 受け取るが、このテンプレは開始行 19 固定前提（将来拡張用）
     """
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb.active
 
-    # token モード時は {{ITEMS_START}} を掃除するだけ（行は19固定のテンプレ）
     if mode == "token":
         r0, c0 = _find_items_start(ws)
         if r0:
             ws.cell(row=r0, column=c0).value = None
-    # fixed モードの指定が来ても、今回のテンプレは19固定なので無視（必要ならここでBASE_*を書き換える）
+    # fixed モード指定が来てもテンプレ構造固定のため現状は無視
 
     _write_company_with_growth(ws, df_items)
 
@@ -621,27 +674,34 @@ def export_with_company_template(template_bytes: bytes,
         key="dl_company_template"
     )
 
-
 # =========================
 # 実行ボタン
 # =========================
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もり項目を作成中…"):
+        # 1) 厳格プロンプト → JSON
         prompt = build_prompt_json()
         items_json = llm_generate_items_json(prompt)
+
+        # 2) 任意：正規化パス
         if do_normalize_pass:
             items_json = llm_normalize_items_json(items_json)
 
+        # 3) JSON→DF
         try:
             df_items = df_from_items_json(items_json)
         except Exception:
             st.error("JSONの解析に失敗しました。もう一度お試しください。")
             st.stop()
 
+        # rush計算：基準 = 撮影+編集+5日、目標 = 今日→納品
         base_days = int(shoot_days + edit_days + 5)
         target_days = (delivery_date - date.today()).days
 
+        # 合計計算 & 管理費キャップ
         df_calc, meta = compute_totals(df_items, base_days, target_days)
+
+        # HTML生成
         final_html = render_html(df_calc, meta)
 
         st.session_state["items_json"] = items_json
@@ -655,8 +715,11 @@ if st.button("💡 見積もりを作成"):
 if st.session_state["final_html"]:
     st.success("✅ 見積もり結果（サーバ計算で整合性チェック済み）")
     st.components.v1.html(st.session_state["final_html"], height=900, scrolling=True)
+
+    # 通常Excel
     download_excel(st.session_state["df"], st.session_state["meta"])
 
+    # 会社テンプレ出力
     st.markdown("---")
     st.subheader("会社Excelテンプレで出力")
     tmpl = st.file_uploader("会社見積テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
@@ -676,7 +739,7 @@ if st.session_state["final_html"]:
                 sheet_name = st.text_input("シート名（未入力なら先頭シート）", "")
                 start_row = st.number_input("明細開始行（例: 19）", min_value=1, value=19, step=1)
                 start_col = st.number_input("明細開始列（A=1, B=2 ... 例: B列は2）", min_value=1, value=2, step=1)
-                prepared_rows = st.number_input("テンプレに準備済みの明細行数", min_value=1, value=10, step=1)
+                prepared_rows = st.number_input("テンプレに準備済みの明細行数", min_value=1, value=13, step=1)
                 submitted = st.form_submit_button("この設定で出力")
             if submitted:
                 cfg = {
