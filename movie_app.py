@@ -467,24 +467,38 @@ def _row_style_copy(ws, src_row, dst_row):
             b._style = copy(a._style)
 
 def _extract_solid_fill(cell):
-    f = cell.fill
-    if f is None or f.fill_type != "solid":
+    """
+    セルの塗りつぶしを安全に取得。
+    - solid 以外 / rgb 以外（indexed/theme等）は None を返す。
+    - フォールバックは _detect_zebra_fills 側で白/薄グレーにする。
+    """
+    f = getattr(cell, "fill", None)
+    if not f or f.fill_type != "solid":
         return None
-    rgb = getattr(f.fgColor, "rgb", None)
-    if rgb and len(rgb) == 8:
+
+    # openpyxlでは fgColor が rgb / indexed / theme のどれか
+    color = getattr(f, "fgColor", None)
+    rgb = getattr(color, "rgb", None)
+
+    if isinstance(rgb, str) and len(rgb) == 8:
         return PatternFill(fill_type="solid", fgColor=rgb)
+
+    # ここで indexed/theme のときは無理に解決しない（テンプレ色に依存）
     return None
 
 def _detect_zebra_fills(ws, start_row):
-    """19行目と20行目の色を見て交互色を決定"""
-    r1, r2 = start_row, start_row+1
+    """
+    19/20行目（代表列=明細開始列）の色を読み取り、無ければ白/薄グレーにフォールバック。
+    """
     c = DETAIL_START_IDX
-    f1 = _extract_solid_fill(ws.cell(row=r1, column=c))
-    f2 = _extract_solid_fill(ws.cell(row=r2, column=c))
+    f1 = _extract_solid_fill(ws.cell(row=start_row,     column=c))
+    f2 = _extract_solid_fill(ws.cell(row=start_row + 1, column=c))
+
     if f1 is None:
-        f1 = PatternFill(fill_type="solid", fgColor="FFFFFFFF")
+        f1 = PatternFill(fill_type="solid", fgColor="FFFFFFFF")  # 白
     if f2 is None:
-        f2 = PatternFill(fill_type="solid", fgColor="FFF2F2F2")
+        f2 = PatternFill(fill_type="solid", fgColor="FFF2F2F2")  # 薄グレー
+
     return f1, f2
 
 def _apply_row_fill(ws, row, fill):
