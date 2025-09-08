@@ -120,7 +120,7 @@ st.caption("※備考に案件概要や条件を追記すると、不足項目�
 
 model_choice = st.selectbox(
     "使用するAIモデル",
-    ["Gemini 2.0 Flash", "Gemini 2.5 Pro", "gpt-4.1-mini", "gpt-4.1", "GPT-5"]
+    ["Gemini 2.5 Flash", "Gemini 2.5 Pro", "gpt-4.1-mini", "gpt-4.1", "GPT-5"]
 )
 do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 do_infer_from_notes = st.checkbox("備考から不足項目を推論して補完（推奨）", value=True)
@@ -306,7 +306,7 @@ def call_gpt_json(prompt: str) -> str:
 def llm_generate_items_json(prompt: str) -> str:
     try:
         if model_choice.startswith("Gemini"):
-            model_id = "gemini-2.0-flash" if "Flash" in model_choice else "gemini-2.5-pro"
+            model_id = "gemini-2.5-flash" if "Flash" in model_choice else "gemini-2.5-pro"
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
@@ -366,7 +366,7 @@ def llm_normalize_items_json(items_json: str) -> str:
         prompt = build_normalize_prompt(items_json, preserve_detail=preserve)
 
         if model_choice.startswith("Gemini"):
-            model_id = "gemini-2.0-flash" if "Flash" in model_choice else "gemini-2.5-pro"
+            model_id = "gemini-2.5-flash" if "Flash" in model_choice else "gemini-2.5-pro"
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
