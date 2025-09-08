@@ -43,15 +43,7 @@ else:
 # =========================
 # OpenAI 初期化（v1→0.x 自動フォールバック / 互換性重視）
 # =========================
-import importlib
 from openai import OpenAI as _OpenAI  # v1 が入っていればインポートは通る
-
-# secrets → 環境変数
-if OPENAI_API_KEY:
-    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-else:
-    st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
-    st.stop()
 
 # プロキシは環境変数に流すだけ（SDK が自動で拾う）
 proxy_url = (
@@ -62,8 +54,6 @@ proxy_url = (
 if proxy_url:
     os.environ["HTTPS_PROXY"] = proxy_url
     os.environ["HTTP_PROXY"] = proxy_url
-
-OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID")
 
 USE_OPENAI_CLIENT_V1 = False
 openai_client = None
@@ -335,7 +325,6 @@ def llm_generate_items_json(prompt: str) -> str:
     """
     Gemini / GPT いずれかの選択モデルで items JSON を生成。
     ・Geminiは .text が空のとき candidates.parts[].text から復元。
-    ・Geminiは safety を BLOCK_NONE に設定。
     """
     def _robust_extract_gemini_text(resp) -> str:
         try:
@@ -378,13 +367,12 @@ def llm_generate_items_json(prompt: str) -> str:
                     "top_p": 0.9,
                     "max_output_tokens": 2500,
                 },
+                # Civic Integrity / Toxicity は指定しない（SDK未対応版があるため）
                 safety_settings=[
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUAL", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUAL",            "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_TOXICITY", "threshold": "BLOCK_NONE"},
                 ],
             )
             resp = model.generate_content(prompt)
@@ -408,12 +396,10 @@ def llm_generate_items_json(prompt: str) -> str:
                         "max_output_tokens": 2500,
                     },
                     safety_settings=[
-                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_SEXUAL", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_SEXUAL",            "threshold": "BLOCK_NONE"},
                         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_TOXICITY", "threshold": "BLOCK_NONE"},
                     ],
                 )
                 resp2 = model2.generate_content(prompt)
@@ -422,19 +408,34 @@ def llm_generate_items_json(prompt: str) -> str:
             st.session_state["model_used"] = model_id
 
         else:
-            # ==== GPT (OpenAI) v1 ====
+            # ==== GPT (OpenAI) ====
             gpt_model = _map_openai_model(model_choice)
-            resp = get_openai().chat.completions.create(
-                model=gpt_model,
-                messages=[
-                    {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-                max_tokens=8000,
-            )
-            res = resp.choices[0].message.content or ""
+            if USE_OPENAI_CLIENT_V1:
+                resp = openai_client.chat.completions.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.2,
+                    max_tokens=8000,
+                )
+                res = resp.choices[0].message.content or ""
+            else:
+                # openai 0.x 互換
+                resp = openai_client.ChatCompletion.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=8000,
+                )
+                # 0.x には response_format が無いので、プロンプトでJSON限定を強める
+                res = resp["choices"][0]["message"]["content"] or ""
+
             st.session_state["model_used"] = gpt_model
 
         st.session_state["items_json_raw"] = res
@@ -495,17 +496,29 @@ def llm_normalize_items_json(items_json: str) -> str:
             res = model.generate_content(prompt).text
         else:
             gpt_model = _map_openai_model(model_choice)
-            resp = get_openai().chat.completions.create(
-                model=gpt_model,
-                messages=[
-                    {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-                max_tokens=4000,
-            )
-            res = resp.choices[0].message.content or ""
+            if USE_OPENAI_CLIENT_V1:
+                resp = openai_client.chat.completions.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.2,
+                    max_tokens=4000,
+                )
+                res = resp.choices[0].message.content or ""
+            else:
+                resp = openai_client.ChatCompletion.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=4000,
+                )
+                res = resp["choices"][0]["message"]["content"] or ""
 
         return robust_parse_items_json(res)
     except Exception:
@@ -897,13 +910,21 @@ if st.session_state["final_html"]:
 with st.expander("OpenAI 接続テスト（任意）", expanded=False):
     if st.button("▶︎ gpt-4.1-mini に簡易テスト送信"):
         try:
-            r = get_openai().chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
-                response_format={"type": "json_object"},
-                max_tokens=100,
-            )
-            st.code(r.choices[0].message.content or "(empty)")
+            if USE_OPENAI_CLIENT_V1:
+                r = openai_client.chat.completions.create(
+                    model="gpt-4.1-mini",
+                    messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
+                    response_format={"type": "json_object"},
+                    max_tokens=100,
+                )
+                st.code(r.choices[0].message.content or "(empty)")
+            else:
+                r = openai_client.ChatCompletion.create(
+                    model="gpt-4.1-mini",
+                    messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
+                    max_tokens=100,
+                )
+                st.code(r["choices"][0]["message"]["content"] or "(empty)")
         except Exception as e:
             st.error(f"OpenAI呼び出しで例外: {type(e).__name__}: {str(e)[:300]}")
 
