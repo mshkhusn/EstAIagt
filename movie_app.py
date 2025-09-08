@@ -61,6 +61,43 @@ TAX_RATE = 0.10
 MGMT_FEE_CAP_RATE = 0.15
 RUSH_K = 0.75
 
+# ===== 必須出現タクソノミー（網羅アンカー） =====
+DETAIL_TAXONOMY = {
+    "制作人件費": [
+        "制作プロデューサー","PM","制作進行","ディレクター",
+        "カメラマン","撮影助手","照明","録音","DIT",
+        "スタイリスト","ヘアメイク","美術デザイナー","大道具","小道具","ロケコーディネーター"
+    ],
+    "企画": [
+        "企画構成","絵コンテ/コンテ","台本作成","ロケハン","許認可申請"
+    ],
+    "撮影費": [
+        "スタジオ費","ロケ費","車両/搬入出","カメラ機材","レンズ","照明機材","音声機材","ドローン","グリーンバック"
+    ],
+    "出演関連費": [
+        "キャスト（メイン）","エキストラ","タレント使用料（該当時）","キャスティング費","衣装/フィッティング","交通/ケータリング"
+    ],
+    "編集費・MA費": [
+        "オフライン編集","オンライン編集","カラコレ/グレーディング","VFX/CG","モーショングラフィックス",
+        "字幕制作","MA","ナレーション収録/スタジオ","BGMライセンス/作曲"
+    ],
+    "諸経費": [
+        "データ管理/バックアップ","予備日","保険","雑費/通信費","納品データ変換/複数書き出し"
+    ],
+    "管理費": ["管理費（固定）"]
+}
+
+# ===== スパース検出しきい値 =====
+MIN_TOTAL_ITEMS = 20  # 管理費を除く最低行数
+MIN_PER_CATEGORY = {
+    "制作人件費": 6,
+    "企画": 3,
+    "撮影費": 5,
+    "出演関連費": 3,
+    "編集費・MA費": 5,
+    "諸経費": 3
+}
+
 # =========================
 # セッション
 # =========================
@@ -194,7 +231,7 @@ def robust_parse_items_json(raw: str) -> str:
     obj["items"] = items
     return json.dumps(obj, ensure_ascii=False)
 
-# ---------- プロンプト（GPT-5: 細分化強化 / 備考から補完） ----------
+# ---------- プロンプト（GPT-5: 細分化強化 / 備考から補完 / 網羅アンカー） ----------
 def _common_case_block() -> str:
     return f"""【案件条件】
 - 尺: {final_duration}
@@ -222,6 +259,9 @@ def _inference_block() -> str:
 """
 
 def build_prompt_json() -> str:
+    taxonomy_hint = "\n".join(
+        f"- {cat}: " + ", ".join(DETAIL_TAXONOMY[cat]) for cat in DETAIL_TAXONOMY if cat != "管理費"
+    )
     if model_choice == "GPT-5":
         return f"""
 あなたは広告映像制作の見積り項目を作成するエキスパートです。
@@ -233,13 +273,12 @@ def build_prompt_json() -> str:
 - JSON 1オブジェクト、ルートは items 配列のみ。
 - 各要素キー: category / task / qty / unit / unit_price / note
 - category は「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」いずれか。
-- **省略・統合を禁止**。粒度を細かく、必ず細分化すること。
-  例: 「制作人件費」は制作P/PM/ディレクター/カメラ/撮影助手/照明/録音/スタイリスト/ヘアメイク/美術/大道具/小道具/制作進行/ロケコーディネーター 等に分ける。
-  例: 「撮影費」はスタジオ/ロケ/機材（カメラ/レンズ/照明/音声/ドローン/グリーンバック）等に分ける。
-  例: 「編集費・MA費」はオフライン/オンライン/カラコレ/VFX・CG/字幕/MA/ナレ収録/楽曲ライセンスor作曲 等に分ける。
+- **省略・統合を禁止**。似た名称でもまとめず、個別に列挙すること。
+- **管理費を除いて最低 20 行以上**を出力。未知は妥当値で補完。
+- 以下の**網羅アンカー**を最低限カバー（該当すれば各カテゴリから複数行を必ず含める）:
+{taxonomy_hint}
 {_inference_block()}
-- **最低でも 15 行以上**（管理費を除く）を出力。未知は妥当値で補完。
-- qty, unit は妥当な値（日/式/人/時間/カット等）。単価は日本の広告映像相場の一般レンジで推定。
+- qty/unit は現実的な単位（日/人/式/時間/カット等）、単価は日本の広告映像の一般レンジで推定。
 - 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
 - 合計/税/HTMLなどは出力しない。
 """
@@ -282,35 +321,45 @@ def build_normalize_prompt(items_json: str, preserve_detail: bool = False) -> st
 
 # ---------- LLM 呼び出し（JSON強制 & ロバストパース） ----------
 def call_gpt_json(prompt: str) -> str:
+    """GPT-5をJSONで強制返答。列挙性を高めるため若干のpresence_penaltyを付与。"""
     if USE_OPENAI_CLIENT_V1:
         resp = openai_client.chat.completions.create(
             model="gpt-5",
-            messages=[{"role": "system", "content": "You MUST return a single valid JSON object only."},
-                      {"role":"user","content":prompt}],
-            response_format={"type":"json_object"},
-            temperature=0.6,
+            messages=[
+                {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+            presence_penalty=0.3,
         )
         return resp.choices[0].message.content
     else:
         resp = openai_client.ChatCompletion.create(
             model="gpt-5",
-            messages=[{"role":"system","content":"You MUST return a single valid JSON object only."},
-                      {"role":"user","content":prompt}],
-            temperature=0.6,
+            messages=[
+                {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            presence_penalty=0.3,
         )
         return resp["choices"][0]["message"]["content"]
 
 def llm_generate_items_json(prompt: str) -> str:
     try:
         if model_choice == "Gemini 2.5 Pro":
-            model = genai.GenerativeModel("gemini-2.5-pro",
-                                          generation_config={"response_mime_type":"application/json"})
+            model = genai.GenerativeModel(
+                "gemini-2.5-pro",
+                generation_config={"response_mime_type": "application/json"}
+            )
             res = model.generate_content(prompt).text
         else:
             res = call_gpt_json(prompt)
         st.session_state["items_json_raw"] = res
         return robust_parse_items_json(res)
     except Exception:
+        # 最低限のフォールバック
         return json.dumps({"items":[
             {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
             {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
@@ -323,14 +372,65 @@ def llm_normalize_items_json(items_json: str) -> str:
         preserve = (model_choice == "GPT-5")
         prompt = build_normalize_prompt(items_json, preserve_detail=preserve)
         if model_choice == "Gemini 2.5 Pro":
-            model = genai.GenerativeModel("gemini-2.5-pro",
-                                          generation_config={"response_mime_type":"application/json"})
+            model = genai.GenerativeModel(
+                "gemini-2.5-pro",
+                generation_config={"response_mime_type": "application/json"}
+            )
             res = model.generate_content(prompt).text
         else:
             res = call_gpt_json(prompt)
         return robust_parse_items_json(res)
     except Exception:
         return items_json
+
+# ---------- “薄い出力なら追記して拡張”（再プロンプト） ----------
+def _count_by_category(df: pd.DataFrame):
+    if df.empty:
+        return {}
+    return df[df["category"] != "管理費"].groupby("category")["task"].count().to_dict()
+
+def expand_if_sparse(items_json_str: str) -> str:
+    """不足していたら GPT-5 に“追記専用”で拡張JSONを返してもらう。"""
+    try:
+        df = df_from_items_json(items_json_str)
+    except Exception:
+        return items_json_str
+
+    non_mgmt = df[df["category"] != "管理費"]
+    need_total = len(non_mgmt) < MIN_TOTAL_ITEMS
+
+    need_cats = []
+    counts = _count_by_category(df)
+    for cat, min_needed in MIN_PER_CATEGORY.items():
+        if counts.get(cat, 0) < min_needed:
+            need_cats.append(cat)
+
+    if not need_total and not need_cats:
+        return items_json_str  # 十分に詳細
+
+    taxonomy_hint = "\n".join(
+        f"- {cat}: " + ", ".join(DETAIL_TAXONOMY[cat]) for cat in DETAIL_TAXONOMY if cat != "管理費"
+    )
+    need_cats_str = ", ".join(need_cats) if need_cats else "全カテゴリ"
+
+    prompt = f"""
+次のJSON（現状の見積り）を**ベースに**、不足している項目を**追記のみ**して返してください。
+- 既存項目は削除・統合・上書き禁止。**追記で拡張**すること。
+- **管理費以外の合計行数が最低 {MIN_TOTAL_ITEMS} 行**になるまで追加。
+- 不足カテゴリ：{need_cats_str}
+- 参考タクソノミー（最低限カバー）:
+{taxonomy_hint}
+- 必要なら備考（案件概要）から合理的に推論して項目を補完する。
+- 出力は**JSON 1オブジェクト（ルート items 配列のみ）**。
+
+【現状JSON】
+{items_json_str}
+"""
+    try:
+        expanded = call_gpt_json(prompt)
+        return robust_parse_items_json(expanded)
+    except Exception:
+        return items_json_str
 
 # ---------- 計算 ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
@@ -403,17 +503,22 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     current_cat = None
     for _, r in df_items.iterrows():
         cat = r.get("category","")
+        task = r.get("task","")
+        unit_price_val = int(r.get("unit_price", 0) or 0)
+        qty_val = r.get("qty", "")
+        unit_val = r.get("unit","")
+        subtotal_val = int(r.get("小計", 0) or 0)
         if cat != current_cat:
             html.append(f"<tr><td colspan='6' style='text-align:left;background:#f6f6f6;font-weight:bold'>{cat}</td></tr>")
             current_cat = cat
         html.append(
             "<tr>"
             f"<td>{cat}</td>"
-            f"<td>{r.get('task','')}</td>"
-            f"{td_right(f'{int(r.get('unit_price',0)):,}')}"
-            f"<td>{str(r.get('qty',''))}</td>"
-            f"<td>{r.get('unit','')}</td>"
-            f"{td_right(f'{int(r.get('小計',0)):,}')}"
+            f"<td>{task}</td>"
+            f"{td_right(f'{unit_price_val:,}')}"
+            f"<td>{qty_val}</td>"
+            f"<td>{unit_val}</td>"
+            f"{td_right(f'{subtotal_val:,}')}"
             "</tr>"
         )
     html.append("</tbody></table>")
@@ -474,7 +579,7 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
             ws.cell(row=last_row+2, column=6, value=int(meta["total"])).number_format = '#,##0'
 
     buf.seek(0)
-    st.download_button("📥 Excelでダウンロード", buf, "見積データ.xlsx",
+    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =========================
@@ -535,7 +640,7 @@ def _write_preextended(ws, df_items: pd.DataFrame):
     c_price= column_index_from_string(COLMAP["unit_price"])
     c_amt  = column_index_from_string(COLMAP["amount"])
 
-    sub_r, sub_c = _find_subtotal_anchor_auto(ws, c_amt)
+    sub_r, _ = _find_subtotal_anchor_auto(ws, c_amt)
     if sub_r is None:
         sub_r = BASE_SUBTOTAL_ROW
     end_row = sub_r - 1
@@ -582,7 +687,7 @@ def export_with_template(template_bytes: bytes,
     st.download_button(
         "📥 DD見積書テンプレ（.xlsx）でダウンロード",
         out,
-        "AI見積くん見積書.xlsx",
+        "見積もり_DDテンプレ.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="dl_dd_template"
     )
@@ -597,6 +702,10 @@ if st.button("💡 見積もりを作成"):
 
         if do_normalize_pass:
             items_json_str = llm_normalize_items_json(items_json_str)
+
+        # ↓ ここで薄ければ追記（再プロンプトで拡張）
+        if model_choice == "GPT-5":
+            items_json_str = expand_if_sparse(items_json_str)
 
         try:
             df_items = df_from_items_json(items_json_str)
@@ -648,4 +757,6 @@ with st.expander("開発者向け情報（バージョン確認）", expanded=Fa
         "infer_from_notes": do_infer_from_notes,
         "normalize_pass": do_normalize_pass,
         "model_choice": model_choice,
+        "min_total_items": MIN_TOTAL_ITEMS,
+        "min_per_category": MIN_PER_CATEGORY,
     })
