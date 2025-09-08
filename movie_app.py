@@ -6,6 +6,7 @@ import importlib
 from io import BytesIO
 from datetime import date
 import ast
+from typing import Optional
 
 import streamlit as st
 import pandas as pd
@@ -28,59 +29,26 @@ st.set_page_config(page_title="映像制作概算見積エージェント vNext"
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
+OPENAI_ORG_ID  = st.secrets.get("OPENAI_ORG_ID", None)
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# =========================
-# OpenAI 初期化（安全な遅延生成＆多段フォールバック）
-# =========================
-from openai import OpenAI as _OpenAI
-
+# OpenAI: 環境変数へ投入（無ければ停止）
 if OPENAI_API_KEY:
     os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 else:
     st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
 
-OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID", None)
-_openai_client_cache = None
+# =========================
+# OpenAI v1 初期化（env参照）
+# =========================
+from openai import OpenAI as _OpenAI
 
 def get_openai():
-    """環境差異に強い OpenAI クライアント生成（初回のみ）。"""
-    global _openai_client_cache
-    if _openai_client_cache is not None:
-        return _openai_client_cache
-
-    # 1) 素のコンストラクタ
-    try:
-        if OPENAI_ORG_ID:
-            _openai_client_cache = _OpenAI(organization=OPENAI_ORG_ID)
-        else:
-            _openai_client_cache = _OpenAI()
-        return _openai_client_cache
-    except TypeError:
-        # 2) api_key を直接渡す
-        try:
-            if OPENAI_ORG_ID:
-                _openai_client_cache = _OpenAI(api_key=OPENAI_API_KEY, organization=OPENAI_ORG_ID)
-            else:
-                _openai_client_cache = _OpenAI(api_key=OPENAI_API_KEY)
-            return _openai_client_cache
-        except TypeError:
-            pass
-
-    # 3) httpx を明示（古い httpx の引数不整合対策）
-    try:
-        import httpx
-        http_client = httpx.Client(timeout=60.0)
-        if OPENAI_ORG_ID:
-            _openai_client_cache = _OpenAI(http_client=http_client, organization=OPENAI_ORG_ID)
-        else:
-            _openai_client_cache = _OpenAI(http_client=http_client)
-        return _openai_client_cache
-    except Exception as e:
-        st.error(f"OpenAI クライアント初期化に失敗しました: {type(e).__name__}: {str(e)[:300]}")
-        st.stop()
+    if OPENAI_ORG_ID:
+        return _OpenAI(organization=OPENAI_ORG_ID)  # api_key は環境変数から
+    return _OpenAI()
 
 openai_version = getattr(importlib.import_module("openai"), "__version__", "1.x")
 USE_OPENAI_CLIENT_V1 = True
@@ -95,7 +63,10 @@ RUSH_K = 0.75
 # =========================
 # セッション
 # =========================
-for k in ["items_json_raw", "items_json", "df", "meta", "final_html", "used_fallback", "gemini_block_reason", "model_used"]:
+for k in [
+    "items_json_raw", "items_json", "df", "meta", "final_html",
+    "used_fallback", "fallback_reason", "gemini_block_reason", "model_used"
+]:
     if k not in st.session_state:
         st.session_state[k] = None
 
@@ -143,9 +114,9 @@ deliverables = st.multiselect("納品形式", ["mp4（16:9）", "mp4（1:1）", 
 subtitle_langs = st.multiselect("字幕言語", ["日本語", "英語", "その他"])
 usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
 usage_period = st.selectbox("使用期間", ["3ヶ月", "6ヶ月", "1年", "2年", "無期限", "未定"])
-budget_hint = st.text_input("参考予算（任意）")
+budget_hint = st.text_input("参考予算（税抜・任意）")
 
-# 備考
+# 備考 + ご指定の注意文
 extra_notes = st.text_area("備考（案件概要・要件・想定媒体・必須/除外事項などを自由記入）")
 st.caption("※備考に案件概要や条件を追記すると、不足項目の自動補完が働き、見積もりの精度が上がります。")
 
@@ -170,6 +141,28 @@ def rush_coeff(base_days: int, target_days: int) -> float:
         return 1.0
     r = (base_days - target_days) / base_days
     return round(1 + RUSH_K * r, 2)
+
+# ---------- 予算パース（税抜） ----------
+def parse_budget_hint_jpy(s: str) -> Optional[int]:
+    """
+    '500万', '800万円', '5,000,000', '1200 万円', '1.2億' などを整数の円へ。
+    失敗時 None。
+    """
+    if not s:
+        return None
+    t = str(s).strip().replace(",", "").replace(" ", "")
+    t = t.replace("円", "")
+    try:
+        if "億" in t:
+            n = float(t.replace("億", "") or "0")
+            return int(n * 100_000_000)
+        if "万" in t:
+            n = float(t.replace("万円", "").replace("万", "") or "0")
+            return int(n * 10_000)
+        n = float(t)
+        return int(n)
+    except Exception:
+        return None
 
 # ---------- JSON ロバストパース ----------
 JSON_ITEMS_FALLBACK = {"items": []}
@@ -236,7 +229,7 @@ def _common_case_block() -> str:
 - 本数: {num_versions}本
 - 撮影日数: {shoot_days}日 / 編集日数: {edit_days}日
 - 納品希望日: {delivery_date.isoformat()}
-- キャスト: メイン {cast_main} 人 / エキストラ {cast_extra} 人 / タレント: {"あり" if talent_use else "なし"}
+- キャスト: メイン{cast_main}人 / エキストラ{cast_extra}人 / タレント: {"あり" if talent_use else "なし"}
 - スタッフ候補: {join_or(staff_roles, empty="未指定")}
 - 撮影場所: {shoot_location if shoot_location else "未定"}
 - 撮影機材: {join_or(kizai, empty="未指定")}
@@ -245,7 +238,7 @@ def _common_case_block() -> str:
 - 納品形式: {join_or(deliverables, empty="未定")}
 - 字幕: {join_or(subtitle_langs, empty="なし")}
 - 使用地域: {usage_region} / 使用期間: {usage_period}
-- 参考予算: {budget_hint if budget_hint else "未設定"}
+- 参考予算（税抜）: {budget_hint if budget_hint else "未設定"}
 - 備考: {extra_notes if extra_notes else "特になし"}"""
 
 def _inference_block() -> str:
@@ -272,7 +265,7 @@ def build_prompt_json() -> str:
 - 合計/税/HTMLなどは出力しない。
 """
 
-# ---------- LLM 呼び出し ----------
+# ---------- モデルIDマッピング ----------
 def _gemini_model_id_from_choice(choice: str) -> str:
     if "2.5 Flash" in choice:
         return "gemini-2.5-flash"
@@ -282,8 +275,53 @@ def _gemini_model_id_from_choice(choice: str) -> str:
         return "gemini-2.0-flash"
     return "gemini-2.5-flash"
 
+def _map_openai_model(choice: str) -> str:
+    if choice == "gpt-4.1-mini":
+        return "gpt-4.1-mini"
+    if choice == "gpt-4.1":
+        return "gpt-4.1"
+    if choice == "GPT-5":
+        st.warning("このAPIキーでは GPT-5 が未開放の可能性があるため、gpt-4.1 に自動切替します。")
+        return "gpt-4.1"
+    return "gpt-4.1"
+
+# ---------- LLM 呼び出し ----------
 def llm_generate_items_json(prompt: str) -> str:
+    """
+    Gemini / GPT いずれかの選択モデルで items JSON を生成。
+    ・Geminiは .text が空のとき candidates.parts[].text から復元。
+    ・Geminiは safety を BLOCK_NONE に設定。
+    """
+    def _robust_extract_gemini_text(resp) -> str:
+        try:
+            if hasattr(resp, "text") and resp.text:
+                return resp.text
+        except Exception:
+            pass
+        try:
+            cands = getattr(resp, "candidates", None) or []
+            for c in cands:
+                content = getattr(c, "content", None)
+                if not content:
+                    continue
+                parts = getattr(content, "parts", None) or []
+                buf = []
+                for p in parts:
+                    t = getattr(p, "text", None)
+                    if t:
+                        buf.append(t)
+                if buf:
+                    return "".join(buf)
+        except Exception:
+            pass
+        return ""
+
     try:
+        st.session_state["used_fallback"] = False
+        st.session_state["fallback_reason"] = None
+        st.session_state["gemini_block_reason"] = None
+        st.session_state["model_used"] = None
+
         if model_choice.startswith("Gemini"):
             model_id = _gemini_model_id_from_choice(model_choice)
             model = genai.GenerativeModel(
@@ -295,14 +333,52 @@ def llm_generate_items_json(prompt: str) -> str:
                     "top_p": 0.9,
                     "max_output_tokens": 2500,
                 },
+                safety_settings=[
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUAL", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_TOXICITY", "threshold": "BLOCK_NONE"},
+                ],
             )
-            res = model.generate_content(prompt).text
+            resp = model.generate_content(prompt)
+
+            try:
+                pf = getattr(resp, "prompt_feedback", None)
+                st.session_state["gemini_block_reason"] = getattr(pf, "block_reason", None) if pf else None
+            except Exception:
+                pass
+
+            res = _robust_extract_gemini_text(resp)
+
+            # 空なら JSON MIME を外して再試行
+            if not res or len(res.strip()) < 5:
+                model2 = genai.GenerativeModel(
+                    model_id,
+                    generation_config={
+                        "candidate_count": 1,
+                        "temperature": 0.4,
+                        "top_p": 0.9,
+                        "max_output_tokens": 2500,
+                    },
+                    safety_settings=[
+                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_SEXUAL", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_TOXICITY", "threshold": "BLOCK_NONE"},
+                    ],
+                )
+                resp2 = model2.generate_content(prompt)
+                res = _robust_extract_gemini_text(resp2)
+
+            st.session_state["model_used"] = model_id
+
         else:
-            gpt_model = (
-                "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
-                else "gpt-4.1" if model_choice == "gpt-4.1"
-                else "gpt-5"
-            )
+            # ==== GPT (OpenAI) v1 ====
+            gpt_model = _map_openai_model(model_choice)
             resp = get_openai().chat.completions.create(
                 model=gpt_model,
                 messages=[
@@ -310,20 +386,43 @@ def llm_generate_items_json(prompt: str) -> str:
                     {"role": "user", "content": prompt},
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.6,
-                max_tokens=4000,
+                temperature=0.2,
+                max_tokens=8000,
             )
             res = resp.choices[0].message.content or ""
+            st.session_state["model_used"] = gpt_model
 
         st.session_state["items_json_raw"] = res
-        return robust_parse_items_json(res)
-    except Exception:
-        return json.dumps({"items":[
-            {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
-            {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
-            {"category":"編集費・MA費","task":"編集","qty":max(1, int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
-            {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
-        ]}, ensure_ascii=False)
+
+        if not res or len(res.strip()) < 5:
+            raise RuntimeError("LLM empty/short response")
+
+        parsed = robust_parse_items_json(res)
+        try:
+            if not json.loads(parsed).get("items"):
+                raise RuntimeError("Parsed items empty")
+        except Exception:
+            raise RuntimeError("Parsed items malformed")
+
+        return parsed
+
+    except Exception as e:
+        st.session_state["used_fallback"] = True
+        st.session_state["fallback_reason"] = f"{type(e).__name__}: {str(e)[:200]}"
+        st.warning(
+            "⚠️ モデル応答の解析に失敗しました。固定のfallbackを使用します。\n"
+            f"reason={type(e).__name__}: {str(e)[:200]}"
+        )
+        fallback = {
+            "items":[
+                {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
+                {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
+                {"category":"編集費・MA費","task":"編集","qty":max(1, int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
+                {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
+            ]
+        }
+        st.session_state["items_json_raw"] = json.dumps(fallback, ensure_ascii=False)
+        return json.dumps(fallback, ensure_ascii=False)
 
 def llm_normalize_items_json(items_json: str) -> str:
     try:
@@ -343,18 +442,14 @@ def llm_normalize_items_json(items_json: str) -> str:
                 generation_config={
                     "response_mime_type": "application/json",
                     "candidate_count": 1,
-                    "temperature": 0.4,
+                    "temperature": 0.2,
                     "top_p": 0.9,
                     "max_output_tokens": 2000,
                 },
             )
             res = model.generate_content(prompt).text
         else:
-            gpt_model = (
-                "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
-                else "gpt-4.1" if model_choice == "gpt-4.1"
-                else "gpt-5"
-            )
+            gpt_model = _map_openai_model(model_choice)
             resp = get_openai().chat.completions.create(
                 model=gpt_model,
                 messages=[
@@ -362,8 +457,8 @@ def llm_normalize_items_json(items_json: str) -> str:
                     {"role": "user", "content": prompt},
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.4,
-                max_tokens=2000,
+                temperature=0.2,
+                max_tokens=4000,
             )
             res = resp.choices[0].message.content or ""
 
@@ -424,6 +519,43 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
     }
     return df_items, meta
 
+# ---------- 予算に（税抜）で寄せる ----------
+def scale_prices_to_budget(df_items: pd.DataFrame,
+                           base_days: int,
+                           target_days: int,
+                           target_taxable_jpy: int,
+                           low: float = 0.6,
+                           high: float = 1.6,
+                           round_to: int = 100) -> pd.DataFrame:
+    """
+    参考予算＝税抜き小計に近づくよう、管理費以外の単価を一括スケール。
+    管理費は compute_totals() 内で「上限=非管理費15%」として再計算される想定。
+    """
+    df_now, meta_now = compute_totals(df_items, base_days, target_days)
+    nonmgmt_after_rush = float(meta_now["subtotal_after_rush_excl_mgmt"])
+    if nonmgmt_after_rush <= 0:
+        return df_items.copy()
+
+    # 税抜き小計 = 非管理費 after rush × (1 + MGMT_FEE_CAP_RATE)
+    desired_nonmgmt_after_rush = target_taxable_jpy / (1.0 + MGMT_FEE_CAP_RATE)
+
+    s = desired_nonmgmt_after_rush / nonmgmt_after_rush
+    s = max(low, min(high, s))  # 変動幅を抑制
+
+    df_scaled = df_items.copy()
+    is_mgmt = (df_scaled["category"] == "管理費")
+
+    df_scaled.loc[~is_mgmt, "unit_price"] = (
+        df_scaled.loc[~is_mgmt, "unit_price"].astype(float) * s
+    ).round().astype(int)
+
+    if round_to and round_to > 1:
+        def _round(x): return int(round(x / round_to) * round_to)
+        df_scaled.loc[~is_mgmt, "unit_price"] = df_scaled.loc[~is_mgmt, "unit_price"].map(_round)
+
+    return df_scaled
+
+# ---------- 表示 ----------
 def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     def td_right(x): return f"<td style='text-align:right'>{x}</td>"
     html = []
@@ -561,7 +693,7 @@ def _update_subtotal_formula(ws, subtotal_row, start_row, end_row, amount_col_id
         ws.cell(row=subtotal_row, column=amount_col_idx).number_format = '#,##0'
 
 def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
-    # 金額列（W列）で最後の SUM を小計アンカーとみなす
+    # 金額列（W列）で最後に現れる SUM を小計アンカーとして採用
     last_r = None
     for r in range(1, ws.max_row + 1):
         v = ws.cell(row=r, column=amount_col_idx).value
@@ -661,7 +793,21 @@ if st.button("💡 見積もりを作成"):
         base_days = int(shoot_days + edit_days + 5)
         target_days = (delivery_date - date.today()).days
 
+        # --- 通常計算 ---
         df_calc, meta = compute_totals(df_items, base_days, target_days)
+
+        # --- 参考予算（税抜）に合わせて調整 ---
+        budget_total = parse_budget_hint_jpy(budget_hint)
+        if budget_total:
+            df_scaled = scale_prices_to_budget(
+                df_items=df_items,
+                base_days=base_days,
+                target_days=target_days,
+                target_taxable_jpy=budget_total,
+            )
+            df_calc, meta = compute_totals(df_scaled, base_days, target_days)
+            df_items = df_scaled  # 以降の出力はスケール後
+
         final_html = render_html(df_calc, meta)
 
         st.session_state["items_json"] = items_json_str
@@ -677,6 +823,7 @@ if st.session_state["final_html"]:
         "model_choice": model_choice,
         "normalize_pass": do_normalize_pass,
         "used_fallback": bool(st.session_state.get("used_fallback")),
+        "fallback_reason": st.session_state.get("fallback_reason"),
         "gemini_block_reason": st.session_state.get("gemini_block_reason"),
         "model_used": st.session_state.get("model_used") or "(n/a)"
     })
