@@ -1,13 +1,13 @@
 # app.py
 import os
 import json
+import importlib
 from io import BytesIO
 from datetime import date
 
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
-from openai import OpenAI
 from dateutil.relativedelta import relativedelta
 
 # =========================
@@ -24,14 +24,38 @@ APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 
 # APIキー設定
 genai.configure(api_key=GEMINI_API_KEY)
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY   # openai==1.x は環境変数から取得
-openai_client = OpenAI()
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY  # v1系でもv0系でも害なし
+
+# =========================
+# OpenAI 初期化（v1系/0系 両対応）
+# =========================
+USE_OPENAI_CLIENT_V1 = False   # True: v1系 OpenAI(), False: v0系 openai.*
+openai_client = None
+openai_version = "unknown"
+
+try:
+    # v1.x 系
+    from openai import OpenAI as _OpenAI
+    openai_client = _OpenAI()
+    USE_OPENAI_CLIENT_V1 = True
+    try:
+        mod = importlib.import_module("openai")
+        openai_version = getattr(mod, "__version__", "1.x")
+    except Exception:
+        openai_version = "1.x"
+except Exception:
+    # v0.x 系
+    import openai as _openai
+    _openai.api_key = OPENAI_API_KEY
+    openai_client = _openai
+    USE_OPENAI_CLIENT_V1 = False
+    openai_version = getattr(openai_client, "__version__", "0.x")
 
 # =========================
 # 定数（税率・管理費・短納期）
 # =========================
 TAX_RATE = 0.10
-MGMT_FEE_CAP_RATE = 0.15   # 種別で変える場合は外部YAML化推奨
+MGMT_FEE_CAP_RATE = 0.15   # 種別で変えるなら外部YAML化推奨
 RUSH_K = 0.75              # rush係数: 1 + K * 短縮率
 
 # =========================
@@ -134,6 +158,21 @@ def build_prompt_json() -> str:
 出力は**JSONのみ**、前後の説明やマークダウン禁止。
 """
 
+def call_gpt_json(prompt: str) -> str:
+    """GPT-5 を呼び出し（v1系/0系 どちらでも動く）"""
+    if USE_OPENAI_CLIENT_V1:
+        resp = openai_client.chat.completions.create(
+            model="gpt-5",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.choices[0].message.content
+    else:
+        resp = openai_client.ChatCompletion.create(
+            model="gpt-5",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp["choices"][0]["message"]["content"]
+
 def llm_generate_items_json(prompt: str) -> str:
     """
     LLMからJSON（items配列）だけを受け取る。
@@ -151,10 +190,7 @@ def llm_generate_items_json(prompt: str) -> str:
             model = genai.GenerativeModel("gemini-2.5-pro")
             res = model.generate_content(prompt).text
         else:  # GPT-5
-            res = openai_client.chat.completions.create(
-                model="gpt-5",
-                messages=[{"role": "user", "content": prompt}],
-            ).choices[0].message.content
+            res = call_gpt_json(prompt)
 
         # JSONフェンス除去
         res = res.strip()
@@ -370,3 +406,12 @@ if st.session_state["final_html"]:
     st.success("✅ 見積もり結果（サーバ計算で整合性チェック済み）")
     st.components.v1.html(st.session_state["final_html"], height=900, scrolling=True)
     download_excel(st.session_state["df"], st.session_state["meta"])
+
+# =========================
+# 開発者向けダイアグ
+# =========================
+with st.expander("開発者向け情報（バージョン確認）", expanded=False):
+    st.write({
+        "openai_version": openai_version,
+        "use_openai_client_v1": USE_OPENAI_CLIENT_V1,
+    })
