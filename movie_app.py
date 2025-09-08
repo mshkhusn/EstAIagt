@@ -118,7 +118,10 @@ budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("備考（案件概要・要件・想定媒体・必須/除外事項などを自由記入）")
 st.caption("※備考に案件概要や条件を追記すると、不足項目の自動補完が働き、見積もりの精度が上がります。")
 
-model_choice = st.selectbox("使用するAIモデル", ["Gemini 2.5 Pro", "GPT-5"])
+model_choice = st.selectbox(
+    "使用するAIモデル",
+    ["Gemini 2.0 Flash", "Gemini 2.5 Pro", "gpt-4.1-mini", "gpt-4.1", "GPT-5"]
+)
 do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 do_infer_from_notes = st.checkbox("備考から不足項目を推論して補完（推奨）", value=True)
 
@@ -302,15 +305,54 @@ def call_gpt_json(prompt: str) -> str:
 
 def llm_generate_items_json(prompt: str) -> str:
     try:
-        if model_choice == "Gemini 2.5 Pro":
-            model = genai.GenerativeModel("gemini-2.5-pro",
-                                          generation_config={"response_mime_type":"application/json"})
+        if model_choice.startswith("Gemini"):
+            model_id = "gemini-2.0-flash" if "Flash" in model_choice else "gemini-2.5-pro"
+            model = genai.GenerativeModel(
+                model_id,
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "candidate_count": 1,
+                    "temperature": 0.4,
+                    "top_p": 0.9,
+                    "max_output_tokens": 2500,  # 省略防止
+                },
+            )
             res = model.generate_content(prompt).text
         else:
-            res = call_gpt_json(prompt)
+            # GPT系
+            gpt_model = (
+                "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
+                else "gpt-4.1" if model_choice == "gpt-4.1"
+                else "gpt-5"
+            )
+            if USE_OPENAI_CLIENT_V1:
+                resp = openai_client.chat.completions.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.6,
+                    max_tokens=4000,  # 省略防止
+                )
+                res = resp.choices[0].message.content
+            else:
+                resp = openai_client.ChatCompletion.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.6,
+                    max_tokens=4000,
+                )
+                res = resp["choices"][0]["message"]["content"]
+
         st.session_state["items_json_raw"] = res
         return robust_parse_items_json(res)
     except Exception:
+        # 最低限のフォールバック
         return json.dumps({"items":[
             {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
             {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
@@ -322,12 +364,50 @@ def llm_normalize_items_json(items_json: str) -> str:
     try:
         preserve = (model_choice == "GPT-5")
         prompt = build_normalize_prompt(items_json, preserve_detail=preserve)
-        if model_choice == "Gemini 2.5 Pro":
-            model = genai.GenerativeModel("gemini-2.5-pro",
-                                          generation_config={"response_mime_type":"application/json"})
+
+        if model_choice.startswith("Gemini"):
+            model_id = "gemini-2.0-flash" if "Flash" in model_choice else "gemini-2.5-pro"
+            model = genai.GenerativeModel(
+                model_id,
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "candidate_count": 1,
+                    "temperature": 0.4,
+                    "top_p": 0.9,
+                    "max_output_tokens": 2000,  # 正規化は少し小さめでもOK
+                },
+            )
             res = model.generate_content(prompt).text
         else:
-            res = call_gpt_json(prompt)
+            gpt_model = (
+                "gpt-4.1-mini" if model_choice == "gpt-4.1-mini"
+                else "gpt-4.1" if model_choice == "gpt-4.1"
+                else "gpt-5"
+            )
+            if USE_OPENAI_CLIENT_V1:
+                resp = openai_client.chat.completions.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.4,
+                    max_tokens=2000,
+                )
+                res = resp.choices[0].message.content
+            else:
+                resp = openai_client.ChatCompletion.create(
+                    model=gpt_model,
+                    messages=[
+                        {"role":"system","content":"You MUST return a single valid JSON object only."},
+                        {"role":"user","content":prompt},
+                    ],
+                    temperature=0.4,
+                    max_tokens=2000,
+                )
+                res = resp["choices"][0]["message"]["content"]
+
         return robust_parse_items_json(res)
     except Exception:
         return items_json
