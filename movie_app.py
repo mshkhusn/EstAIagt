@@ -1,16 +1,20 @@
 import streamlit as st
 import google.generativeai as genai
 from openai import OpenAI
-import re
+import json
 import pandas as pd
 from io import BytesIO
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-# --- ページ設定 ---
-st.set_page_config(page_title="映像制作概算見積エージェントβ", layout="centered")
+# =========================
+# ページ設定
+# =========================
+st.set_page_config(page_title="映像制作概算見積エージェント vNext", layout="centered")
 
-# --- Secrets 読み込み ---
+# =========================
+# Secrets 読み込み
+# =========================
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
@@ -18,41 +22,51 @@ APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 genai.configure(api_key=GEMINI_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# --- セッション状態の初期化 ---
-if "resA" not in st.session_state:
-    st.session_state["resA"] = None
-if "resB" not in st.session_state:
-    st.session_state["resB"] = None
-if "final_html" not in st.session_state:
-    st.session_state["final_html"] = None
+# =========================
+# 定数（税率・管理費・短納期）
+# =========================
+TAX_RATE = 0.10
+MGMT_FEE_CAP_RATE = 0.15   # TODO: 種別ごとに切替えるなら外部YAML化
+RUSH_K = 0.75              # accel = 1 + K * 短縮率
 
-# --- 認証 ---
-st.title("映像制作概算見積エージェントβ")
+# =========================
+# セッション状態
+# =========================
+for k in ["items_json", "df", "meta", "final_html"]:
+    if k not in st.session_state:
+        st.session_state[k] = None
+
+# =========================
+# 認証
+# =========================
+st.title("映像制作概算見積エージェント vNext")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("🔒 認証が必要です")
     st.stop()
 
-# --- ユーザー入力 ---
+# =========================
+# ユーザー入力
+# =========================
 st.header("制作条件の入力")
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
 final_duration = st.text_input("尺の長さ（自由記入）") if video_duration == "その他" else video_duration
 num_versions = st.number_input("納品本数", min_value=1, max_value=10, value=1)
 shoot_days = st.number_input("撮影日数", min_value=1, max_value=10, value=2)
 edit_days = st.number_input("編集日数", min_value=1, max_value=10, value=3)
-delivery_date = st.date_input("納品希望日", value=date.today() + relativedelta(months=1))  
+delivery_date = st.date_input("納品希望日", value=date.today() + relativedelta(months=1))
 cast_main = st.number_input("メインキャスト人数", 0, 10, 1)
 cast_extra = st.number_input("エキストラ人数", 0, 20, 0)
 talent_use = st.checkbox("タレント起用あり")
+
 default_roles = [
-    "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター", "カメラマン", 
+    "制作プロデューサー", "制作プロジェクトマネージャー", "ディレクター", "カメラマン",
     "照明スタッフ", "スタイリスト", "ヘアメイク"
 ]
 selected_roles = st.multiselect("必要なスタッフ（選択式）", default_roles, default=default_roles)
 
 custom_roles_text = st.text_input("その他のスタッフ（カンマ区切りで自由に追加）")
 custom_roles = [role.strip() for role in custom_roles_text.split(",") if role.strip()]
-
 staff_roles = selected_roles + custom_roles
 
 shoot_location = st.text_input("撮影場所（例：都内スタジオ＋ロケ）")
@@ -65,140 +79,269 @@ ma_needed = st.checkbox("MAあり")
 deliverables = st.multiselect("納品形式", ["mp4（16:9）", "mp4（1:1）", "mp4（9:16）", "ProRes"])
 subtitle_langs = st.multiselect("字幕言語", ["日本語", "英語", "その他"])
 usage_region = st.selectbox("使用地域", ["日本国内", "グローバル", "未定"])
-usage_period = st.selectbox("使用期間", ["3ヶ月","6ヶ月", "1年", "2年", "無期限", "未定"])
-budget_hint = st.text_input("参考予算（任意）※予算を入れるとその金額に近づけて調整します。出力された見積もり金額が相場と異なると感じた場合は、参考予算を入力して再調整をお試しください。")
-extra_notes = st.text_area("その他備考（任意）※案件の概要やキャスティング手配の有無など、重視したいポイントなどをご記入いただくと、より精度の高い見積もりが可能になります")
-model_choice = st.selectbox("使用するAIモデル　※Gemini、GPT-4o、GPT-4.1、GPT-4o-miniを選べます。", ["Gemini", "GPT-4o", "GPT-4.1", "GPT-4o-mini"])
+usage_period = st.selectbox("使用期間", ["3ヶ月", "6ヶ月", "1年", "2年", "無期限", "未定"])
+budget_hint = st.text_input("参考予算（任意）")
+extra_notes = st.text_area("その他備考（任意）")
 
-model = "gpt-4o" if model_choice == "GPT-4o" else "gpt-4o-mini" if model_choice == "GPT-4o-mini" else "gpt-4.1"
+# === モデル選択（Gemini 2.5 Pro / GPT-5） ===
+model_choice = st.selectbox("使用するAIモデル", ["Gemini 2.5 Pro", "GPT-5"])
 
-# --- プロンプト A ---
-promptA = f"""
-あなたは広告制作費のプロフェッショナルな見積もりエージェントです。
-以下の条件から、必要な制作工程・リソース（人件費・機材・スタジオ・その他オプションなど）を
-漏れなくリストアップしてください。
-予算、納期、仕様、スタッフ構成、撮影条件などから、実務に即した内容で正確かつ論理的に推論してください。
-短納期や複雑な仕様の場合は、工数や費用が増加する点も加味してください。
-※ 管理費は「固定金額」で設定してください。パーセンテージ指定は禁止です。
-※ また、見算もり全体の量とバランスを見て、過大にならない金額に調整してください。相場としては、全体の5～10%内に範囲に絞りましょう。
-項目ごとに「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」といったカテゴリに分類してください。
-※「制作プロデューサー」「制作プロジェクトマネージャー」「ディレクター」は「制作人件費」カテゴリの中項目として分類してください
-※「カメラマン」「照明スタッフ」「スタイリスト」「ヘアメイク」は「撮影費」カテゴリの中項目として分類してください
-※ 「その他のスタッフ」に関しては、どこに入れるべきか推論した上で適当な箇所に分類してください。
-※「撮影機材」は「撮影費」カテゴリの中項目として分類してください
-※「セット建て・美術装飾」は「撮影費」カテゴリの中項目として分類してください
-カテゴリ名ごとに見出しをつけて、見積もりが見やすい構造になるよう整理してください。
-参考予算（任意）に金額がある場合は、その金額に近づけるよう全ての項目を調整してください。
-その他備考（任意）に入力がある場合は、その内容を鑑みて推論した上で見積もりに反映してください。
-【条件】
-- 尺：{final_duration}
-- 納品本数：{num_versions}本
-- 撮影日数：{shoot_days}日
-- 編集日数：{edit_days}日
-- 納品希望日：{delivery_date}
-- メインキャスト人数：{cast_main}人
-- エキストラ人数：{cast_extra}人
-- タレント：{'あり' if talent_use else 'なし'}
-- スタッフ：{', '.join(staff_roles)}
-- 撮影場所：{shoot_location or '未定'}
-- 撮影機材：{', '.join(kizai)}
-- 美術装飾：{set_design_quality}
-- CG：{'あり' if use_cg else 'なし'}
-- ナレーション：{'あり' if use_narration else 'なし'}
-- 音楽：{use_music}
-- MA：{'あり' if ma_needed else 'なし'}
-- 納品形式：{', '.join(deliverables)}
-- 字幕：{', '.join(subtitle_langs)}
-- 地域：{usage_region}
-- 期間：{usage_period}
-- 参考予算：{budget_hint or '未設定'}
-- 備考：{extra_notes or '特になし'}
+# =========================
+# ユーティリティ
+# =========================
+def rush_coeff(base_days: int, target_days: int) -> float:
+    """短納期係数を計算"""
+    if target_days >= base_days or base_days <= 0:
+        return 1.0
+    r = (base_days - target_days) / base_days
+    return round(1 + RUSH_K * r, 2)
+
+def safe_int(x):
+    try:
+        return int(x)
+    except Exception:
+        return 0
+
+def build_prompt_json() -> str:
+    """LLMへのプロンプト（JSONのみ出力させる）"""
+    return f"""
+あなたは広告制作費の見積り項目を作る専門家です。以下条件から、**JSONのみ**で返してください。
+必須仕様:
+- 最上位に "items": Array を持つJSON
+- 各itemは {{ "category": str, "task": str, "qty": number, "unit": str, "unit_price": number, "note": str }} のみ
+- **金額の合計やHTMLは出力しない**
+- 管理費は「固定金額」で item を1つだけ作成（categoryは「管理費」、taskは「管理費（固定）」）。全体5〜10%相当を目安に案出し。
+- 単価は整数、数量は整数または小数OK
+- カテゴリは以下から用いる：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
+
+条件:
+- 尺: {final_duration}
+- 本数: {num_versions}本
+- 撮影日数: {shoot_days}日
+- 編集日数: {edit_days}日
+- 納品希望日: {delivery_date.isoformat()}
+- メインキャスト: {cast_main}人 / エキストラ: {cast_extra}人 / タレント: {"あり" if talent_use else "なし"}
+- スタッフ: {", ".join(staff_roles) if staff_roles else "未指定"}
+- 撮影場所: {shoot_location or "未定"}
+- 撮影機材: {", ".join(kizai) if kizai else "未指定"}
+- 美術装飾: {set_design_quality}
+- CG: {"あり" if use_cg else "なし"} / ナレーション: {"あり" if use_narration else "なし"} / 音楽: {use_music} / MA: {"あり" if ma_needed else "なし"}
+- 納品形式: {", ".join(deliverables) if deliverables else "未指定"}
+- 字幕: {", ".join(subtitle_langs) if subtitle_langs else "なし"}
+- 地域: {usage_region} / 期間: {usage_period}
+- 参考予算: {budget_hint or "未設定"}
+- 備考: {extra_notes or "特になし"}
+
+出力は**JSONのみ**、前後の説明やマークダウン禁止。
 """
 
-# --- プロンプト B ---
-promptB = """
-以下の項目について、すべて「単価×数量＝金額（円）」の形式で計算し、
-「項目名：金額（円）」で1行ずつ出力してください。
-端数処理はせず、すべて整数で出力。管理費は固定金額で。
-また、項目ごとに単価・数量も併記してください（例：撮影機材：単価80,000円×数量1日＝80,000円）
-さらに、すべての項目の金額を正確に合計し、合計金額の算出に誤りがないかチェックしてください。
-誤りがある場合は修正し、最終的に正しい合計金額のみを表示してください。
-# 以下に項目を貼ってください
-"""
+def llm_generate_items_json(prompt: str) -> str:
+    """
+    LLMからJSON（items配列）だけを受け取る。
+    期待JSON:
+    {
+      "items": [
+        {"category":"撮影費","task":"カメラマン","qty":2,"unit":"日","unit_price":80000,"note":""},
+        ...
+        {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":""}
+      ]
+    }
+    """
+    try:
+        if model_choice == "Gemini 2.5 Pro":
+            model = genai.GenerativeModel("gemini-2.5-pro")
+            res = model.generate_content(prompt).text
+        else:  # GPT-5
+            res = openai_client.chat.completions.create(
+                model="gpt-5",
+                messages=[{"role": "user", "content": prompt}],
+            ).choices[0].message.content
 
-# --- プロンプト C（HTML専用） ---
-promptC_template = """
-以下の2つの情報をもとに、HTMLの<table>構造で1つの表としてカテゴリごとに区切った見積書を作成してください。
-1) 項目出し結果:
-{items_a}
-2) 計算結果:
-{items_b}
-出力形式:
-- HTML冒頭に以下の説明文を挿入してください：
-  『以下は、映像制作にかかる各種費用をカテゴリごとに整理した概算見積書です。』
-- 冒頭に続けて、本見積もり要件を説明した説明文を記載してください。
-- <table>タグで1つのテーブルとして表示
-- カラム：カテゴリ／項目／単価／数量／単位／金額（円）
-- 各カテゴリの最初に colspan=6 の見出し行を追加して区切る（例：<tr><td colspan='6'>撮影費</td></tr>）
-- 見出し行のカテゴリ表記は左寄せで表示してください
-- 金額カラムは右寄せ、合計は<b>または<span style='color:red'>で強調
-- 管理費は固定金額、合計金額の10%以内に収めてください
-- HTMLの最後に「備考」欄を追加し、以下の文言を記載してください：
-  『※本見積書は自動生成された概算見積もりです。実際の制作内容・条件により金額が増減する可能性があります。あらかじめご了承ください。』
-- 備考には見積もりにあたっての条件や注意事項などを必要に応じて記載してください。
-- HTML構造は正確に
-"""
+        # JSONフェンス除去
+        res = res.strip()
+        if res.startswith("```json"):
+            res = res.removeprefix("```json").removesuffix("```").strip()
+        elif res.startswith("```"):
+            res = res.removeprefix("```").removesuffix("```").strip()
+        return res
 
-# --- 合計金額チェック関数 ---
-def extract_and_validate_total(estimate_text):
-    lines = estimate_text.strip().split("\n")
-    item_lines = [l for l in lines if "＝" in l and "円" in l]
-    total_calc = sum(
-        int(m.group(1).replace(",", "")) * int(m.group(2))
-        for l in item_lines if (m := re.search(r"単価([0-9,]+)円×数量([0-9]+)", l))
+    except Exception as e:
+        # フォールバック（最小骨格）
+        return json.dumps({"items":[
+            {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
+            {"category":"撮影費","task":"カメラマン","qty":shoot_days,"unit":"日","unit_price":80000,"note":"fallback"},
+            {"category":"編集費・MA費","task":"編集","qty":edit_days,"unit":"日","unit_price":70000,"note":"fallback"},
+            {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
+        ]}, ensure_ascii=False)
+
+def df_from_items_json(items_json: str) -> pd.DataFrame:
+    data = json.loads(items_json)
+    items = data.get("items", [])
+    norm = []
+    for x in items:
+        norm.append({
+            "category": str(x.get("category","")),
+            "task": str(x.get("task","")),
+            "qty": float(x.get("qty", 0)),
+            "unit": str(x.get("unit","")),
+            "unit_price": int(float(x.get("unit_price", 0))),
+            "note": str(x.get("note","")),
+        })
+    return pd.DataFrame(norm)
+
+def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
+    """rush適用・管理費キャップ・税・合計を計算"""
+    accel = rush_coeff(base_days, target_days)
+    df_items = df_items.copy()
+    df_items["小計"] = (df_items["qty"] * df_items["unit_price"]).round().astype(int)
+
+    # rushは管理費以外に適用
+    is_mgmt = (df_items["category"] == "管理費")
+    df_items.loc[~is_mgmt, "小計"] = (df_items.loc[~is_mgmt, "小計"] * accel).round().astype(int)
+
+    # 管理費キャップ
+    mgmt_current = int(df_items.loc[is_mgmt, "小計"].sum()) if is_mgmt.any() else 0
+    subtotal_after_rush = int(df_items.loc[~is_mgmt, "小計"].sum())
+    mgmt_cap = int(round(subtotal_after_rush * MGMT_FEE_CAP_RATE))
+    mgmt_final = min(mgmt_current, mgmt_cap) if mgmt_current > 0 else mgmt_cap
+
+    if is_mgmt.any():
+        idx = df_items[is_mgmt].index[0]
+        df_items.at[idx, "unit_price"] = mgmt_final  # qty=1前提
+        df_items.at[idx, "qty"] = 1
+        df_items.at[idx, "小計"] = mgmt_final
+    else:
+        # 行が無い場合は追加
+        df_items = pd.concat([df_items, pd.DataFrame([{
+            "category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":mgmt_final,"小計":mgmt_final
+        }])], ignore_index=True)
+
+    taxable = int(df_items["小計"].sum())
+    tax = int(round(taxable * TAX_RATE))
+    total = taxable + tax
+
+    meta = {
+        "rush_coeff": accel,
+        "subtotal_after_rush_excl_mgmt": subtotal_after_rush,
+        "mgmt_fee_final": mgmt_final,
+        "taxable": taxable,
+        "tax": tax,
+        "total": total,
+    }
+    return df_items, meta
+
+def render_html(df_items: pd.DataFrame, meta: dict) -> str:
+    """カテゴリ見出し付きのHTMLテーブルを生成（安全にサーバ側で作成）"""
+    def td_right(x): return f"<td style='text-align:right'>{x}</td>"
+    cols = ["カテゴリ","項目","単価","数量","単位","金額（円）"]
+
+    html = []
+    html.append("<p>以下は、映像制作にかかる各種費用をカテゴリごとに整理した概算見積書です。</p>")
+    html.append(f"<p>短納期係数：{meta['rush_coeff']} ／ 管理費上限：{int(MGMT_FEE_CAP_RATE*100)}% ／ 消費税率：{int(TAX_RATE*100)}%</p>")
+    html.append("<table border='1' cellspacing='0' cellpadding='6' style='border-collapse:collapse;width:100%'>")
+    html.append("<thead><tr>" + "".join([
+        "<th style='text-align:left'>カテゴリ</th>",
+        "<th style='text-align:left'>項目</th>",
+        "<th style='text-align:right'>単価</th>",
+        "<th style='text-align:left'>数量</th>",
+        "<th style='text-align:left'>単位</th>",
+        "<th style='text-align:right'>金額（円）</th>",
+    ]) + "</tr></thead>")
+    html.append("<tbody>")
+
+    current_cat = None
+    for _, r in df_items.iterrows():
+        cat = r.get("category","")
+        if cat != current_cat:
+            html.append(f"<tr><td colspan='6' style='text-align:left;background:#f6f6f6;font-weight:bold'>{cat}</td></tr>")
+            current_cat = cat
+        html.append(
+            "<tr>"
+            f"<td>{cat}</td>"
+            f"<td>{r.get('task','')}</td>"
+            f"{td_right(f'{int(r.get('unit_price',0)):,}')}"
+            f"<td>{str(r.get('qty',''))}</td>"
+            f"<td>{r.get('unit','')}</td>"
+            f"{td_right(f'{int(r.get('小計',0)):,}')}"
+            "</tr>"
+        )
+
+    html.append("</tbody></table>")
+    html.append(
+        f"<p><b>小計（税抜）</b>：{meta['taxable']:,}円　／　"
+        f"<b>消費税</b>：{meta['tax']:,}円　／　"
+        f"<b>合計</b>：<span style='color:red'>{meta['total']:,}円</span></p>"
     )
-    for l in lines:
-        if "合計" in l and "円" in l:
-            m = re.search(r"合計.*?([0-9,]+)円", l)
-            if m:
-                total_displayed = int(m.group(1).replace(",", ""))
-                return total_displayed, total_calc, total_displayed == total_calc
-    return 0, total_calc, False
+    html.append("<p>※本見積書は自動生成された概算です。実制作内容・条件により金額が増減します。</p>")
+    return "\n".join(html)
 
-# --- ボタン処理 ---
-if st.button("💡 見積もりを作成"):
-    with st.spinner("AIが見積もりを作成中…"):
-        resA = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptA).text if model_choice == "Gemini" else openai_client.chat.completions.create(model=model, messages=[{"role": "user", "content": promptA}]).choices[0].message.content
-        fullB = promptB + "\n" + resA
-        resB = genai.GenerativeModel("gemini-2.0-flash").generate_content(fullB).text if model_choice == "Gemini" else openai_client.chat.completions.create(model=model, messages=[{"role": "user", "content": fullB}]).choices[0].message.content
-        shown, calc, ok = extract_and_validate_total(resB)
-        promptC = promptC_template.format(items_a=resA, items_b=resB)
-        final = genai.GenerativeModel("gemini-2.0-flash").generate_content(promptC).text if model_choice == "Gemini" else openai_client.chat.completions.create(model=model, messages=[{"role": "user", "content": promptC}]).choices[0].message.content
+def download_excel(df_items: pd.DataFrame, meta: dict):
+    """Excel出力（列幅・合計行つき）"""
+    out = df_items.copy()
+    out = out[["category","task","unit_price","qty","unit","小計"]]
+    out.columns = ["カテゴリ","項目","単価（円）","数量","単位","金額（円）"]
 
-        st.session_state["resA"] = resA
-        st.session_state["resB"] = resB
-        st.session_state["final_html"] = final
-
-# --- 結果表示 ---
-if st.session_state["final_html"]:
-    st.success("✅ 見積もり結果")
-    if st.session_state["resB"]:
-        shown, calc, ok = extract_and_validate_total(st.session_state["resB"])
-        if not ok:
-            st.error(f"⚠️ 合計金額に不整合があります：表示 = {shown:,}円 / 再計算 = {calc:,}円")
-
-    st.components.v1.html(st.session_state["final_html"].strip().removeprefix("```html").removesuffix("```"), height=900, scrolling=True)
-
-    def convert_to_excel(text):
-        data = []
-        for line in text.split("\n"):
-            m = re.search(r"(.+?)：単価([0-9,]+)円×数量([0-9]+).*＝([0-9,]+)円", line)
-            if m:
-                data.append([m.group(1), int(m.group(2).replace(",", "")), int(m.group(3)), int(m.group(4).replace(",", ""))])
-        return pd.DataFrame(data, columns=["項目", "単価（円）", "数量", "金額（円）"])
-
-    df = convert_to_excel(st.session_state["resB"])
     buf = BytesIO()
-    df.to_excel(buf, index=False, sheet_name="見積もり")
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        out.to_excel(writer, index=False, sheet_name="見積もり")
+        wb = writer.book
+        ws = writer.sheets["見積もり"]
+        fmt_int = wb.add_format({"num_format": "#,##0"})
+        ws.set_column("A:B", 20)
+        ws.set_column("C:C", 14, fmt_int)
+        ws.set_column("D:D", 8)
+        ws.set_column("E:E", 8)
+        ws.set_column("F:F", 14, fmt_int)
+
+        # 合計の追記（値書き込み）
+        last_row = len(out) + 2  # header含め1-based
+        ws.write(last_row,   4, "小計（税抜）")   # E列(0-based col=4)
+        ws.write_number(last_row, 5, int(meta["taxable"]), fmt_int)
+
+        ws.write(last_row+1, 4, "消費税")
+        ws.write_number(last_row+1, 5, int(meta["tax"]), fmt_int)
+
+        ws.write(last_row+2, 4, "合計")
+        ws.write_number(last_row+2, 5, int(meta["total"]), fmt_int)
+
     buf.seek(0)
-    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+# =========================
+# 実行ボタン
+# =========================
+if st.button("💡 見積もりを作成"):
+    with st.spinner("AIが見積もり項目を作成中…"):
+        prompt = build_prompt_json()
+        items_json = llm_generate_items_json(prompt)
+
+        # JSON→DF
+        try:
+            df_items = df_from_items_json(items_json)
+        except Exception:
+            st.error("JSONの解析に失敗しました。入力条件を見直すか、もう一度お試しください。")
+            st.stop()
+
+        # rush計算：基準 = 撮影+編集+5日、目標 = 今日→納品
+        base_days = int(shoot_days + edit_days + 5)
+        target_days = (delivery_date - date.today()).days
+
+        # 合計計算 & 管理費キャップ
+        df_calc, meta = compute_totals(df_items, base_days, target_days)
+
+        # HTML生成
+        final_html = render_html(df_calc, meta)
+
+        st.session_state["items_json"] = items_json
+        st.session_state["df"] = df_calc
+        st.session_state["meta"] = meta
+        st.session_state["final_html"] = final_html
+
+# =========================
+# 表示 & ダウンロード
+# =========================
+if st.session_state["final_html"]:
+    st.success("✅ 見積もり結果（サーバ計算で整合性チェック済み）")
+    st.components.v1.html(st.session_state["final_html"], height=900, scrolling=True)
+    download_excel(st.session_state["df"], st.session_state["meta"])
