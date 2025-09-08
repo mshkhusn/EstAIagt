@@ -112,12 +112,18 @@ usage_period = st.selectbox("使用期間", ["3ヶ月", "6ヶ月", "1年", "2年
 budget_hint = st.text_input("参考予算（任意）")
 extra_notes = st.text_area("その他備考（任意）")
 
-# === モデル選択（Gemini 2.5 Pro / GPT-5） ===
+# === モデル選択（Gemini 2.5 Pro / GPT-5） & オプション ===
 model_choice = st.selectbox("使用するAIモデル", ["Gemini 2.5 Pro", "GPT-5"])
+do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 
 # =========================
 # ユーティリティ
 # =========================
+def join_or(value_list, empty="なし", sep=", "):
+    if not value_list:
+        return empty
+    return sep.join(map(str, value_list))
+
 def rush_coeff(base_days: int, target_days: int) -> float:
     """短納期係数を計算（target_days: 今日→納品日 / base_days: 撮影+編集+バッファ）"""
     if target_days >= base_days or base_days <= 0:
@@ -125,41 +131,111 @@ def rush_coeff(base_days: int, target_days: int) -> float:
     r = (base_days - target_days) / base_days
     return round(1 + RUSH_K * r, 2)
 
+# ---------- プロンプト（厳格版） ----------
 def build_prompt_json() -> str:
-    """LLMへのプロンプト（JSONのみ出力させる）"""
-    return f"""
-あなたは広告制作費の見積り項目を作る専門家です。以下条件から、**JSONのみ**で返してください。
-必須仕様:
-- 最上位に "items": Array を持つJSON
-- 各itemは {{ "category": str, "task": str, "qty": number, "unit": str, "unit_price": number, "note": str }} のみ
-- **金額の合計やHTMLは出力しない**
-- 管理費は「固定金額」で item を1つだけ作成（categoryは「管理費」、taskは「管理費（固定）」）。全体5〜10%相当を目安に案出し。
-- 単価は整数、数量は整数または小数OK
-- カテゴリは以下から用いる：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
+    staff_roles_str = join_or(staff_roles, empty="未指定")
+    kizai_str = join_or(kizai, empty="未指定")
+    deliverables_str = join_or(deliverables, empty="未指定")
+    subtitle_langs_str = join_or(subtitle_langs, empty="なし")
+    shoot_location_str = shoot_location if shoot_location else "未定"
+    budget_hint_or_none = budget_hint if budget_hint else "未設定"
+    extra_notes_or_none = extra_notes if extra_notes else "特になし"
 
-条件:
+    return f"""
+あなたは広告映像制作の見積り項目を作成するエキスパートです。
+以下の「案件条件」と「出力仕様・ルール」を満たし、**JSONのみ**を返してください。
+
+【案件条件】
 - 尺: {final_duration}
 - 本数: {num_versions}本
-- 撮影日数: {shoot_days}日
-- 編集日数: {edit_days}日
-- 納品希望日: {delivery_date.isoformat()}
-- メインキャスト: {cast_main}人 / エキストラ: {cast_extra}人 / タレント: {"あり" if talent_use else "なし"}
-- スタッフ: {", ".join(staff_roles) if staff_roles else "未指定"}
-- 撮影場所: {shoot_location or "未定"}
-- 撮影機材: {", ".join(kizai) if kizai else "未指定"}
+- 撮影日数: {shoot_days}日 / 編集日数: {edit_days}日
+- 納品希望日: {delivery_date.isoformat()}  （短納期係数や税計算は**サーバ側で行う**ため出力しない）
+- キャスト: メイン{cast_main}人 / エキストラ{cast_extra}人 / タレント: {"あり" if talent_use else "なし"}
+- スタッフ候補: {staff_roles_str}
+- 撮影場所: {shoot_location_str}
+- 撮影機材: {kizai_str}
 - 美術装飾: {set_design_quality}
 - CG: {"あり" if use_cg else "なし"} / ナレーション: {"あり" if use_narration else "なし"} / 音楽: {use_music} / MA: {"あり" if ma_needed else "なし"}
-- 納品形式: {", ".join(deliverables) if deliverables else "未指定"}
-- 字幕: {", ".join(subtitle_langs) if subtitle_langs else "なし"}
-- 地域: {usage_region} / 期間: {usage_period}
-- 参考予算: {budget_hint or "未設定"}
-- 備考: {extra_notes or "特になし"}
+- 納品形式: {deliverables_str}
+- 字幕: {subtitle_langs_str}
+- 使用地域: {usage_region} / 使用期間: {usage_period}
+- 参考予算: {budget_hint_or_none}
+- 備考メモ: {extra_notes_or_none}
 
-出力は**JSONのみ**、前後の説明やマークダウン禁止。
+【出力仕様】
+- 返答は **JSON 1オブジェクトのみ**。前後に説明やマークダウンは不要。
+- ルートキーは "items"（配列）のみ。
+- 各要素は次のキーのみを持つ（順不同可・追加キー禁止）:
+  - "category": string  # 次のいずれかに厳格一致 → 「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」
+  - "task": string      # 項目名（例: "ディレクター", "ロケバス", "カラーグレーディング"）
+  - "qty": number       # 数量（整数または少数）
+  - "unit": string      # 単位（"日","人","式","本","カット","ページ","台","時間" など）
+  - "unit_price": number  # 単価（サーバ側で税計算を行うため税込/税抜の指定は不要）
+  - "note": string      # 前提・根拠・含む/含まないの注意点（空でも可）
+- **禁止**: 合計/小計/税/短納期係数・割増計算、HTMLやテキスト表、コードフェンス。
+- **管理費は固定金額の1行のみ**（category="管理費", task="管理費（固定）", qty=1, unit="式"）。目安は**全体5–10%**だが、レンジとバランスで妥当化。
+
+【分類規則（厳守）】
+- 「制作プロデューサー」「制作PM」「ディレクター」→ 制作人件費
+- 「カメラマン」「照明」「録音」「スタイリスト」「ヘアメイク」「機材」「スタジオ」「ロケバス」「美術装飾」→ 撮影費
+- 俳優・モデル・エキストラ・キャスティング費・使用料（媒体/期間/地域）→ 出演関連費
+- オフライン/オンライン編集・カラー・MA・ナレ撮・字幕/翻訳・VFX/MG → 編集費・MA費
+- 交通/宿泊/ケータリング/申請・許認可/雑費/予備費 → 諸経費
+- 企画書/コンテ/絵コンテ/演出設計/プリプロ会議 → 企画
+- 単位の正規化例：人日→「日」、セット一式→「式」、カット数→「カット」、納品本数→「本」
+
+【価格レンジのガード（1日あたり概算）】
+- ディレクター: 80,000–200,000
+- プロデューサー/PM: 70,000–160,000
+- カメラマン: 80,000–180,000
+- 照明: 60,000–140,000
+- ヘアメイク/スタイリスト: 40,000–120,000
+- 編集（オフ/オン含む）: 60,000–150,000
+- カラー: 60,000–150,000
+- MA/ナレーター（1時間基準）: 20,000–80,000
+- 撮影機材一式（1日）: 50,000–200,000
+- スタジオ（1日）: 80,000–300,000
+- ロケバス（1日）: 50,000–120,000
+※ 逸脱する場合は `note` に根拠（高難度/大規模/持込/ディスカウント 等）。
+
+【数量の考え方（例）】
+- 人員系: 撮影日数×人数、編集は 編集日数×必要ロール（オフ/オン/カラー/MA 等）。
+- 機材/スタジオ/ロケバス: 撮影日数に準拠。
+- 派生書き出し（1:1/9:16 等）: 納品本数や派生係数で数量化（0以下は出力しない）。
+
+【参考予算がある場合】
+- 項目削減ではなく、数量・単価の現実的見直しやランク調整で近づける。乖離時は `note` に理由を記載。
+
+【抜けやすい項目の確認】
+- 企画/コンテ、プリプロ会議、機材・スタジオ、ロケバス、交通/宿泊、BGM/SE、素材購入、字幕/翻訳、MA、カラー、VFX、派生書き出し、データ管理、権利表記/クレジット、二次使用（※必要なら項目化）。
+
+【最終チェック】
+- **管理費（固定）1行**を必ず含める。
+- 大きく外れる単価はレンジへ寄せ、`note`に補正理由。
+- 同義重複は統合・正規化（「演出」→「ディレクター」等）。
+- **JSON構造に厳密準拠**、余計なキーや説明・合計は出力しない。
 """
 
+# ---------- 正規化パス用プロンプト ----------
+def build_normalize_prompt(items_json: str) -> str:
+    return f"""
+次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
+
+【やること】
+- スキーマ外のキーは削除。欠損キーは補完（空や0可）。
+- category を 次のいずれかに正規化：制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費
+- 単位を日本語代表表記に正規化（人日→日、セット→式 等）
+- 単価・数量は数値（負値・NaNは0）
+- 同義重複の task 名を統合（例: 演出=ディレクター）
+- 管理費（固定）は**1行のみ**：category=管理費, task=管理費（固定）, qty=1, unit=式, unit_price=合算額
+- 価格レンジからの過度な逸脱は近似値に補正し、noteに理由を追記
+
+【入力JSON】
+{items_json}
+"""
+
+# ---------- OpenAI呼び出し（v1/v0 両対応） ----------
 def call_gpt_json(prompt: str) -> str:
-    """GPT-5 を呼び出し（v1系/0系 どちらでも動く）"""
     if USE_OPENAI_CLIENT_V1:
         resp = openai_client.chat.completions.create(
             model="gpt-5",
@@ -173,18 +249,8 @@ def call_gpt_json(prompt: str) -> str:
         )
         return resp["choices"][0]["message"]["content"]
 
+# ---------- LLM項目生成 ----------
 def llm_generate_items_json(prompt: str) -> str:
-    """
-    LLMからJSON（items配列）だけを受け取る。
-    期待JSON:
-    {
-      "items": [
-        {"category":"撮影費","task":"カメラマン","qty":2,"unit":"日","unit_price":80000,"note":""},
-        ...
-        {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":""}
-      ]
-    }
-    """
     try:
         if model_choice == "Gemini 2.5 Pro":
             model = genai.GenerativeModel("gemini-2.5-pro")
@@ -192,16 +258,13 @@ def llm_generate_items_json(prompt: str) -> str:
         else:  # GPT-5
             res = call_gpt_json(prompt)
 
-        # JSONフェンス除去
         res = res.strip()
         if res.startswith("```json"):
             res = res.removeprefix("```json").removesuffix("```").strip()
         elif res.startswith("```"):
             res = res.removeprefix("```").removesuffix("```").strip()
         return res
-
     except Exception:
-        # フォールバック（最小骨格）
         return json.dumps({"items":[
             {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
             {"category":"撮影費","task":"カメラマン","qty":shoot_days,"unit":"日","unit_price":80000,"note":"fallback"},
@@ -209,6 +272,25 @@ def llm_generate_items_json(prompt: str) -> str:
             {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
         ]}, ensure_ascii=False)
 
+# ---------- LLM正規化 ----------
+def llm_normalize_items_json(items_json: str) -> str:
+    try:
+        prompt = build_normalize_prompt(items_json)
+        if model_choice == "Gemini 2.5 Pro":
+            model = genai.GenerativeModel("gemini-2.5-pro")
+            res = model.generate_content(prompt).text
+        else:
+            res = call_gpt_json(prompt)
+        res = res.strip()
+        if res.startswith("```json"):
+            res = res.removeprefix("```json").removesuffix("```").strip()
+        elif res.startswith("```"):
+            res = res.removeprefix("```").removesuffix("```").strip()
+        return res
+    except Exception:
+        return items_json  # 失敗したら元を返す
+
+# ---------- DataFrame/計算/HTML/Excel ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
     data = json.loads(items_json)
     items = data.get("items", [])
@@ -347,16 +429,13 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
         else:  # openpyxl
             from openpyxl.utils import get_column_letter
             ws = writer.book["見積もり"]
-            # 列幅
             widths = {"A":20, "B":20, "C":14, "D":8, "E":8, "F":14}
             for col, w in widths.items():
                 ws.column_dimensions[col].width = w
-            # 数値列の表示形式（#,##0）
             for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=3, max_col=3):
                 for cell in row: cell.number_format = '#,##0'
             for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=6, max_col=6):
                 for cell in row: cell.number_format = '#,##0'
-            # 合計の追記（値書き込み）
             last_row = ws.max_row + 2
             ws.cell(row=last_row,   column=5, value="小計（税抜）")
             ws.cell(row=last_row,   column=6, value=int(meta["taxable"])).number_format = '#,##0'
@@ -374,10 +453,15 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
 # =========================
 if st.button("💡 見積もりを作成"):
     with st.spinner("AIが見積もり項目を作成中…"):
+        # 1) 厳格プロンプト → JSON
         prompt = build_prompt_json()
         items_json = llm_generate_items_json(prompt)
 
-        # JSON→DF
+        # 2) 任意：正規化パス
+        if do_normalize_pass:
+            items_json = llm_normalize_items_json(items_json)
+
+        # 3) JSON→DF
         try:
             df_items = df_from_items_json(items_json)
         except Exception:
