@@ -519,7 +519,7 @@ def scale_prices_to_budget(df_items: pd.DataFrame,
                            target_days: int,
                            target_taxable_jpy: int,
                            low: float = 0.6,
-                           high: float = 1.6,
+                           high: float = 5.0,
                            round_to: int = 100) -> pd.DataFrame:
     df_now, meta_now = compute_totals(df_items, base_days, target_days)
     nonmgmt_after_rush = float(meta_now["subtotal_after_rush_excl_mgmt"])
