@@ -395,30 +395,27 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =========================
-# 会社Excelテンプレ機能（結合セル・列マップ対応）
+# 会社Excelテンプレ機能（崩れ対策版）
 # =========================
+from openpyxl import load_workbook
+from openpyxl.cell.cell import MergedCell
+from openpyxl.utils import column_index_from_string
+from copy import copy
+
 TOKEN_ITEMS = "{{ITEMS_START}}"
-TOKEN_SUBTOTAL = "{{SUBTOTAL}}"
-TOKEN_TAX = "{{TAX}}"
-TOKEN_TOTAL = "{{TOTAL}}"
 
-def _find_cell_by_token(ws, token: str):
-    for row in ws.iter_rows(values_only=False):
-        for cell in row:
-            if isinstance(cell.value, str) and cell.value.strip() == token:
-                return cell
-    return None
+# 列マップ（あなたのテンプレ）
+COLUMN_MAP_FOR_YOUR_TEMPLATE = {
+    "task": "B",        # 項目
+    "qty": "O",         # 数量
+    "unit": "Q",        # 単位
+    "unit_price": "S",  # 単価
+    "amount": "W",      # 金額（数式）
+    # "category" は使っていないので省略でOK
+}
 
-def _insert_rows_with_format(ws, start_row, count):
-    if count <= 0:
-        return
-    ws.insert_rows(start_row+1, amount=count)
-    for i in range(count):
-        for col in range(1, ws.max_column+1):
-            cell_above = ws.cell(row=start_row, column=col)
-            cell_new = ws.cell(row=start_row+1+i, column=col)
-            if cell_above.has_style:
-                cell_new._style = copy(cell_above._style)
+def _col_to_idx(col):  # "B" -> 2
+    return col if isinstance(col, int) else column_index_from_string(col)
 
 def _anchor_cell(ws, row, col):
     c = ws.cell(row=row, column=col)
@@ -428,95 +425,121 @@ def _anchor_cell(ws, row, col):
                 return ws.cell(row=rng.min_row, column=rng.min_col)
     return c
 
-def _col_to_idx(col):
-    if isinstance(col, int):
-        return col
-    return column_index_from_string(col)
+def _replicate_merged_row(ws, template_row, target_row):
+    """template_row と同じ横方向の結合を target_row に複製"""
+    to_add = []
+    for rng in list(ws.merged_cells.ranges):
+        if rng.min_row == rng.max_row == template_row:
+            to_add.append((rng.min_col, rng.max_col))
+    for mc, xc in to_add:
+        ws.merge_cells(start_row=target_row, start_column=mc,
+                       end_row=target_row,   end_column=xc)
 
-def _write_items(ws, df_items, start_row, start_col, prepared_rows,
-                 column_map=None, write_amount=False):
+def _row_style_copy(ws, src_row, dst_row):
+    """src_row のスタイル/高さを dst_row にコピー"""
+    ws.row_dimensions[dst_row].height = ws.row_dimensions[src_row].height
+    for col in range(1, ws.max_column+1):
+        a = ws.cell(row=src_row, column=col)
+        b = ws.cell(row=dst_row, column=col)
+        if a.has_style:
+            b._style = copy(a._style)
+
+def _count_prepared_rows(ws, start_row, task_col_idx, hard_cap=200):
     """
-    column_map 例：{"task":"B","qty":"O","unit":"Q","unit_price":"S","amount":"W"}
-    write_amount=False なら金額列は触らない（Excelの数式を保持）
+    すでに用意されている“空の明細行”の数を自動検出。
+    task列（B列）の値が空（またはNone）であれば“空き行”とみなします。
     """
-    if column_map is None:
-        column_map = {
-            "category": start_col,
-            "task": start_col + 1,
-            "unit_price": start_col + 2,
-            "qty": start_col + 3,
-            "unit": start_col + 4,
-            "amount": start_col + 5,
-        }
-    col_idx = {k: _col_to_idx(v) for k, v in column_map.items()}
+    cnt = 0
+    for r in range(start_row, min(ws.max_row, start_row + hard_cap) + 1):
+        v = ws.cell(row=r, column=task_col_idx).value
+        if v in (None, ""):
+            cnt += 1
+        else:
+            break
+    return cnt
 
-    needed_rows = len(df_items)
-    if needed_rows > prepared_rows:
-        _insert_rows_with_format(ws, start_row + prepared_rows - 1, needed_rows - prepared_rows)
+def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
+    """金額セルが空なら =O{row}*S{row} を付与（列マップに合わせて生成）"""
+    c = ws.cell(row=row, column=amount_col_idx)
+    if c.value in (None, ""):
+        q = ws.cell(row=row, column=qty_col_idx)
+        p = ws.cell(row=row, column=price_col_idx)
+        from openpyxl.utils import get_column_letter
+        qcol = get_column_letter(qty_col_idx)
+        pcol = get_column_letter(price_col_idx)
+        c.value = f"={qcol}{row}*{pcol}{row}"
+        c.number_format = '#,##0'
 
+def _write_items_safely(ws, df_items, start_row, column_map):
+    # 列番号に正規化
+    cmap = {k: _col_to_idx(v) for k,v in column_map.items()}
+    task_col = cmap["task"]
+    qty_col  = cmap["qty"]
+    unit_col = cmap["unit"]
+    price_col= cmap["unit_price"]
+    amt_col  = cmap["amount"]
+
+    needed = len(df_items)
+
+    # 既存の空行数を自動検出（足りない場合のみ増やす）
+    prepared = _count_prepared_rows(ws, start_row, task_col)
+    lack = max(0, needed - prepared)
+
+    if lack > 0:
+        # テンプレの“ひな型行”= start_row+prepared-1（最後の空き行）をコピーして増設
+        template_row = start_row + prepared - 1
+        # 追加する行を一行ずつ作る（スタイル＋結合＋数式）
+        for i in range(lack):
+            insert_at = template_row + i + 1
+            ws.insert_rows(insert_at, amount=1)
+            _row_style_copy(ws, template_row, insert_at)
+            _replicate_merged_row(ws, template_row, insert_at)
+            _ensure_amount_formula(ws, insert_at, qty_col, price_col, amt_col)
+
+    # データ書き込み
     for i, (_, r) in enumerate(df_items.iterrows()):
         row = start_row + i
-        if "category" in col_idx:
-            _anchor_cell(ws, row, col_idx["category"]).value = str(r.get("category",""))
-        _anchor_cell(ws, row, col_idx["task"]).value = str(r.get("task",""))
-        _anchor_cell(ws, row, col_idx["qty"]).value = float(r.get("qty", 0) or 0)
-        _anchor_cell(ws, row, col_idx["unit"]).value = str(r.get("unit",""))
-        _anchor_cell(ws, row, col_idx["unit_price"]).value = int(float(r.get("unit_price", 0) or 0))
-        if write_amount and "amount" in col_idx:
-            _anchor_cell(ws, row, col_idx["amount"]).value = int(float(r.get("小計", 0) or 0))
-
-# あなたのテンプレ列マップ（教えていただいた配置）
-COLUMN_MAP_FOR_YOUR_TEMPLATE = {
-    # "category": をテンプレに載せないなら省略でOK
-    "task": "B",        # 項目
-    "qty": "O",         # 数量
-    "unit": "Q",        # 単位
-    "unit_price": "S",  # 単価
-    "amount": "W",      # 金額（数式がある想定→write_amount=False）
-}
+        _anchor_cell(ws, row, task_col).value  = str(r.get("task",""))
+        _anchor_cell(ws, row, qty_col).value   = float(r.get("qty", 0) or 0)
+        _anchor_cell(ws, row, unit_col).value  = str(r.get("unit",""))
+        _anchor_cell(ws, row, price_col).value = int(float(r.get("unit_price", 0) or 0))
+        # 金額列は数式を維持（既存 or 追加分なら上で自動付与）
+        _ensure_amount_formula(ws, row, qty_col, price_col, amt_col)
 
 def export_with_company_template(template_bytes: bytes,
                                  df_items: pd.DataFrame,
                                  meta: dict,
                                  mode: str = "token",
                                  fixed_config: dict | None = None):
+    """
+    mode:
+      - "token": シート内の {{ITEMS_START}} を起点に自動差し込み
+      - "fixed": fixed_config = {"sheet_name":..., "start_row":19} の開始行指定
+    """
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb[fixed_config["sheet_name"]] if (mode=="fixed" and fixed_config and fixed_config.get("sheet_name")) else wb.active
 
-    prepared_rows_default = 10  # テンプレ側の空行数
-
     if mode == "token":
-        start = _find_cell_by_token(ws, TOKEN_ITEMS)
-        if not start:
+        # 起点セルを探す
+        start_cell = None
+        for row in ws.iter_rows(values_only=False):
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.strip() == TOKEN_ITEMS:
+                    start_cell = cell
+                    break
+            if start_cell: break
+        if not start_cell:
             st.error("テンプレに {{ITEMS_START}} が見つかりません。B19 など明細先頭セルに置いてください。")
             return
-        start_row, start_col = start.row, start.column
-        start.value = None  # トークン消す
+        start_row = start_cell.row
+        start_cell.value = None  # トークンを消す
+    else:
+        start_row = int((fixed_config or {}).get("start_row", 19))
 
-        _write_items(
-            ws, df_items,
-            start_row=start_row,
-            start_col=start_col,
-            prepared_rows=prepared_rows_default,
-            column_map=COLUMN_MAP_FOR_YOUR_TEMPLATE,
-            write_amount=False   # 金額列は数式を保持
-        )
+    # 書き込み（結合維持・数式維持・不足時のみ増設）
+    _write_items_safely(ws, df_items, start_row, COLUMN_MAP_FOR_YOUR_TEMPLATE)
 
-    else:  # fixed
-        cfg = fixed_config or {}
-        start_row = int(cfg.get("start_row", 19))  # 例: B19 の行
-        start_col = int(cfg.get("start_col", 2))   # 例: B=2
-        prepared_rows = int(cfg.get("prepared_rows", prepared_rows_default))
-
-        _write_items(
-            ws, df_items,
-            start_row=start_row,
-            start_col=start_col,
-            prepared_rows=prepared_rows,
-            column_map=COLUMN_MAP_FOR_YOUR_TEMPLATE,
-            write_amount=False
-        )
-
+    # ダウンロード
     out = BytesIO()
     wb.save(out)
     out.seek(0)
