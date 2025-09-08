@@ -56,10 +56,7 @@ if proxy_url:
     os.environ["HTTP_PROXY"] = proxy_url
 
 # OpenAI v1 クライアント
-openai_client = OpenAI(
-    api_key=OPENAI_API_KEY,
-    organization=OPENAI_ORG_ID if OPENAI_ORG_ID else None,
-)
+openai_client = OpenAI()
 
 # バージョン表示
 try:
