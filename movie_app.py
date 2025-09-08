@@ -33,12 +33,27 @@ genai.configure(api_key=GEMINI_API_KEY)
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 # =========================
-# OpenAI 初期化（v1専用に統一）
+# OpenAI 初期化（env経由・引数なしで安全に）
 # =========================
 from openai import OpenAI as _OpenAI
-openai_client = _OpenAI(api_key=OPENAI_API_KEY)
+
+# secrets から環境へ（None対策）
+if OPENAI_API_KEY:
+    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+else:
+    st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
+    st.stop()
+
+# 企業アカウントの場合は org を渡す（無ければ渡さない）
+OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID", None)
+
+if OPENAI_ORG_ID:
+    openai_client = _OpenAI(organization=OPENAI_ORG_ID)  # api_key は環境変数から拾わせる
+else:
+    openai_client = _OpenAI()  # 引数なし
+
 openai_version = getattr(importlib.import_module("openai"), "__version__", "1.x")
-USE_OPENAI_CLIENT_V1 = True  # 明示固定（旧APIは使用しない）
+USE_OPENAI_CLIENT_V1 = True  # 明示固定
 
 # =========================
 # 定数
