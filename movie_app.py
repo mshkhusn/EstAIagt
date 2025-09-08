@@ -41,43 +41,37 @@ else:
     st.stop()
 
 # =========================
-# OpenAI 初期化（v1 / 公式SDK、proxyはhttp_client経由）
+# OpenAI 初期化（v1 / envベース・互換性重視）
 # =========================
 from openai import OpenAI as _OpenAI
-import httpx
 
-# secrets から環境へ（None対策）
+# secrets → 環境変数
 if OPENAI_API_KEY:
     os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 else:
     st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
 
-# 企業アカウントの org（任意）
-OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID")
-
-# --- プロキシ対応 ---
+# 代理店/社内プロキシがある場合はここで環境へ流す（SDKが自動で拾う）
 proxy_url = (
     st.secrets.get("OPENAI_PROXY")
     or st.secrets.get("HTTPS_PROXY")
     or st.secrets.get("HTTP_PROXY")
 )
+if proxy_url:
+    os.environ["HTTPS_PROXY"] = proxy_url
+    os.environ["HTTP_PROXY"] = proxy_url
 
-http_client = None
+# org はあれば渡す／無ければ渡さない
+OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID")
 try:
-    if proxy_url:
-        http_client = httpx.Client(proxies=proxy_url, timeout=30.0)
-except Exception as _e:
-    st.warning(f"プロキシ初期化に失敗しました: {type(_e).__name__}: {str(_e)[:120]}")
-    http_client = None
-
-client_kwargs = {}
-if OPENAI_ORG_ID:
-    client_kwargs["organization"] = OPENAI_ORG_ID
-if http_client is not None:
-    client_kwargs["http_client"] = http_client
-
-openai_client = _OpenAI(**client_kwargs)
+    if OPENAI_ORG_ID:
+        openai_client = _OpenAI(organization=OPENAI_ORG_ID)
+    else:
+        openai_client = _OpenAI()
+except TypeError:
+    # 古いSDK向けのフォールバック（organization未対応など）
+    openai_client = _OpenAI()
 
 # バージョン表示用
 try:
