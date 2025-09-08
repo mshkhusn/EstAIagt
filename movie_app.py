@@ -41,16 +41,50 @@ else:
     st.stop()
 
 # =========================
-# OpenAI v1 初期化（env参照）
+# OpenAI 初期化（v1 / 公式SDK、proxyはhttp_client経由）
 # =========================
 from openai import OpenAI as _OpenAI
+import httpx
 
-def get_openai():
-    if OPENAI_ORG_ID:
-        return _OpenAI(organization=OPENAI_ORG_ID)  # api_key は環境変数から
-    return _OpenAI()
+# secrets から環境へ（None対策）
+if OPENAI_API_KEY:
+    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+else:
+    st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
+    st.stop()
 
-openai_version = getattr(importlib.import_module("openai"), "__version__", "1.x")
+# 企業アカウントの org（任意）
+OPENAI_ORG_ID = st.secrets.get("OPENAI_ORG_ID")
+
+# --- プロキシ対応 ---
+proxy_url = (
+    st.secrets.get("OPENAI_PROXY")
+    or st.secrets.get("HTTPS_PROXY")
+    or st.secrets.get("HTTP_PROXY")
+)
+
+http_client = None
+try:
+    if proxy_url:
+        http_client = httpx.Client(proxies=proxy_url, timeout=30.0)
+except Exception as _e:
+    st.warning(f"プロキシ初期化に失敗しました: {type(_e).__name__}: {str(_e)[:120]}")
+    http_client = None
+
+client_kwargs = {}
+if OPENAI_ORG_ID:
+    client_kwargs["organization"] = OPENAI_ORG_ID
+if http_client is not None:
+    client_kwargs["http_client"] = http_client
+
+openai_client = _OpenAI(**client_kwargs)
+
+# バージョン表示用
+try:
+    openai_version = importlib.import_module("openai").__version__
+except Exception:
+    openai_version = "1.x"
+
 USE_OPENAI_CLIENT_V1 = True
 
 # =========================
