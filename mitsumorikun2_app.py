@@ -1,6 +1,7 @@
 # app.py （AI見積もりくん２）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
+# ★見積もり生成「後」にだけ再生成ヒント文言を表示（文面カスタマイズ）
 
 import os
 import json
@@ -74,7 +75,7 @@ for msg in st.session_state["chat_history"]:
         st.chat_message("user").write(msg["content"])
 
 if user_input := st.chat_input("要件を入力してください..."):
-    # 新しい入力があれば過去の見積もり結果をクリア
+    # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
@@ -254,8 +255,6 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
-    st.caption("💡 追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。")
-
     if st.button("📝 AI見積もりくんで見積もりを生成する"):
         with st.spinner("AIが見積もりを生成中…"):
             prompt = build_prompt_for_estimation(st.session_state["chat_history"])
@@ -289,6 +288,12 @@ if st.session_state["df"] is not None:
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
+
+    # ★ここでのみ再生成ヒントを表示
+    st.caption(
+        "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
+        "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
+    )
 
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
