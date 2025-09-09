@@ -366,36 +366,60 @@ def llm_generate_items_json(prompt: str) -> str:
 
         if model_choice.startswith("Gemini"):
             model_id = _gemini_model_id_from_choice(model_choice)
+
+            # 1) モデル生成（MIMEは指定しない＝通常テキスト出力）
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
                     "candidate_count": 1,
-                    "temperature": 0.4,
+                    "temperature": 0.3,
                     "top_p": 0.9,
                     "max_output_tokens": 2500,
                 },
-                safety_settings=[
-                    {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUAL",            "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ],
+                # safety はデフォルトに戻す（BLOCK_NONE 指定を外す）
+                # safety_settings を渡さないことで SDK/サーバの既定値を使用
             )
+
+            # 2) まずは通常の generate_content
             resp = model.generate_content(prompt)
+
+            # デバッグ保存
             try:
                 st.session_state["gemini_raw_dict"] = resp.to_dict()
             except Exception:
                 st.session_state["gemini_raw_dict"] = {"_note": "resp.to_dict() 失敗"}
-            try:
-                pf = getattr(resp, "prompt_feedback", None)
-                st.session_state["gemini_block_reason"] = getattr(pf, "block_reason", None) if pf else None
-            except Exception:
-                pass
+
+            # まず parts/text を吸い上げ
             res = _robust_extract_gemini_text(resp)
+
+            # 3) 出力が空なら、chat 経路で再トライ
             if not res or len(res.strip()) < 5:
-                # リトライ
-                resp2 = model.generate_content(prompt)
+                chat = model.start_chat(history=[])
+                resp2 = chat.send_message(prompt)
+                try:
+                    # 2回目のレスポンスも記録（見比べられるよう簡易に追記）
+                    d1 = st.session_state.get("gemini_raw_dict") or {}
+                    d2 = resp2.to_dict()
+                    st.session_state["gemini_raw_dict"] = {"first": d1, "retry_chat": d2}
+                except Exception:
+                    pass
                 res = _robust_extract_gemini_text(resp2)
+
+            # 4) それでも空なら、最終リトライ（ごく軽いプロンプトに縮退）
+            if not res or len(res.strip()) < 5:
+                minimal_prompt = f"""{STRICT_JSON_HEADER}
+以下のキーを持つ items 配列のみのJSONを1個だけ返してください:
+category, task, qty, unit, unit_price, note
+管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
+"""
+                resp3 = model.generate_content(minimal_prompt)
+                try:
+                    d0 = st.session_state.get("gemini_raw_dict") or {}
+                    st.session_state["gemini_raw_dict"] = {"prev": d0, "final_minimal": resp3.to_dict()}
+                except Exception:
+                    pass
+                res = _robust_extract_gemini_text(resp3)
+
             st.session_state["model_used"] = model_id
 
         else:
