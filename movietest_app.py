@@ -1,8 +1,5 @@
-# movie_app_stage_a.py
-# Stage A: UIフォーム付き・JSON出力ミニ版（Gemini 2.5 Flash 専用 / フォールバックは2.0を使わない）
-# - 目的: 元の movie_app に段階的に近づけるための最初の統合版
-# - 機能: 入力フォーム -> プロンプト組立 -> 2.5 Flash で items JSON 生成 -> 表 + 合計表示
-# - 未実装(次段階で追加): 管理費上限・Rush係数・Excel出力・テンプレ書き出し等
+# movie_app_stage_a.py  ← 置き換え
+# Stage A+: UIフォーム付き・JSON出力ミニ版（Gemini 2.5 Flash 専用 / 空返し耐性強化）
 
 import os
 import re
@@ -14,7 +11,7 @@ import pandas as pd
 import google.generativeai as genai
 
 # ============== ページ設定 ==============
-st.set_page_config(page_title="映像制作見積（段階統合 Stage A）", layout="centered")
+st.set_page_config(page_title="映像制作見積（段階統合 Stage A+）", layout="centered")
 
 # ============== Secrets / API Key ==============
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -29,9 +26,7 @@ def _strip_code_fences(s: str) -> str:
     return s.strip()
 
 def robust_items_parse(raw: str) -> dict:
-    """
-    可能な限り { "items": [...] } に整形して返す（dict）
-    """
+    """可能な限り { "items": [...] } に整形して返す（dict）"""
     if not raw:
         return {"items": []}
     t = _strip_code_fences(raw)
@@ -49,7 +44,7 @@ def robust_items_parse(raw: str) -> dict:
         first = t.find("{"); last = t.rfind("}")
         if 0 <= first < last:
             frag = t[first:last+1]
-            frag = re.sub(r",\s*([}\]])", r"\1", frag)  # 末尾カンマ修正
+            frag = re.sub(r",\s*([}\]])", r"\1", frag)  # 末尾カンマ削除
             frag2 = frag.replace("\r", "")
             frag2 = re.sub(r"\bTrue\b", "true", frag2)
             frag2 = re.sub(r"\bFalse\b", "false", frag2)
@@ -83,7 +78,6 @@ def df_from_items(obj: dict) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["qty"] = df["qty"].fillna(0).astype(float)
     df["unit_price"] = df["unit_price"].fillna(0).astype(float)
-
     # 単価の最低下駄（安全寄り）
     df.loc[df["unit_price"] < 1000, "unit_price"] = 1000
     df["amount"] = (df["qty"] * df["unit_price"]).round().astype(int)
@@ -115,60 +109,86 @@ def build_case_block(
         f"- 備考: {notes if notes else '特になし'}\n"
     )
 
-# 2.5 Flash に JSON を出させるための“段階的 MIME 設定”ラダー
-# （2.0へは落とさない／同一モデル内で形式だけ緩める）
+# ---------- 安全かつ出力誘導を強めたガイド ----------
 _MINI_SYSTEM = (
-    "あなたは広告映像の見積り項目テンプレートを作るアシスタントです。"
-    "出力は安全かつビジネス用途に限定してください。"
+    "あなたは広告映像の制作費見積テンプレートを作るアシスタントです。"
+    "この出力はビジネス用途の一般的テンプレートで、個人情報や不適切な内容は含めません。"
 )
 _JSON_SPEC = (
     "次の仕様で **JSON オブジェクト1個** を返してください。\n"
     "- ルートは {\"items\": [...]} のみ\n"
     "- 各要素: category, task, qty, unit, unit_price, note\n"
-    "- 価格は概算で構いませんが 1,000 円未満は 1,000 に揃えてください\n"
-    "- 合計や税は出力に含めない\n"
+    "- 最低4項目以上。カテゴリ例: 制作費/撮影費/編集費・MA費/諸経費/管理費 など\n"
+    "- 単価は概算。1,000 円未満は 1,000 に切り上げ\n"
+    "- 合計/税などは出力に含めない\n"
+    "- JSON 以外の文章は出力しない\n"
 )
 
-def call_g25_items_json(prompt_block: str) -> dict:
-    # STEP 1: structured + permissive
-    for mode in [
-        {"mime": "application/json"},
-        {"mime": None},           # structured（MIME 指定なし）
-        {"mime": "text/plain"},   # plain
-    ]:
-        model = genai.GenerativeModel(
-            "gemini-2.5-flash",
-            generation_config={
-                "temperature": 0.2,
-                "top_p": 0.9,
-                "candidate_count": 1,
-                "max_output_tokens": 2048,
-                **({"response_mime_type": mode["mime"]} if mode["mime"] else {}),
-            },
-        )
+_EXAMPLE = {
+  "items": [
+    {"category":"制作費","task":"企画構成費","qty":1,"unit":"式","unit_price":50000,"note":""},
+    {"category":"撮影費","task":"カメラマン費","qty":2,"unit":"日","unit_price":80000,"note":""},
+    {"category":"編集費・MA費","task":"編集","qty":3,"unit":"日","unit_price":70000,"note":""},
+    {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":50000,"note":""}
+  ]
+}
 
-        full_prompt = (
-            f"{_MINI_SYSTEM}\n\n"
-            f"{prompt_block}\n\n"
-            "【出力仕様】\n"
-            f"{_JSON_SPEC}\n"
-            "JSON 以外の文章は出力しないでください。"
-        )
+def _run_model(prompt_text: str, response_mime: str | None):
+    model = genai.GenerativeModel(
+        "gemini-2.5-flash",
+        generation_config={
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "candidate_count": 1,
+            "max_output_tokens": 2048,
+            **({"response_mime_type": response_mime} if response_mime else {}),
+        },
+    )
+    resp = model.generate_content(prompt_text)
+    return (resp.text or "").strip()
+
+def call_g25_items_json(prompt_block: str) -> dict:
+    """
+    3段階（structured+permissive → structured → plain）＋最小プロンプトで再試行。
+    """
+    base_prompt = (
+        f"{_MINI_SYSTEM}\n\n"
+        f"{prompt_block}\n\n"
+        "【出力仕様】\n"
+        f"{_JSON_SPEC}\n"
+        "【出力例（参考。数値は状況に応じて推定し直してください）】\n"
+        "```json\n" + json.dumps(_EXAMPLE, ensure_ascii=False, indent=2) + "\n```\n"
+    )
+
+    # 1) structured + permissive
+    for mime in ["application/json", None, "text/plain"]:
         try:
-            resp = model.generate_content(full_prompt)
-            raw = (resp.text or "").strip()
+            raw = _run_model(base_prompt, mime)
             obj = robust_items_parse(raw)
-            # items が入っていれば採用
-            if isinstance(obj, dict) and isinstance(obj.get("items"), list) and len(obj["items"]) > 0:
+            if isinstance(obj.get("items"), list) and len(obj["items"]) >= 1:
                 return obj
         except Exception:
             pass
 
-    # すべて空/失敗 -> 空 items を返す
+    # 2) 最小プロンプト（強制短文）
+    minimal = (
+        "出力は JSON オブジェクト1個のみ。"
+        "keys: items(category, task, qty, unit, unit_price, note)。"
+        "最低4項目。文章は出力しない。\n"
+        "例:{\"items\":[{\"category\":\"制作費\",\"task\":\"企画構成費\",\"qty\":1,\"unit\":\"式\",\"unit_price\":50000,\"note\":\"\"}]}\n"
+    )
+    try:
+        raw2 = _run_model(minimal, "application/json")
+        obj2 = robust_items_parse(raw2)
+        if isinstance(obj2.get("items"), list) and len(obj2["items"]) >= 1:
+            return obj2
+    except Exception:
+        pass
+
     return {"items": []}
 
 # ============== UI ==============
-st.title("映像制作見積（段階統合 Stage A / Gemini 2.5 Flash 専用）")
+st.title("映像制作見積（段階統合 Stage A+ / Gemini 2.5 Flash 専用）")
 
 st.subheader("制作条件（縮小版）")
 col1, col2 = st.columns(2)
@@ -184,7 +204,10 @@ with col2:
     edit_days = st.number_input("編集日数", min_value=1, max_value=10, value=3)
     ma_needed = st.checkbox("MAあり", value=True)
 
-notes = st.text_area("備考（任意）", placeholder="案件概要・媒体などを簡単に")
+notes = st.text_area(
+    "備考（任意）",
+    placeholder="例：都内スタジオ撮影＋ロケ、BGMあり、ナレーション収録あり、Web配信想定 など"
+)
 
 st.markdown("---")
 if st.button("▶ 見積アイテムを生成（Gemini 2.5 Flash）", type="primary"):
@@ -219,4 +242,4 @@ if st.button("▶ 見積アイテムを生成（Gemini 2.5 Flash）", type="prim
         st.code(json.dumps(items_obj, ensure_ascii=False, indent=2), language="json")
 
 else:
-    st.caption("※ このバージョンでは、2.5 Flash 以外のモデルや 2.0 への切替・他社APIへのフォールバックは一切行いません。")
+    st.caption("※ 2.5 Flash 固定。2.0や他社APIには切替えません。")
