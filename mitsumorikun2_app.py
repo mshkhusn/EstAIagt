@@ -1,4 +1,6 @@
-# app.py （AI見積もりくん２ / GPT系のみ対応・JSON強制＆質問カテゴリフォールバック付き / 追加要件込み再生成対応）
+# app.py （AI見積もりくん２）
+# GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
+# 追加要件込み再生成対応 / 追加質問時にプレビュー消去
 
 import os
 import json
@@ -72,6 +74,12 @@ for msg in st.session_state["chat_history"]:
         st.chat_message("user").write(msg["content"])
 
 if user_input := st.chat_input("要件を入力してください..."):
+    # 新しい入力があれば過去の見積もり結果をクリア
+    st.session_state["df"] = None
+    st.session_state["meta"] = None
+    st.session_state["items_json"] = None
+    st.session_state["items_json_raw"] = None
+
     st.session_state["chat_history"].append({"role": "user", "content": user_input})
 
     with st.chat_message("user"):
