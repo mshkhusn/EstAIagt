@@ -1,9 +1,11 @@
 # movie_app_stage_a_flex.py
-# Stage A（柔軟版）: フィルタ除去なし。UIで「映像のみ」ガードを切替可能。
+# Stage A（柔軟版・note保持）: フィルタ除去なし。UIで「映像のみ」ガードを切替可能。
+# 生成結果は note 列を保持し、Excel ダウンロードにも含めます。
 
 import os
 import re
 import json
+from io import BytesIO
 from datetime import date
 
 import streamlit as st
@@ -70,11 +72,11 @@ def df_from_items(obj: dict) -> pd.DataFrame:
             "note": str(x.get("note", "")),
         })
     if not rows:
-        return pd.DataFrame(columns=["category","task","qty","unit","unit_price","amount"])
+        return pd.DataFrame(columns=["category","task","qty","unit","unit_price","note","amount"])
     df = pd.DataFrame(rows)
     df["qty"] = df["qty"].fillna(0).astype(float)
     df["unit_price"] = df["unit_price"].fillna(0).astype(float)
-    # 無意味な1円/0円を防ぐための軽い下駄
+    # 単価の下駄（1,000円未満を 1,000 に）
     df.loc[df["unit_price"] < 1000, "unit_price"] = 1000
     df["amount"] = (df["qty"] * df["unit_price"]).round().astype(int)
     return df
@@ -84,6 +86,51 @@ def totals(df: pd.DataFrame, tax_rate=0.10):
     tax = int(round(taxable * tax_rate))
     total = taxable + tax
     return {"taxable": taxable, "tax": tax, "total": total}
+
+def download_excel(df: pd.DataFrame, meta: dict, filename="見積り.xlsx"):
+    """note を含む Excel を配布"""
+    out = df.copy()
+    out = out[["category","task","qty","unit","unit_price","note","amount"]]
+    out.columns = ["カテゴリ","項目","数量","単位","単価（円）","内訳・注記","金額（円）"]
+
+    buf = BytesIO()
+    try:
+        import xlsxwriter  # noqa: F401
+        engine = "xlsxwriter"
+    except ModuleNotFoundError:
+        engine = "openpyxl"
+
+    with pd.ExcelWriter(buf, engine=engine) as writer:
+        out.to_excel(writer, index=False, sheet_name="見積り")
+        # 軽い整形
+        if engine == "xlsxwriter":
+            wb = writer.book
+            ws = writer.sheets["見積り"]
+            fmt_int = wb.add_format({"num_format": "#,##0"})
+            ws.set_column("A:A", 14)  # カテゴリ
+            ws.set_column("B:B", 26)  # 項目
+            ws.set_column("C:C", 8)   # 数量
+            ws.set_column("D:D", 8)   # 単位
+            ws.set_column("E:E", 12, fmt_int)  # 単価
+            ws.set_column("F:F", 36)  # 内訳・注記
+            ws.set_column("G:G", 12, fmt_int)  # 金額
+            last = len(out) + 2
+            ws.write(last,   5, "小計（税抜）")
+            ws.write_number(last,   6, int(meta["taxable"]), fmt_int)
+            ws.write(last+1, 5, "消費税")
+            ws.write_number(last+1, 6, int(meta["tax"]), fmt_int)
+            ws.write(last+2, 5, "合計")
+            ws.write_number(last+2, 6, int(meta["total"]), fmt_int)
+        else:
+            ws = writer.book["見積り"]
+            # openpyxl 側は最小限（列幅）
+            widths = {"A":14,"B":26,"C":8,"D":8,"E":12,"F":36,"G":12}
+            for col, w in widths.items():
+                ws.column_dimensions[col].width = w
+
+    buf.seek(0)
+    st.download_button("📥 Excelダウンロード（note入り）", buf, file_name=filename,
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ====== Prompts ======
 _MINI_SYSTEM = (
@@ -95,6 +142,7 @@ _JSON_SPEC = (
     "【出力仕様】\n"
     "- ルートは {\"items\":[...]} のみ\n"
     "- 各要素キー: category, task, qty, unit, unit_price, note\n"
+    "- note には、その項目の内訳/前提/条件などを短く記す（必須。空文字は不可）\n"
     "- 最低4項目以上\n"
     "- 単価は概算でよいが 1,000 円未満は 1,000 に切り上げ\n"
     "- 合計や消費税などの集計は出力しない\n"
@@ -108,10 +156,10 @@ _DOMAIN_GUARD_VIDEO_ONLY = (
 
 _EXAMPLE = {
   "items": [
-    {"category":"制作費","task":"企画構成費","qty":1,"unit":"式","unit_price":50000,"note":""},
-    {"category":"撮影費","task":"カメラマン費","qty":2,"unit":"日","unit_price":80000,"note":""},
-    {"category":"編集費・MA費","task":"編集","qty":3,"unit":"日","unit_price":70000,"note":""},
-    {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":50000,"note":""}
+    {"category":"制作費","task":"企画構成費","qty":1,"unit":"式","unit_price":50000,"note":"構成・絵コンテ・スケジュール調整"},
+    {"category":"撮影費","task":"カメラマン費","qty":2,"unit":"日","unit_price":80000,"note":"本番/予備日、機材基本含む"},
+    {"category":"編集費・MA費","task":"編集","qty":3,"unit":"日","unit_price":70000,"note":"オフライン～オンラインまで"},
+    {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":50000,"note":"進行/安全管理/制作管理"}
   ]
 }
 
@@ -145,37 +193,42 @@ def _run_model(prompt_text: str, response_mime: str | None):
     return (resp.text or "").strip()
 
 def call_g25_items_json(prompt_block: str, video_only: bool) -> dict:
-    # プロンプト組み立て（フィルタは使わず、プロンプトだけでガード）
     guard = _DOMAIN_GUARD_VIDEO_ONLY if video_only else ""
     base_prompt = (
         f"{_MINI_SYSTEM}\n\n{guard}\n{prompt_block}\n\n{_JSON_SPEC}\n"
         "【出力例（数値は状況に応じて推定し直してください）】\n"
         "```json\n" + json.dumps(_EXAMPLE, ensure_ascii=False, indent=2) + "\n```\n"
     )
-    # 1) application/json → None → text/plain の順に試す
     for mime in ["application/json", None, "text/plain"]:
         try:
             raw = _run_model(base_prompt, mime)
             obj = robust_items_parse(raw)
             if isinstance(obj.get("items"), list) and len(obj["items"]) >= 4:
+                # noteが空の要素を簡易補完（モデルのブレ対策）
+                for e in obj["items"]:
+                    if isinstance(e, dict) and not str(e.get("note","")).strip():
+                        e["note"] = "内訳/前提: 追って確定"
                 return obj
         except Exception:
             pass
 
-    # 2) 最小プロンプトで最後のリトライ
     minimal = (
-        ("映像制作のみ。出力は JSON オブジェクト1個（文章禁止）。" if video_only
-         else "備考優先（映像以外も可）。出力は JSON オブジェクト1個（文章禁止）。")
-        + "keys: items(category, task, qty, unit, unit_price, note)。最低4項目。"
+        ("映像制作のみ。出力は JSON オブジェクト1個（文章禁止）。"
+         "items: category, task, qty, unit, unit_price, note（note必須・短い内訳）。最低4項目。")
+        if video_only else
+        ("備考優先（映像以外も可）。出力は JSON オブジェクト1個（文章禁止）。"
+         "items: category, task, qty, unit, unit_price, note（note必須・短い内訳）。最低4項目。")
     )
     try:
         raw2 = _run_model(minimal, "application/json")
         obj2 = robust_items_parse(raw2)
         if isinstance(obj2.get("items"), list) and len(obj2["items"]) >= 4:
+            for e in obj2["items"]:
+                if isinstance(e, dict) and not str(e.get("note","")).strip():
+                    e["note"] = "内訳/前提: 追って確定"
             return obj2
     except Exception:
         pass
-
     return {"items": []}
 
 # ====== UI ======
@@ -227,6 +280,9 @@ if st.button("▶ 見積アイテムを生成（Gemini 2.5 Flash）", type="prim
         f"**消費税** : {meta['tax']:,} 円　/　"
         f"**合計** : **{meta['total']:,} 円**"
     )
+
+    if len(df):
+        download_excel(df, meta, filename="見積り_note入り.xlsx")
 
     with st.expander("デバッグ：生成 JSON（RAW→整形後）", expanded=False):
         st.code(json.dumps(items_obj, ensure_ascii=False, indent=2), language="json")
