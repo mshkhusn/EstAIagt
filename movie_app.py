@@ -4,8 +4,6 @@ import re
 import json
 import importlib
 from io import BytesIO
-from datetime_t import date  # ← typo回避: 正しくは 'from datetime import date'
-# ↑ もしこの行でエラーが出たら、上の行を削除して下の正しい行を使ってください
 from datetime import date
 import ast
 from typing import Optional
