@@ -1,7 +1,7 @@
 # app.py （AI見積もりくん２）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
-# ★見積もり生成「後」にだけ再生成ヒント文言を表示（文面カスタマイズ）
+# 見積もり生成後にチャット入力欄の上にヒント文を表示
 
 import os
 import json
@@ -74,6 +74,14 @@ for msg in st.session_state["chat_history"]:
     elif msg["role"] == "user":
         st.chat_message("user").write(msg["content"])
 
+# 👇 見積もり生成済みならチャット入力欄の上にヒント文を表示
+if st.session_state["df"] is not None:
+    st.caption(
+        "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
+        "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
+    )
+
+# 入力欄
 if user_input := st.chat_input("要件を入力してください..."):
     # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
     st.session_state["df"] = None
@@ -288,12 +296,6 @@ if st.session_state["df"] is not None:
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
-
-    # ★ここでのみ再生成ヒントを表示
-    st.caption(
-        "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
-        "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
-    )
 
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
