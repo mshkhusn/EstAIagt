@@ -225,7 +225,11 @@ def robust_parse_items_json(raw: str) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 # ---------- プロンプト ----------
-STRICT_JSON_HEADER = "絶対に説明文や前置きは出力しないでください。JSONオブジェクトのみを1個、コードフェンスなしで返してください。"
+STRICT_JSON_HEADER = (
+    "必ず有効な JSON 1オブジェクトのみ（コードフェンスなし）を返してください。"
+    "説明文や前置きは禁止です。"
+    "もし要件を満たせない・生成が難しい場合でも、空にはせず、必ず {\"items\": []} を返してください。"
+)
 
 def _common_case_block() -> str:
     return f"""【案件条件】
@@ -293,16 +297,16 @@ def _map_openai_model(choice: str) -> str:
 # ---------- LLM 呼び出し（2.5専用チューニング / フォールバックなし） ----------
 def llm_generate_items_json(prompt: str) -> str:
     """
-    選択モデルで items JSON を生成（Gemini 2.5 Flash/Pro 対応）。
-    2.0 へのフォールバックは行わない。失敗時は例外 → 最後の except で固定ダミー。
+    選択モデルで items JSON を生成（Gemini 2.5 Flash/Pro 直叩き・フォールバックなし）。
+    2.5 で空返しを避けるため response_mime_type=application/json を指定。
     """
+    import base64
 
     def _robust_extract_gemini_text(resp) -> str:
         # 1) 普通に text
         try:
-            t = getattr(resp, "text", None)
-            if t:
-                return t
+            if getattr(resp, "text", None):
+                return resp.text
         except Exception:
             pass
         # 2) parts(text / inline_data: application/json)
@@ -312,15 +316,14 @@ def llm_generate_items_json(prompt: str) -> str:
                 content = getattr(c, "content", None)
                 parts = getattr(content, "parts", None) or []
                 for p in parts:
-                    if getattr(p, "text", None):
-                        buf.append(p.text)
-                        continue
+                    t = getattr(p, "text", None)
+                    if t:
+                        buf.append(t); continue
                     inline = getattr(p, "inline_data", None)
                     if inline:
                         mime = getattr(inline, "mime_type", "") or getattr(inline, "mimeType", "")
                         data_b64 = getattr(inline, "data", None)
                         if data_b64 and "json" in mime:
-                            import base64
                             try:
                                 buf.append(base64.b64decode(data_b64).decode("utf-8", errors="ignore"))
                             except Exception:
@@ -329,14 +332,14 @@ def llm_generate_items_json(prompt: str) -> str:
                 return "".join(buf)
         except Exception:
             pass
-        # 3) デバッグ用に dict に落とす
+        # 3) どうしても取れない時は to_dict を文字列化（デバッグ用）
         try:
             import json as _json
             return _json.dumps(resp.to_dict(), ensure_ascii=False)
         except Exception:
             return ""
 
-    # 状態初期化（表示用）
+    # 表示用の状態初期化
     st.session_state.update({
         "used_fallback": False,
         "fallback_reason": None,
@@ -349,18 +352,19 @@ def llm_generate_items_json(prompt: str) -> str:
             model_id = _gemini_model_id_from_choice(model_choice)
             st.session_state["model_used"] = model_id
 
-            # ※ 2.5 はまず素のテキスト出力で（response_mime_typeは指定しない）
+            # ★ ここが肝心：2.5 は JSON MIME を明示する方が空返しが減る
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
                     "candidate_count": 1,
-                    "temperature": 0.3,
+                    "temperature": 0.25,
                     "top_p": 0.9,
                     "max_output_tokens": 2500,
+                    "response_mime_type": "application/json",
                 },
             )
 
-            # 1st try: generate_content
+            # 1st: generate_content
             resp = model.generate_content(prompt)
             try:
                 st.session_state["gemini_raw_dict"] = resp.to_dict()
@@ -368,8 +372,8 @@ def llm_generate_items_json(prompt: str) -> str:
                 st.session_state["gemini_raw_dict"] = {"_note": "to_dict() failed"}
             out = _robust_extract_gemini_text(resp)
 
-            # 2nd try: 同一モデルの chat 経路で再試行（フォールバックではない）
-            if not out or len(out.strip()) < 5:
+            # 2nd: 同一モデルの chat 経路で再試行（フォールバックではない）
+            if not out or len(out.strip()) < 3:
                 chat = model.start_chat(history=[])
                 resp2 = chat.send_message(prompt)
                 try:
@@ -383,7 +387,7 @@ def llm_generate_items_json(prompt: str) -> str:
 
             raw = out or ""
         else:
-            # OpenAI 側は従来どおり
+            # OpenAI 側（従来どおり）
             gpt_model = _map_openai_model(model_choice)
             resp = openai_client.chat.completions.create(
                 model=gpt_model,
@@ -398,42 +402,37 @@ def llm_generate_items_json(prompt: str) -> str:
             raw = resp.choices[0].message.content or ""
             st.session_state["model_used"] = gpt_model
 
-        st.session_state["items_json_raw"] = raw
+        # 最低限のガード：本当に空なら {items:[]} を採用
+        if not raw or len(raw.strip()) == 0:
+            raw = '{"items": []}'
 
-        if not raw or len(raw.strip()) < 5:
-            raise RuntimeError("Gemini returned empty/too short response.")
+        st.session_state["items_json_raw"] = raw
 
         parsed = robust_parse_items_json(raw)
         try:
             if not json.loads(parsed).get("items"):
-                raise RuntimeError("Parsed items is empty.")
+                # items キーが無い/空配列のみならそれも許容（最低限のJSON）
+                return json.dumps({"items": []}, ensure_ascii=False)
         except Exception:
             raise RuntimeError("Parsed JSON malformed.")
 
         return parsed
 
     except Exception as e:
-        # 最後の非常口（固定の安全ダミー）
+        # “最後の非常口”だけは残す（画面は進める）
         st.session_state["used_fallback"] = True
         st.session_state["fallback_reason"] = f"{type(e).__name__}: {str(e)[:200]}"
-        st.warning("⚠️ モデル応答の解析に失敗。固定fallbackで継続します。")
-
-        fallback = {
-            "items": [
-                {"category": "制作人件費","task": "制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
-                {"category": "撮影費","task": "カメラマン","qty":max(1,int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
-                {"category": "編集費・MA費","task": "編集","qty":max(1,int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
-                {"category": "管理費","task": "管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"},
-            ]
-        }
+        st.warning("⚠️ モデル応答の解析に失敗（最低限の固定JSONを使用）。")
+        fallback = {"items": []}
         parsed = json.dumps(fallback, ensure_ascii=False)
         st.session_state["items_json_raw"] = parsed
         return parsed
 
 
+
 def llm_normalize_items_json(items_json: str) -> str:
     """
-    2.5 との相性を優先：response_mime_type は指定せず、厳格プロンプトでテキストJSONを返させる。
+    正規化パスも 2.5 では JSON MIME を明示して空返しを回避。
     """
     try:
         prompt = f"""{STRICT_JSON_HEADER}
@@ -454,9 +453,10 @@ def llm_normalize_items_json(items_json: str) -> str:
                     "temperature": 0.2,
                     "top_p": 0.9,
                     "max_output_tokens": 2000,
+                    "response_mime_type": "application/json",
                 },
             )
-            res = model.generate_content(prompt).text
+            res = model.generate_content(prompt).text or '{"items":[]}'
         else:
             gpt_model = _map_openai_model(model_choice)
             resp = openai_client.chat.completions.create(
@@ -469,11 +469,12 @@ def llm_normalize_items_json(items_json: str) -> str:
                 temperature=0.2,
                 max_tokens=4000,
             )
-            res = resp.choices[0].message.content or ""
-
+            res = resp.choices[0].message.content or '{"items":[]}'
         return robust_parse_items_json(res)
     except Exception:
+        # 失敗時はそのまま返す（最低限の許容）
         return items_json
+
 
 # ---------- 計算 ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
