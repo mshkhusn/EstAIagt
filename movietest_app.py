@@ -1,9 +1,9 @@
-# app_gemini25_test.py
+# movietest_app.py
 # =============================================
 # Gemini 2.5 疎通テスター（2.0へ自動フォールバック）
 # - まずはテキストのみで 2.5 が通るか確認する最小実装
-# - 既存 requirements.txt は「いまのまま」でOK（まずは試す）
-# - 環境変数 GEMINI_API_KEY を設定してデプロイしてください
+# - requirements.txt は現状のままでOK
+# - 環境変数 GEMINI_API_KEY を設定してください
 # =============================================
 
 import os
@@ -60,4 +60,82 @@ prompt = st.text_area(
     height=180,
 )
 
-col_run, col_clear = st.columns([1, 1])
+
+# ============ ボタン UI ============
+col_run, col_clear = st.columns(2)
+with col_run:
+    run_clicked = st.button("実行", type="primary", use_container_width=True)
+with col_clear:
+    clear_clicked = st.button("クリア", use_container_width=True)
+
+
+# ============ 推論ラッパ関数群 ============
+def _generate(model_id: str, contents: str, *, max_tokens: int, temp: float):
+    m = genai.GenerativeModel(model_id)
+    return m.generate_content(
+        contents,
+        generation_config={
+            "max_output_tokens": int(max_tokens),
+            "temperature": float(temp),
+        },
+    )
+
+
+def run_with_fallback(
+    primary_model: str,
+    contents: str,
+    *,
+    max_tokens: int,
+    temp: float,
+    fallback_model: str = FALLBACK_MODEL,
+) -> Dict[str, Any]:
+    out = {"ok": False, "model": primary_model, "fallback_used": False, "text": "", "raw": None}
+    try:
+        r = _generate(primary_model, contents, max_tokens=max_tokens, temp=temp)
+        out.update({"ok": True, "text": getattr(r, "text", ""), "raw": r})
+        return out
+    except Exception as e:
+        out["error_primary"] = repr(e)
+        time.sleep(0.6)
+        try:
+            r2 = _generate(fallback_model, contents, max_tokens=max_tokens, temp=temp)
+            out.update(
+                {
+                    "ok": True,
+                    "model": fallback_model,
+                    "fallback_used": True,
+                    "text": getattr(r2, "text", ""),
+                    "raw": r2,
+                }
+            )
+            return out
+        except Exception as e2:
+            out["error_fallback"] = repr(e2)
+            return out
+
+
+# ============ 実行/クリア ロジック ============
+if run_clicked:
+    if not prompt.strip():
+        st.warning("プロンプトを入力してください。")
+    else:
+        final_prompt = (
+            "あなたは厳密なJSON出力のアシスタントです。必ず JSON のみを返してください。\n"
+            "日本語の説明文は JSON の値の中だけに含めてください。トップレベルは {\"result\": ...} 構造にしてください。\n\n"
+        ) + prompt if force_json else prompt
+
+        with st.spinner(f"{model_name} で実行中…"):
+            out = run_with_fallback(model_name, final_prompt, max_tokens=max_output_tokens, temp=temperature)
+
+        status = ("成功" if out.get("ok") else "失敗") + ("（フォールバックあり）" if out.get("fallback_used") else "")
+        if out.get("ok"):
+            st.success(f"{status} / 実行モデル: {out.get('model')}")
+            st.write(out.get("text", ""))
+        else:
+            st.error(f"失敗 / 実行モデル: {out.get('model')}")
+            st.write("Primary error:", out.get("error_primary"))
+            st.write("Fallback error:", out.get("error_fallback"))
+
+if clear_clicked:
+    st.session_state.clear()
+    st.rerun()
