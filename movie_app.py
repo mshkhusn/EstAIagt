@@ -1,4 +1,5 @@
-# app.py (Gemini 2.5 対応版 / フォールバックなし)
+# app.py（GPT-4.1専用 / シンプル版）
+
 import os
 import re
 import json
@@ -10,49 +11,42 @@ from typing import Optional
 
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
 from dateutil.relativedelta import relativedelta
 from openpyxl.styles import Font
 
 # ===== openpyxl / Excel =====
 from openpyxl import load_workbook
-from openpyxl.cell.cell import MergedCell
 from openpyxl.utils import column_index_from_string, get_column_letter
 
 # ===== OpenAI v1 SDK =====
 from openai import OpenAI
-import httpx  # ← 追加
+import httpx
 
 # =========================
 # ページ設定
 # =========================
-st.set_page_config(page_title="（調整中・使用不可）映像制作概算見積エージェント vNext", layout="centered")
+st.set_page_config(page_title="映像制作概算見積エージェント (GPT-4.1)", layout="centered")
 
 # =========================
 # Secrets
 # =========================
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 OPENAI_ORG_ID  = st.secrets.get("OPENAI_ORG_ID", None)
 
-# Gemini 初期化
-genai.configure(api_key=GEMINI_API_KEY)
-
-# OpenAI 環境変数（明示）
 if not OPENAI_API_KEY:
     st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
+
+# OpenAI 環境変数（明示）
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 if OPENAI_ORG_ID:
     os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
 
-# OpenAI v1 クライアント（httpx.Client を明示して渡す）
-openai_client = OpenAI(
-    http_client=httpx.Client(timeout=60.0)
-)
+# OpenAI v1 クライアント
+openai_client = OpenAI(http_client=httpx.Client(timeout=60.0))
 
-# バージョン表示
+# バージョン表示用（任意）
 try:
     openai_version = importlib.import_module("openai").__version__
 except Exception:
@@ -64,22 +58,19 @@ except Exception:
 TAX_RATE = 0.10
 MGMT_FEE_CAP_RATE = 0.15
 RUSH_K = 0.75
+OPENAI_MODEL = "gpt-4.1"  # ← 常に GPT-4.1 を使用
 
 # =========================
 # セッション
 # =========================
-for k in [
-    "items_json_raw", "items_json", "df", "meta", "final_html",
-    "used_fallback", "fallback_reason", "gemini_block_reason", "model_used",
-    "gemini_raw_dict"
-]:
+for k in ["items_json_raw", "items_json", "df", "meta", "final_html"]:
     if k not in st.session_state:
         st.session_state[k] = None
 
 # =========================
 # 認証
 # =========================
-st.title("（調整中・使用不可）映像制作概算見積エージェント vNext")
+st.title("映像制作概算見積エージェント (GPT-4.1)")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("🔒 認証が必要です")
@@ -126,11 +117,7 @@ budget_hint = st.text_input("参考予算（税抜・任意）")
 extra_notes = st.text_area("備考（案件概要・要件・想定媒体・必須/除外事項などを自由記入）")
 st.caption("※備考に案件概要や条件を追記すると、不足項目の自動補完が働き、見積もりの精度が上がります。")
 
-# モデル選択
-model_choice = st.selectbox(
-    "使用するAIモデル",
-    ["Gemini 2.5 Flash", "Gemini 2.5 Pro", "Gemini 2.0 Flash", "gpt-4.1-mini", "gpt-4.1", "GPT-5"]
-)
+# 補助フラグ
 do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 do_infer_from_notes = st.checkbox("備考から不足項目を推論して補完（推奨）", value=True)
 
@@ -274,166 +261,37 @@ def build_prompt_json() -> str:
 - 合計/税/HTMLなどは出力しない。
 """
 
-# ---------- モデルIDマッピング ----------
-def _gemini_model_id_from_choice(choice: str) -> str:
-    if "2.5 Flash" in choice:
-        return "gemini-2.5-flash"
-    if "2.5 Pro" in choice:
-        return "gemini-2.5-pro"
-    if "2.0 Flash" in choice:
-        return "gemini-2.0-flash"
-    return "gemini-2.5-flash"
-
-def _map_openai_model(choice: str) -> str:
-    if choice == "gpt-4.1-mini":
-        return "gpt-4.1-mini"
-    if choice == "gpt-4.1":
-        return "gpt-4.1"
-    if choice == "GPT-5":
-        st.warning("このAPIキーでは GPT-5 が未開放の可能性があるため、gpt-4.1 に自動切替します。")
-        return "gpt-4.1"
-    return "gpt-4.1"
-
-# ---------- LLM 呼び出し（2.5専用チューニング / フォールバックなし） ----------
+# ---------- LLM 呼び出し（GPT-4.1 固定） ----------
 def llm_generate_items_json(prompt: str) -> str:
-    """
-    選択モデルで items JSON を生成（Gemini 2.5 Flash/Pro 直叩き・フォールバックなし）。
-    2.5 で空返しを避けるため response_mime_type=application/json を指定。
-    """
-    import base64
-
-    def _robust_extract_gemini_text(resp) -> str:
-        # 1) 普通に text
-        try:
-            if getattr(resp, "text", None):
-                return resp.text
-        except Exception:
-            pass
-        # 2) parts(text / inline_data: application/json)
-        try:
-            buf = []
-            for c in getattr(resp, "candidates", []) or []:
-                content = getattr(c, "content", None)
-                parts = getattr(content, "parts", None) or []
-                for p in parts:
-                    t = getattr(p, "text", None)
-                    if t:
-                        buf.append(t); continue
-                    inline = getattr(p, "inline_data", None)
-                    if inline:
-                        mime = getattr(inline, "mime_type", "") or getattr(inline, "mimeType", "")
-                        data_b64 = getattr(inline, "data", None)
-                        if data_b64 and "json" in mime:
-                            try:
-                                buf.append(base64.b64decode(data_b64).decode("utf-8", errors="ignore"))
-                            except Exception:
-                                pass
-            if buf:
-                return "".join(buf)
-        except Exception:
-            pass
-        # 3) どうしても取れない時は to_dict を文字列化（デバッグ用）
-        try:
-            import json as _json
-            return _json.dumps(resp.to_dict(), ensure_ascii=False)
-        except Exception:
-            return ""
-
-    # 表示用の状態初期化
-    st.session_state.update({
-        "used_fallback": False,
-        "fallback_reason": None,
-        "gemini_block_reason": None,
-        "model_used": None,
-    })
-
     try:
-        if model_choice.startswith("Gemini"):
-            model_id = _gemini_model_id_from_choice(model_choice)
-            st.session_state["model_used"] = model_id
-
-            # ★ ここが肝心：2.5 は JSON MIME を明示する方が空返しが減る
-            model = genai.GenerativeModel(
-                model_id,
-                generation_config={
-                    "candidate_count": 1,
-                    "temperature": 0.25,
-                    "top_p": 0.9,
-                    "max_output_tokens": 2500,
-                    "response_mime_type": "application/json",
-                },
-            )
-
-            # 1st: generate_content
-            resp = model.generate_content(prompt)
-            try:
-                st.session_state["gemini_raw_dict"] = resp.to_dict()
-            except Exception:
-                st.session_state["gemini_raw_dict"] = {"_note": "to_dict() failed"}
-            out = _robust_extract_gemini_text(resp)
-
-            # 2nd: 同一モデルの chat 経路で再試行（フォールバックではない）
-            if not out or len(out.strip()) < 3:
-                chat = model.start_chat(history=[])
-                resp2 = chat.send_message(prompt)
-                try:
-                    st.session_state["gemini_raw_dict"] = {
-                        "first": st.session_state.get("gemini_raw_dict"),
-                        "retry_chat": resp2.to_dict()
-                    }
-                except Exception:
-                    pass
-                out = _robust_extract_gemini_text(resp2)
-
-            raw = out or ""
-        else:
-            # OpenAI 側（従来どおり）
-            gpt_model = _map_openai_model(model_choice)
-            resp = openai_client.chat.completions.create(
-                model=gpt_model,
-                messages=[
-                    {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-                max_tokens=8000,
-            )
-            raw = resp.choices[0].message.content or ""
-            st.session_state["model_used"] = gpt_model
-
-        # 最低限のガード：本当に空なら {items:[]} を採用
-        if not raw or len(raw.strip()) == 0:
+        resp = openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=8000,
+        )
+        raw = resp.choices[0].message.content or ""
+        if not raw.strip():
             raw = '{"items": []}'
-
         st.session_state["items_json_raw"] = raw
-
         parsed = robust_parse_items_json(raw)
+        # items が無い場合でも最低限の JSON を返す
         try:
-            if not json.loads(parsed).get("items"):
-                # items キーが無い/空配列のみならそれも許容（最低限のJSON）
-                return json.dumps({"items": []}, ensure_ascii=False)
+            _ = json.loads(parsed).get("items", [])
         except Exception:
-            raise RuntimeError("Parsed JSON malformed.")
-
+            return json.dumps({"items": []}, ensure_ascii=False)
         return parsed
-
     except Exception as e:
-        # “最後の非常口”だけは残す（画面は進める）
-        st.session_state["used_fallback"] = True
-        st.session_state["fallback_reason"] = f"{type(e).__name__}: {str(e)[:200]}"
         st.warning("⚠️ モデル応答の解析に失敗（最低限の固定JSONを使用）。")
-        fallback = {"items": []}
-        parsed = json.dumps(fallback, ensure_ascii=False)
+        parsed = json.dumps({"items": []}, ensure_ascii=False)
         st.session_state["items_json_raw"] = parsed
         return parsed
 
-
-
 def llm_normalize_items_json(items_json: str) -> str:
-    """
-    正規化パスも 2.5 では JSON MIME を明示して空返しを回避。
-    """
     try:
         prompt = f"""{STRICT_JSON_HEADER}
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
@@ -444,41 +302,23 @@ def llm_normalize_items_json(items_json: str) -> str:
 【入力JSON】
 {items_json}
 """
-        if model_choice.startswith("Gemini"):
-            model_id = _gemini_model_id_from_choice(model_choice)
-            model = genai.GenerativeModel(
-                model_id,
-                generation_config={
-                    "candidate_count": 1,
-                    "temperature": 0.2,
-                    "top_p": 0.9,
-                    "max_output_tokens": 2000,
-                    "response_mime_type": "application/json",
-                },
-            )
-            res = model.generate_content(prompt).text or '{"items":[]}'
-        else:
-            gpt_model = _map_openai_model(model_choice)
-            resp = openai_client.chat.completions.create(
-                model=gpt_model,
-                messages=[
-                    {"role": "system", "content": "You MUST return a single valid JSON object only."},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-                max_tokens=4000,
-            )
-            res = resp.choices[0].message.content or '{"items":[]}'
+        resp = openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You MUST return a single valid JSON object only."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=4000,
+        )
+        res = resp.choices[0].message.content or '{"items":[]}'
         return robust_parse_items_json(res)
     except Exception:
-        # 失敗時はそのまま返す（最低限の許容）
         return items_json
-
 
 # ---------- 計算 ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
-    # JSONの壊れに耐える
     try:
         data = json.loads(items_json) if items_json else {}
     except Exception:
@@ -487,7 +327,6 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
     items = data.get("items", []) or []
     norm = []
     for x in items:
-        # 文字列や None が混じっても安全に拾う
         norm.append({
             "category": str((x or {}).get("category", "")),
             "task": str((x or {}).get("task", "")),
@@ -499,12 +338,10 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
 
     df = pd.DataFrame(norm)
 
-    # 必須カラムを補完（存在しない場合に作る）
     for col in ["category", "task", "qty", "unit", "unit_price", "note"]:
         if col not in df.columns:
             df[col] = "" if col in ["category", "task", "unit", "note"] else 0
 
-    # 数値カラムは強制的に数値化（文字列/NoneでもOKにする）
     df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0.0)
     df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
 
@@ -530,7 +367,8 @@ def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
         df_items.at[idx, "小計"] = mgmt_final
     else:
         df_items = pd.concat([df_items, pd.DataFrame([{
-            "category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":mgmt_final,"小計":mgmt_final
+            "category": "管理費", "task": "管理費（固定）", "qty": 1, "unit": "式",
+            "unit_price": mgmt_final, "小計": mgmt_final
         }])], ignore_index=True)
 
     taxable = int(df_items["小計"].sum())
@@ -595,15 +433,15 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     html.append("<tbody>")
     current_cat = None
     for _, r in df_items.iterrows():
-        cat = r.get("category","")
+        cat = r.get("category", "")
         if cat != current_cat:
             html.append(f"<tr><td colspan='6' style='text-align:left;background:#f6f6f6;font-weight:bold'>{cat}</td></tr>")
             current_cat = cat
-        unit_price_str = f"{int(r.get('unit_price',0)):,}"
-        qty_str = str(r.get('qty',''))
-        unit_str = r.get('unit','')
-        amount_str = f"{int(r.get('小計',0)):,}"
-        task_str = r.get('task','')
+        unit_price_str = f"{int(r.get('unit_price', 0)):,}"
+        qty_str = str(r.get('qty', ''))
+        unit_str = r.get('unit', '')
+        amount_str = f"{int(r.get('小計', 0)):,}"
+        task_str = r.get('task', '')
         html.append(
             "<tr>"
             f"<td>{cat}</td>"
@@ -625,8 +463,8 @@ def render_html(df_items: pd.DataFrame, meta: dict) -> str:
 
 def download_excel(df_items: pd.DataFrame, meta: dict):
     out = df_items.copy()
-    out = out[["category","task","unit_price","qty","unit","小計"]]
-    out.columns = ["カテゴリ","項目","単価（円）","数量","単位","金額（円）"]
+    out = out[["category", "task", "unit_price", "qty", "unit", "小計"]]
+    out.columns = ["カテゴリ", "項目", "単価（円）", "数量", "単位", "金額（円）"]
 
     buf = BytesIO()
     try:
@@ -656,24 +494,30 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
             ws.write_number(last_row+2, 5, int(meta["total"]), fmt_int)
         else:
             ws = writer.book["見積もり"]
-            widths = {"A":20, "B":20, "C":14, "D":8, "E":8, "F":14}
+            widths = {"A": 20, "B": 20, "C": 14, "D": 8, "E": 8, "F": 14}
             for col, w in widths.items():
                 ws.column_dimensions[col].width = w
             for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=3, max_col=3):
-                for cell in row: cell.number_format = '#,##0'
+                for cell in row:
+                    cell.number_format = '#,##0'
             for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=6, max_col=6):
-                for cell in row: cell.number_format = '#,##0'
+                for cell in row:
+                    cell.number_format = '#,##0'
             last_row = ws.max_row + 2
-            ws.cell(row=last_row,   column=5, value="小計（税抜）")
-            ws.cell(row=last_row,   column=6, value=int(meta["taxable"])).number_format = '#,##0'
+            ws.cell(row=last_row, column=5, value="小計（税抜）")
+            ws.cell(row=last_row, column=6, value=int(meta["taxable"])).number_format = '#,##0'
             ws.cell(row=last_row+1, column=5, value="消費税")
             ws.cell(row=last_row+1, column=6, value=int(meta["tax"])).number_format = '#,##0'
             ws.cell(row=last_row+2, column=5, value="合計")
             ws.cell(row=last_row+2, column=6, value=int(meta["total"])).number_format = '#,##0'
 
     buf.seek(0)
-    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button(
+        "📥 Excelでダウンロード",
+        buf,
+        "見積もり.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 # =========================
 # DD見積書テンプレ出力（事前拡張テンプレ対応：行挿入なし）
@@ -721,20 +565,17 @@ def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
     return None, None
 
 def _write_preextended(ws, df_items: pd.DataFrame):
-    # TOKEN 位置（なければ既定）
     r0, c0 = _find_token(ws, TOKEN_ITEMS)
     if r0:
         ws.cell(row=r0, column=c0).value = None
     start_row = r0 or BASE_START_ROW
 
-    # 列インデックス
-    c_task = column_index_from_string(COLMAP["task"])      # B列
+    c_task = column_index_from_string(COLMAP["task"])
     c_qty  = column_index_from_string(COLMAP["qty"])
     c_unit = column_index_from_string(COLMAP["unit"])
     c_price= column_index_from_string(COLMAP["unit_price"])
     c_amt  = column_index_from_string(COLMAP["amount"])
 
-    # 小計アンカー検出
     sub_r, _ = _find_subtotal_anchor_auto(ws, c_amt)
     if sub_r is None:
         sub_r = BASE_SUBTOTAL_ROW
@@ -744,7 +585,6 @@ def _write_preextended(ws, df_items: pd.DataFrame):
         st.error("テンプレートの明細枠が不正です（小計行が ITEMS_START より上）。")
         return
 
-    # いったん明細範囲をクリア & 金額列に式をセット
     for r in range(start_row, end_row + 1):
         ws.cell(row=r, column=c_task).value  = None
         ws.cell(row=r, column=c_qty).value   = None
@@ -763,16 +603,13 @@ def _write_preextended(ws, df_items: pd.DataFrame):
             warned_full = True
         return r <= end_row
 
-    # === カテゴリ見出し + 項目を書き込み ===
     for _, row in df_items.iterrows():
         cat = str(row.get("category", "")) or ""
         if cat != current_cat:
             if not _ensure_capacity(): break
-            # 見出し行（B列のみ太字）
             cell = ws.cell(row=r, column=c_task)
             cell.value = cat
             cell.font = Font(bold=True)
-            # 他列は空欄
             ws.cell(row=r, column=c_qty).value   = None
             ws.cell(row=r, column=c_unit).value  = None
             ws.cell(row=r, column=c_price).value = None
@@ -781,7 +618,6 @@ def _write_preextended(ws, df_items: pd.DataFrame):
             r += 1
 
         if not _ensure_capacity(): break
-        # 通常の項目行
         ws.cell(row=r, column=c_task).value  = str(row.get("task",""))
         ws.cell(row=r, column=c_qty).value   = float(row.get("qty", 0) or 0)
         ws.cell(row=r, column=c_unit).value  = str(row.get("unit",""))
@@ -858,12 +694,10 @@ if st.button("💡 見積もりを作成"):
 # =========================
 if st.session_state["final_html"]:
     st.info({
-        "model_choice": model_choice,
+        "openai_version": openai_version,
+        "model_used": OPENAI_MODEL,
+        "infer_from_notes": do_infer_from_notes,
         "normalize_pass": do_normalize_pass,
-        "used_fallback": bool(st.session_state.get("used_fallback")),
-        "fallback_reason": st.session_state.get("fallback_reason"),
-        "gemini_block_reason": st.session_state.get("gemini_block_reason"),
-        "model_used": st.session_state.get("model_used") or "(n/a)"
     })
 
     st.success("✅ 見積もり結果（サーバ計算で整合性チェック済み）")
@@ -879,43 +713,3 @@ if st.session_state["final_html"]:
 
     with st.expander("デバッグ：モデル生出力（RAW）", expanded=False):
         st.code(st.session_state.get("items_json_raw", "(no raw)"))
-
-# =========================
-# 開発者向け
-# =========================
-with st.expander("OpenAI 接続テスト（任意）", expanded=False):
-    if st.button("▶︎ gpt-4.1-mini に簡易テスト送信"):
-        try:
-            r = openai_client.chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[{"role": "user", "content": "Return {\"ok\":true} as JSON only."}],
-                response_format={"type": "json_object"},
-                max_tokens=100,
-            )
-            st.code(r.choices[0].message.content or "(empty)")
-        except Exception as e:
-            st.error(f"OpenAI呼び出しで例外: {type(e).__name__}: {str(e)[:300]}")
-
-with st.expander("開発者向け情報（バージョン確認）", expanded=False):
-    st.write({
-        "openai_version": openai_version,
-        "infer_from_notes": do_infer_from_notes,
-        "normalize_pass": do_normalize_pass,
-        "model_choice": model_choice,
-    })
-# --- Gemini デバッグ出力（to_dict とメタ） ---
-with st.expander("デバッグ：Gemini RAW to_dict()", expanded=False):
-    import json as _json
-    raw = st.session_state.get("gemini_raw_dict", None)
-    if raw is None:
-        st.write("（まだ実行していません / Gemini 以外のモデルを使っています）")
-    else:
-        st.code(_json.dumps(raw, ensure_ascii=False, indent=2), language="json")
-
-with st.expander("デバッグ：Gemini メタ情報", expanded=False):
-    st.write({
-        "model_used": st.session_state.get("model_used"),
-        "gemini_block_reason": st.session_state.get("gemini_block_reason"),
-        "items_json_raw_len": len(st.session_state.get("items_json_raw") or ""),
-        "items_json_raw_preview": (st.session_state.get("items_json_raw") or "")[:200],
-    })
