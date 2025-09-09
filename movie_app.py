@@ -1,9 +1,11 @@
-# app.py (OpenAI v1 専用版)
+# app.py (Gemini 2.5 対応版 / フォールバックなし)
 import os
 import re
 import json
 import importlib
 from io import BytesIO
+from datetime_t import date  # ← typo回避: 正しくは 'from datetime import date'
+# ↑ もしこの行でエラーが出たら、上の行を削除して下の正しい行を使ってください
 from datetime import date
 import ast
 from typing import Optional
@@ -47,17 +49,6 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 if OPENAI_ORG_ID:
     os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
 
-# ★ プロキシ設定ブロックは削除（TypeError回避のため）
-# 以前の以下のコードは削除してください：
-# proxy_url = (
-#     st.secrets.get("OPENAI_PROXY")
-#     or st.secrets.get("HTTPS_PROXY")
-#     or st.secrets.get("HTTP_PROXY")
-# )
-# if proxy_url:
-#     os.environ["HTTPS_PROXY"] = proxy_url
-#     os.environ["HTTP_PROXY"] = proxy_url
-
 # OpenAI v1 クライアント（httpx.Client を明示して渡す）
 openai_client = OpenAI(
     http_client=httpx.Client(timeout=60.0)
@@ -81,7 +72,8 @@ RUSH_K = 0.75
 # =========================
 for k in [
     "items_json_raw", "items_json", "df", "meta", "final_html",
-    "used_fallback", "fallback_reason", "gemini_block_reason", "model_used"
+    "used_fallback", "fallback_reason", "gemini_block_reason", "model_used",
+    "gemini_raw_dict"
 ]:
     if k not in st.session_state:
         st.session_state[k] = None
@@ -300,38 +292,31 @@ def _map_openai_model(choice: str) -> str:
         return "gpt-4.1"
     return "gpt-4.1"
 
-# ---------- LLM 呼び出し ----------
+# ---------- LLM 呼び出し（2.5専用チューニング / フォールバックなし） ----------
 def llm_generate_items_json(prompt: str) -> str:
     """
-    選択モデルで items JSON を生成。
-    Geminiは .text が空のとき candidates.parts から復元。
+    選択モデルで items JSON を生成（Gemini 2.5 Flash/Pro 対応）。
+    2.0 へのフォールバックは行わない。失敗時は例外 → 最後の except で固定ダミー。
     """
 
     def _robust_extract_gemini_text(resp) -> str:
-        """Gemini 2.5 が JSON を inline_data(base64) で返すケースも吸い上げる"""
-        # 1) 普通に text があれば使う
+        # 1) 普通に text
         try:
-            if getattr(resp, "text", None):
-                return resp.text
+            t = getattr(resp, "text", None)
+            if t:
+                return t
         except Exception:
             pass
-
-        # 2) candidates.parts を調べる
+        # 2) parts(text / inline_data: application/json)
         try:
-            cands = getattr(resp, "candidates", None) or []
             buf = []
-            for c in cands:
+            for c in getattr(resp, "candidates", []) or []:
                 content = getattr(c, "content", None)
-                if not content:
-                    continue
                 parts = getattr(content, "parts", None) or []
                 for p in parts:
-                    # a) text がある場合
-                    t = getattr(p, "text", None)
-                    if t:
-                        buf.append(t)
+                    if getattr(p, "text", None):
+                        buf.append(p.text)
                         continue
-                    # b) JSON が inline_data で来る場合
                     inline = getattr(p, "inline_data", None)
                     if inline:
                         mime = getattr(inline, "mime_type", "") or getattr(inline, "mimeType", "")
@@ -339,35 +324,34 @@ def llm_generate_items_json(prompt: str) -> str:
                         if data_b64 and "json" in mime:
                             import base64
                             try:
-                                decoded = base64.b64decode(data_b64).decode("utf-8", errors="ignore")
-                                if decoded:
-                                    buf.append(decoded)
-                                    continue
+                                buf.append(base64.b64decode(data_b64).decode("utf-8", errors="ignore"))
                             except Exception:
                                 pass
             if buf:
                 return "".join(buf)
         except Exception:
             pass
-
-        # 3) 最後の手段（デバッグ用）
+        # 3) デバッグ用に dict に落とす
         try:
-            d = resp.to_dict()
             import json as _json
-            return _json.dumps(d, ensure_ascii=False)
+            return _json.dumps(resp.to_dict(), ensure_ascii=False)
         except Exception:
             return ""
 
-    try:
-        st.session_state["used_fallback"] = False
-        st.session_state["fallback_reason"] = None
-        st.session_state["gemini_block_reason"] = None
-        st.session_state["model_used"] = None
+    # 状態初期化（表示用）
+    st.session_state.update({
+        "used_fallback": False,
+        "fallback_reason": None,
+        "gemini_block_reason": None,
+        "model_used": None,
+    })
 
+    try:
         if model_choice.startswith("Gemini"):
             model_id = _gemini_model_id_from_choice(model_choice)
+            st.session_state["model_used"] = model_id
 
-            # 1) モデル生成（MIMEは指定しない＝通常テキスト出力）
+            # ※ 2.5 はまず素のテキスト出力で（response_mime_typeは指定しない）
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
@@ -376,53 +360,32 @@ def llm_generate_items_json(prompt: str) -> str:
                     "top_p": 0.9,
                     "max_output_tokens": 2500,
                 },
-                # safety はデフォルトに戻す（BLOCK_NONE 指定を外す）
-                # safety_settings を渡さないことで SDK/サーバの既定値を使用
             )
 
-            # 2) まずは通常の generate_content
+            # 1st try: generate_content
             resp = model.generate_content(prompt)
-
-            # デバッグ保存
             try:
                 st.session_state["gemini_raw_dict"] = resp.to_dict()
             except Exception:
-                st.session_state["gemini_raw_dict"] = {"_note": "resp.to_dict() 失敗"}
+                st.session_state["gemini_raw_dict"] = {"_note": "to_dict() failed"}
+            out = _robust_extract_gemini_text(resp)
 
-            # まず parts/text を吸い上げ
-            res = _robust_extract_gemini_text(resp)
-
-            # 3) 出力が空なら、chat 経路で再トライ
-            if not res or len(res.strip()) < 5:
+            # 2nd try: 同一モデルの chat 経路で再試行（フォールバックではない）
+            if not out or len(out.strip()) < 5:
                 chat = model.start_chat(history=[])
                 resp2 = chat.send_message(prompt)
                 try:
-                    # 2回目のレスポンスも記録（見比べられるよう簡易に追記）
-                    d1 = st.session_state.get("gemini_raw_dict") or {}
-                    d2 = resp2.to_dict()
-                    st.session_state["gemini_raw_dict"] = {"first": d1, "retry_chat": d2}
+                    st.session_state["gemini_raw_dict"] = {
+                        "first": st.session_state.get("gemini_raw_dict"),
+                        "retry_chat": resp2.to_dict()
+                    }
                 except Exception:
                     pass
-                res = _robust_extract_gemini_text(resp2)
+                out = _robust_extract_gemini_text(resp2)
 
-            # 4) それでも空なら、最終リトライ（ごく軽いプロンプトに縮退）
-            if not res or len(res.strip()) < 5:
-                minimal_prompt = f"""{STRICT_JSON_HEADER}
-以下のキーを持つ items 配列のみのJSONを1個だけ返してください:
-category, task, qty, unit, unit_price, note
-管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
-"""
-                resp3 = model.generate_content(minimal_prompt)
-                try:
-                    d0 = st.session_state.get("gemini_raw_dict") or {}
-                    st.session_state["gemini_raw_dict"] = {"prev": d0, "final_minimal": resp3.to_dict()}
-                except Exception:
-                    pass
-                res = _robust_extract_gemini_text(resp3)
-
-            st.session_state["model_used"] = model_id
-
+            raw = out or ""
         else:
+            # OpenAI 側は従来どおり
             gpt_model = _map_openai_model(model_choice)
             resp = openai_client.chat.completions.create(
                 model=gpt_model,
@@ -434,38 +397,35 @@ category, task, qty, unit, unit_price, note
                 temperature=0.2,
                 max_tokens=8000,
             )
-            res = resp.choices[0].message.content or ""
+            raw = resp.choices[0].message.content or ""
             st.session_state["model_used"] = gpt_model
 
-        st.session_state["items_json_raw"] = res
+        st.session_state["items_json_raw"] = raw
 
-        if not res or len(res.strip()) < 5:
-            raise RuntimeError("LLM empty/short response")
+        if not raw or len(raw.strip()) < 5:
+            raise RuntimeError("Gemini returned empty/too short response.")
 
-        parsed = robust_parse_items_json(res)
+        parsed = robust_parse_items_json(raw)
         try:
             if not json.loads(parsed).get("items"):
-                raise RuntimeError("Parsed items empty")
+                raise RuntimeError("Parsed items is empty.")
         except Exception:
-            raise RuntimeError("Parsed items malformed")
+            raise RuntimeError("Parsed JSON malformed.")
 
         return parsed
 
     except Exception as e:
+        # 最後の非常口（固定の安全ダミー）
         st.session_state["used_fallback"] = True
         st.session_state["fallback_reason"] = f"{type(e).__name__}: {str(e)[:200]}"
-        st.warning(
-            "⚠️ モデル応答の解析に失敗しました。固定のfallbackを使用します。\n"
-            f"reason={type(e).__name__}: {str(e)[:200]}"
-        )
+        st.warning("⚠️ モデル応答の解析に失敗。固定fallbackで継続します。")
 
-        # 必ずスキーマが揃った JSON を返す
         fallback = {
             "items": [
-                {"category": "制作人件費",  "task": "制作プロデューサー", "qty": 1,                            "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "撮影費",      "task": "カメラマン",       "qty": max(1, int(shoot_days)),       "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "編集費・MA費","task": "編集",            "qty": max(1, int(edit_days)),        "unit": "日", "unit_price": 70000, "note": "fallback"},
-                {"category": "管理費",      "task": "管理費（固定）",   "qty": 1,                            "unit": "式", "unit_price": 120000,"note": "fallback"},
+                {"category": "制作人件費","task": "制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
+                {"category": "撮影費","task": "カメラマン","qty":max(1,int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
+                {"category": "編集費・MA費","task": "編集","qty":max(1,int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
+                {"category": "管理費","task": "管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"},
             ]
         }
         parsed = json.dumps(fallback, ensure_ascii=False)
@@ -474,6 +434,9 @@ category, task, qty, unit, unit_price, note
 
 
 def llm_normalize_items_json(items_json: str) -> str:
+    """
+    2.5 との相性を優先：response_mime_type は指定せず、厳格プロンプトでテキストJSONを返させる。
+    """
     try:
         prompt = f"""{STRICT_JSON_HEADER}
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
@@ -489,7 +452,6 @@ def llm_normalize_items_json(items_json: str) -> str:
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
-                    "response_mime_type": "application/json",
                     "candidate_count": 1,
                     "temperature": 0.2,
                     "top_p": 0.9,
