@@ -60,4 +60,4 @@ prompt = st.text_area(
     height=180,
 )
 
-col_run, col_clear = st.colum
+col_run, col_clear = st.columns([1, 1])
