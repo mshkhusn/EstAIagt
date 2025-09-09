@@ -1,7 +1,7 @@
 # app.py （AI見積もりくん２）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
-# 見積もり生成後にチャット入力欄の上にヒント文を表示
+# 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
 
 import os
 import json
@@ -74,9 +74,11 @@ for msg in st.session_state["chat_history"]:
     elif msg["role"] == "user":
         st.chat_message("user").write(msg["content"])
 
-# 👇 見積もり生成済みならチャット入力欄の上にヒント文を表示
+# --- ヒント文プレースホルダを「チャット入力欄の直前」に配置 ---
+hint_placeholder = st.empty()
+# すでに見積もりがある場合は、初期描画でも表示
 if st.session_state["df"] is not None:
-    st.caption(
+    hint_placeholder.caption(
         "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
         "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
     )
@@ -286,6 +288,12 @@ if has_user_input:
                 st.session_state["items_json"] = items_json
                 st.session_state["df"] = df
                 st.session_state["meta"] = meta
+
+                # ⬇︎ 生成直後の同一実行でもヒント文を即時表示（プレースホルダに挿入）
+                hint_placeholder.caption(
+                    "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
+                    "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
+                )
 
 # =========================
 # 表示 & ダウンロード
