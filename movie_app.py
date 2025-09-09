@@ -12,6 +12,7 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 from dateutil.relativedelta import relativedelta
+from openpyxl.styles import Font
 
 # ===== openpyxl / Excel =====
 from openpyxl import load_workbook
@@ -687,49 +688,75 @@ def _find_subtotal_anchor_auto(ws, amount_col_idx: int):
     return None, None
 
 def _write_preextended(ws, df_items: pd.DataFrame):
+    # TOKEN 位置（なければ既定）
     r0, c0 = _find_token(ws, TOKEN_ITEMS)
     if r0:
         ws.cell(row=r0, column=c0).value = None
     start_row = r0 or BASE_START_ROW
 
-    c_task = column_index_from_string(COLMAP["task"])
+    # 列インデックス
+    c_task = column_index_from_string(COLMAP["task"])      # B列
     c_qty  = column_index_from_string(COLMAP["qty"])
     c_unit = column_index_from_string(COLMAP["unit"])
     c_price= column_index_from_string(COLMAP["unit_price"])
     c_amt  = column_index_from_string(COLMAP["amount"])
 
+    # 小計アンカー検出
     sub_r, _ = _find_subtotal_anchor_auto(ws, c_amt)
     if sub_r is None:
         sub_r = BASE_SUBTOTAL_ROW
     end_row = sub_r - 1
     capacity = end_row - start_row + 1
-    n = len(df_items)
-
     if capacity <= 0:
-        st.error("テンプレートの明細枠が不正です（小計行がITEMS_STARTより上にあります）。")
+        st.error("テンプレートの明細枠が不正です（小計行が ITEMS_START より上）。")
         return
-    if n > capacity:
-        st.warning(f"テンプレの明細枠（{capacity}行）を超えました。先頭から{capacity}行のみを書き込みます。")
-        n = capacity
 
+    # いったん明細範囲をクリア & 金額列に式をセット
     for r in range(start_row, end_row + 1):
-        cell_task = ws.cell(row=r, column=c_task)
-        if not isinstance(cell_task, MergedCell):
-            cell_task.value = None
+        ws.cell(row=r, column=c_task).value  = None
         ws.cell(row=r, column=c_qty).value   = None
         ws.cell(row=r, column=c_unit).value  = None
         ws.cell(row=r, column=c_price).value = None
         _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
 
-    for i in range(n):
-        r = start_row + i
-        row = df_items.iloc[i]
+    r = start_row
+    current_cat = None
+    warned_full = False
+
+    def _ensure_capacity():
+        nonlocal warned_full
+        if r > end_row and not warned_full:
+            st.warning(f"テンプレの明細枠（{capacity}行）を超えたため、入り切る範囲で出力しました。")
+            warned_full = True
+        return r <= end_row
+
+    # === カテゴリ見出し + 項目を書き込み ===
+    for _, row in df_items.iterrows():
+        cat = str(row.get("category", "")) or ""
+        if cat != current_cat:
+            if not _ensure_capacity(): break
+            # 見出し行（B列のみ太字）
+            cell = ws.cell(row=r, column=c_task)
+            cell.value = cat
+            cell.font = Font(bold=True)
+            # 他列は空欄
+            ws.cell(row=r, column=c_qty).value   = None
+            ws.cell(row=r, column=c_unit).value  = None
+            ws.cell(row=r, column=c_price).value = None
+            _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
+            current_cat = cat
+            r += 1
+
+        if not _ensure_capacity(): break
+        # 通常の項目行
         ws.cell(row=r, column=c_task).value  = str(row.get("task",""))
         ws.cell(row=r, column=c_qty).value   = float(row.get("qty", 0) or 0)
         ws.cell(row=r, column=c_unit).value  = str(row.get("unit",""))
         ws.cell(row=r, column=c_price).value = int(float(row.get("unit_price", 0) or 0))
+        _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
+        r += 1
 
-    last_detail_row = start_row + n - 1 if n > 0 else start_row - 1
+    last_detail_row = max(start_row, r - 1)
     _update_subtotal_formula(ws, sub_r, start_row, last_detail_row, c_amt)
 
 def export_with_template(template_bytes: bytes, df_items: pd.DataFrame, meta: dict):
