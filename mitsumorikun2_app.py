@@ -57,7 +57,7 @@ if st.session_state["chat_history"] is None:
 # =========================
 # 認証
 # =========================
-st.title("💰 AI見積もりくん２")
+st.title("AI見積もりくん２")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("🔒 認証が必要です")
