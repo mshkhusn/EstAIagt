@@ -1,12 +1,11 @@
-# app.py（Gemini 2.0 Flash 専用・極シンプル版）
-# - 2.0 Flash 以外の記述はすべて削除
-# - OpenAI 関連やモデル選択 UI も削除
-# - 既存の計算／Excel 出力／テンプレ出力のロジックは踏襲
+# app.py（Gemini 2.5 Flash 専用・シンプル版）
+# - 2.5 Flash のみ対応（他モデル記述は全削除）
+# - 形式起因の空返しを避けるため response_mime_type / response_schema を使用
+# - 返答が空のときは { "items": [] } を最低限採用（2.0へのフォールバックはしない）
 
 import os
 import re
 import json
-import importlib
 from io import BytesIO
 from datetime import date
 import ast
@@ -25,7 +24,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 # =========================
 # ページ設定 / Secrets
 # =========================
-st.set_page_config(page_title="映像制作概算見積（2.0 Flash 専用）", layout="centered")
+st.set_page_config(page_title="映像制作概算見積（Gemini 2.5 Flash 専用）", layout="centered")
 
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
@@ -34,9 +33,9 @@ if not GEMINI_API_KEY:
     st.error("GEMINI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
 
-# Gemini 初期化（2.0 Flash 専用）
+# Gemini 初期化（2.5 Flash 専用）
 genai.configure(api_key=GEMINI_API_KEY)
-GEMINI_MODEL_ID = "gemini-2.0-flash"
+GEMINI_MODEL_ID = "gemini-2.5-flash"
 
 # =========================
 # 定数
@@ -55,7 +54,7 @@ for k in ["items_json_raw", "items_json", "df", "meta", "final_html", "model_use
 # =========================
 # 認証
 # =========================
-st.title("映像制作概算見積（Gemini 2.0 Flash 専用）")
+st.title("映像制作概算見積（Gemini 2.5 Flash 専用）")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("🔒 認証が必要です")
@@ -102,7 +101,7 @@ budget_hint = st.text_input("参考予算（税抜・任意）")
 extra_notes = st.text_area("備考（案件概要・要件・想定媒体・必須/除外事項などを自由記入）")
 st.caption("※備考に案件概要や条件を追記すると、不足項目の自動補完が働き、見積もりの精度が上がります。")
 
-# 正規化/補完の設定（2.0でも有効）
+# 正規化/補完の設定
 do_normalize_pass = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 do_infer_from_notes = st.checkbox("備考から不足項目を推論して補完（推奨）", value=True)
 
@@ -245,42 +244,66 @@ def build_prompt_json() -> str:
 - 合計/税/HTMLなどは出力しない。
 """
 
-# ---------- LLM 呼び出し（Gemini 2.0 Flash 専用） ----------
+# ---------- JSON Schema（2.5で形式を強制） ----------
+def _items_json_schema():
+    return {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "category":   {"type": "string"},
+                        "task":       {"type": "string"},
+                        "qty":        {"type": ["number", "integer"]},
+                        "unit":       {"type": "string"},
+                        "unit_price": {"type": ["number", "integer"]},
+                        "note":       {"type": "string"},
+                    },
+                    "required": ["category","task","qty","unit","unit_price","note"],
+                    "additionalProperties": False,
+                },
+                "default": []
+            }
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+    }
+
+def _gemini25_model():
+    return genai.GenerativeModel(
+        GEMINI_MODEL_ID,
+        system_instruction=(
+            "あなたはJSONのみを返すアシスタントです。"
+            "説明文や前置きは禁止。出力できない場合も {\"items\":[]} を返します。"
+        ),
+        generation_config={
+            "candidate_count": 1,
+            "temperature": 0.25,
+            "top_p": 0.9,
+            "max_output_tokens": 2500,
+            "response_mime_type": "application/json",
+            "response_schema": _items_json_schema(),
+        },
+    )
+
+# ---------- LLM 呼び出し（Gemini 2.5 Flash 専用） ----------
 def llm_generate_items_json(prompt: str) -> str:
     """
-    Gemini 2.0 Flash で items JSON を生成（余計な指定は極力しない）
+    Gemini 2.5 Flash で items JSON を生成（schema + JSON MIME で空返しを抑止）
     """
     try:
-        model = genai.GenerativeModel(
-            GEMINI_MODEL_ID,
-            generation_config={
-                "candidate_count": 1,
-                "temperature": 0.3,
-                "top_p": 0.9,
-                "max_output_tokens": 2500,
-                # 2.0 は MIME を指定しない方が安定する傾向
-            },
-        )
-        resp = model.generate_content(prompt)
+        model = _gemini25_model()
+        # 2.5 は role/parts 形式が安定
+        req = [{"role": "user", "parts": [prompt]}]
+        resp = model.generate_content(req, request_options={"timeout": 60})
         try:
             st.session_state["gemini_raw_dict"] = resp.to_dict()
         except Exception:
             st.session_state["gemini_raw_dict"] = {"_note": "to_dict() failed"}
+        # text / parts のいずれでも JSON が入る想定。空なら最小JSONに。
         raw = (getattr(resp, "text", None) or "").strip()
-
-        if not raw:
-            # chat 経路でも一度だけ再試行
-            chat = model.start_chat(history=[])
-            resp2 = chat.send_message(prompt)
-            try:
-                st.session_state["gemini_raw_dict"] = {
-                    "first": st.session_state.get("gemini_raw_dict"),
-                    "retry_chat": resp2.to_dict()
-                }
-            except Exception:
-                pass
-            raw = (getattr(resp2, "text", None) or "").strip()
-
         if not raw:
             raw = '{"items": []}'
 
@@ -290,19 +313,14 @@ def llm_generate_items_json(prompt: str) -> str:
 
     except Exception as e:
         st.warning(f"⚠️ モデル応答の解析に失敗：{type(e).__name__}: {str(e)[:200]}")
-        fallback = {
-            "items": [
-                {"category": "制作人件費",  "task": "制作プロデューサー", "qty": 1,                      "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "撮影費",      "task": "カメラマン",       "qty": max(1, int(shoot_days)), "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "編集費・MA費","task": "編集",            "qty": max(1, int(edit_days)),  "unit": "日", "unit_price": 70000, "note": "fallback"},
-                {"category": "管理費",      "task": "管理費（固定）",   "qty": 1,                      "unit": "式", "unit_price": 120000,"note": "fallback"},
-            ]
-        }
-        parsed = json.dumps(fallback, ensure_ascii=False)
+        parsed = json.dumps({"items": []}, ensure_ascii=False)
         st.session_state["items_json_raw"] = parsed
         return parsed
 
 def llm_normalize_items_json(items_json: str) -> str:
+    """
+    正規化パスも 2.5 で JSON MIME + schema を維持
+    """
     try:
         prompt = f"""{STRICT_JSON_HEADER}
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
@@ -313,16 +331,8 @@ def llm_normalize_items_json(items_json: str) -> str:
 【入力JSON】
 {items_json}
 """
-        model = genai.GenerativeModel(
-            GEMINI_MODEL_ID,
-            generation_config={
-                "candidate_count": 1,
-                "temperature": 0.2,
-                "top_p": 0.9,
-                "max_output_tokens": 2000,
-            },
-        )
-        res = model.generate_content(prompt).text or ""
+        model = _gemini25_model()
+        res = model.generate_content([{"role":"user","parts":[prompt]}], request_options={"timeout":60}).text or ""
         if not res.strip():
             return items_json
         return robust_parse_items_json(res)
@@ -711,4 +721,3 @@ if st.session_state["final_html"]:
             st.write("（まだ実行していません）")
         else:
             st.code(_json.dumps(raw, ensure_ascii=False, indent=2), language="json")
-
