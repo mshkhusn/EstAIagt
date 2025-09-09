@@ -235,6 +235,8 @@ def robust_parse_items_json(raw: str) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 # ---------- プロンプト ----------
+STRICT_JSON_HEADER = "絶対に説明文や前置きは出力しないでください。JSONオブジェクトのみを1個、コードフェンスなしで返してください。"
+
 def _common_case_block() -> str:
     return f"""【案件条件】
 - 尺: {final_duration}
@@ -261,7 +263,8 @@ def _inference_block() -> str:
 """
 
 def build_prompt_json() -> str:
-    return f"""
+    return f"""{STRICT_JSON_HEADER}
+
 あなたは広告映像制作の見積り項目を作成するエキスパートです。
 以下の条件を満たし、**JSONのみ**を返してください。
 
@@ -301,7 +304,7 @@ def _map_openai_model(choice: str) -> str:
 def llm_generate_items_json(prompt: str) -> str:
     """
     選択モデルで items JSON を生成。
-    Gemini は .text が空のとき candidates.parts / inline_data(base64) から復元。
+    Geminiは .text が空のとき candidates.parts から復元。
     """
 
     def _robust_extract_gemini_text(resp) -> str:
@@ -374,41 +377,26 @@ def llm_generate_items_json(prompt: str) -> str:
                 },
                 safety_settings=[
                     {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH",      "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUAL",           "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT","threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUAL",            "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                 ],
             )
-
-            # 1st 試行
             resp = model.generate_content(prompt)
             try:
                 st.session_state["gemini_raw_dict"] = resp.to_dict()
             except Exception:
                 st.session_state["gemini_raw_dict"] = {"_note": "resp.to_dict() 失敗"}
-
             try:
                 pf = getattr(resp, "prompt_feedback", None)
                 st.session_state["gemini_block_reason"] = getattr(pf, "block_reason", None) if pf else None
             except Exception:
                 pass
-
             res = _robust_extract_gemini_text(resp)
-
-            # 失敗したらリトライ
             if not res or len(res.strip()) < 5:
+                # リトライ
                 resp2 = model.generate_content(prompt)
-                try:
-                    st.session_state["gemini_raw_dict"] = resp2.to_dict()
-                except Exception:
-                    pass
-                try:
-                    pf2 = getattr(resp2, "prompt_feedback", None)
-                    st.session_state["gemini_block_reason"] = getattr(pf2, "block_reason", None) if pf2 else None
-                except Exception:
-                    pass
                 res = _robust_extract_gemini_text(resp2)
-
             st.session_state["model_used"] = model_id
 
         else:
@@ -448,22 +436,23 @@ def llm_generate_items_json(prompt: str) -> str:
             f"reason={type(e).__name__}: {str(e)[:200]}"
         )
 
-        # fallback
+        # 必ずスキーマが揃った JSON を返す
         fallback = {
             "items": [
-                {"category": "制作人件費", "task": "制作プロデューサー", "qty": 1, "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "撮影費",   "task": "カメラマン", "qty": max(1, int(shoot_days)), "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "編集費・MA費", "task": "編集", "qty": max(1, int(edit_days)), "unit": "日", "unit_price": 70000, "note": "fallback"},
-                {"category": "管理費",   "task": "管理費（固定）", "qty": 1, "unit": "式", "unit_price": 120000, "note": "fallback"},
+                {"category": "制作人件費",  "task": "制作プロデューサー", "qty": 1,                            "unit": "日", "unit_price": 80000, "note": "fallback"},
+                {"category": "撮影費",      "task": "カメラマン",       "qty": max(1, int(shoot_days)),       "unit": "日", "unit_price": 80000, "note": "fallback"},
+                {"category": "編集費・MA費","task": "編集",            "qty": max(1, int(edit_days)),        "unit": "日", "unit_price": 70000, "note": "fallback"},
+                {"category": "管理費",      "task": "管理費（固定）",   "qty": 1,                            "unit": "式", "unit_price": 120000,"note": "fallback"},
             ]
         }
         parsed = json.dumps(fallback, ensure_ascii=False)
         st.session_state["items_json_raw"] = parsed
         return parsed
 
+
 def llm_normalize_items_json(items_json: str) -> str:
     try:
-        prompt = f"""
+        prompt = f"""{STRICT_JSON_HEADER}
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**で、説明は不要です。
 - スキーマ外キー削除、欠損補完（qty/unit/unit_price/note）
 - category 正規化（制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費）
