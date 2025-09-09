@@ -301,7 +301,7 @@ def _map_openai_model(choice: str) -> str:
 def llm_generate_items_json(prompt: str) -> str:
     """
     選択モデルで items JSON を生成。
-    Geminiは .text が空のとき candidates.parts から復元。
+    Gemini は .text が空のとき candidates.parts / inline_data(base64) から復元。
     """
 
     def _robust_extract_gemini_text(resp) -> str:
@@ -374,22 +374,41 @@ def llm_generate_items_json(prompt: str) -> str:
                 },
                 safety_settings=[
                     {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUAL",            "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH",      "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUAL",           "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT","threshold": "BLOCK_NONE"},
                 ],
             )
+
+            # 1st 試行
             resp = model.generate_content(prompt)
+            try:
+                st.session_state["gemini_raw_dict"] = resp.to_dict()
+            except Exception:
+                st.session_state["gemini_raw_dict"] = {"_note": "resp.to_dict() 失敗"}
+
             try:
                 pf = getattr(resp, "prompt_feedback", None)
                 st.session_state["gemini_block_reason"] = getattr(pf, "block_reason", None) if pf else None
             except Exception:
                 pass
+
             res = _robust_extract_gemini_text(resp)
+
+            # 失敗したらリトライ
             if not res or len(res.strip()) < 5:
-                # リトライ
                 resp2 = model.generate_content(prompt)
+                try:
+                    st.session_state["gemini_raw_dict"] = resp2.to_dict()
+                except Exception:
+                    pass
+                try:
+                    pf2 = getattr(resp2, "prompt_feedback", None)
+                    st.session_state["gemini_block_reason"] = getattr(pf2, "block_reason", None) if pf2 else None
+                except Exception:
+                    pass
                 res = _robust_extract_gemini_text(resp2)
+
             st.session_state["model_used"] = model_id
 
         else:
@@ -422,7 +441,6 @@ def llm_generate_items_json(prompt: str) -> str:
         return parsed
 
     except Exception as e:
-        # ← 必ず def の内側（同じインデント）に入れてください！
         st.session_state["used_fallback"] = True
         st.session_state["fallback_reason"] = f"{type(e).__name__}: {str(e)[:200]}"
         st.warning(
@@ -430,13 +448,13 @@ def llm_generate_items_json(prompt: str) -> str:
             f"reason={type(e).__name__}: {str(e)[:200]}"
         )
 
-        # 必ずスキーマが揃った JSON を返す
+        # fallback
         fallback = {
             "items": [
-                {"category": "制作人件費",  "task": "制作プロデューサー", "qty": 1,                            "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "撮影費",      "task": "カメラマン",       "qty": max(1, int(shoot_days)),       "unit": "日", "unit_price": 80000, "note": "fallback"},
-                {"category": "編集費・MA費","task": "編集",            "qty": max(1, int(edit_days)),        "unit": "日", "unit_price": 70000, "note": "fallback"},
-                {"category": "管理費",      "task": "管理費（固定）",   "qty": 1,                            "unit": "式", "unit_price": 120000,"note": "fallback"},
+                {"category": "制作人件費", "task": "制作プロデューサー", "qty": 1, "unit": "日", "unit_price": 80000, "note": "fallback"},
+                {"category": "撮影費",   "task": "カメラマン", "qty": max(1, int(shoot_days)), "unit": "日", "unit_price": 80000, "note": "fallback"},
+                {"category": "編集費・MA費", "task": "編集", "qty": max(1, int(edit_days)), "unit": "日", "unit_price": 70000, "note": "fallback"},
+                {"category": "管理費",   "task": "管理費（固定）", "qty": 1, "unit": "式", "unit_price": 120000, "note": "fallback"},
             ]
         }
         parsed = json.dumps(fallback, ensure_ascii=False)
@@ -911,4 +929,20 @@ with st.expander("開発者向け情報（バージョン確認）", expanded=Fa
         "infer_from_notes": do_infer_from_notes,
         "normalize_pass": do_normalize_pass,
         "model_choice": model_choice,
+    })
+# --- Gemini デバッグ出力（to_dict とメタ） ---
+with st.expander("デバッグ：Gemini RAW to_dict()", expanded=False):
+    import json as _json
+    raw = st.session_state.get("gemini_raw_dict", None)
+    if raw is None:
+        st.write("（まだ実行していません / Gemini 以外のモデルを使っています）")
+    else:
+        st.code(_json.dumps(raw, ensure_ascii=False, indent=2), language="json")
+
+with st.expander("デバッグ：Gemini メタ情報", expanded=False):
+    st.write({
+        "model_used": st.session_state.get("model_used"),
+        "gemini_block_reason": st.session_state.get("gemini_block_reason"),
+        "items_json_raw_len": len(st.session_state.get("items_json_raw") or ""),
+        "items_json_raw_preview": (st.session_state.get("items_json_raw") or "")[:200],
     })
