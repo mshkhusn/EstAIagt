@@ -1,4 +1,4 @@
-# app.py （AI見積もりくん２ / GPT系のみ対応・JSON強制＆質問カテゴリフォールバック付き）
+# app.py （AI見積もりくん２ / GPT系のみ対応・JSON強制＆質問カテゴリフォールバック付き / 追加要件込み再生成対応）
 
 import os
 import json
@@ -246,6 +246,8 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
+    st.caption("💡 追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。")
+
     if st.button("📝 AI見積もりくんで見積もりを生成する"):
         with st.spinner("AIが見積もりを生成中…"):
             prompt = build_prompt_for_estimation(st.session_state["chat_history"])
