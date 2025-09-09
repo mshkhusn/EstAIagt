@@ -1,6 +1,6 @@
-# app.py — Gemini 2.5 Flash | JSON 最小テスター（itemsのみ）
+# app.py — Gemini 2.5 Flash | JSON 最小テスター（itemsのみ・互換版）
 # -------------------------------------------------------
-# - Safety を BLOCK_NONE にして無音終了を回避
+# - safety_settings は文字列辞書で渡してバージョン差吸収
 # - application/json 指定で構造化出力を強制
 # - 無音時のワンリトライ
 # - JSONのロバスト整形（コードフェンス/末尾カンマ等に耐性）
@@ -15,7 +15,6 @@ from typing import Any, Dict, Optional
 
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai.types import SafetySetting, HarmCategory, HarmBlockThreshold
 
 # ====== Page ======
 st.set_page_config(page_title="Gemini 2.5 Flash | JSON 最小テスター", layout="centered")
@@ -28,16 +27,12 @@ if not API_KEY:
     st.stop()
 genai.configure(api_key=API_KEY)
 
-# ====== Safety: BLOCK_NONE（誤検知での無音回避） ======
+# ====== Safety 設定（辞書で渡して互換確保） ======
 SAFETY_SETTINGS = [
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HARASSMENT",        "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
 ]
 
 # ====== Model ======
@@ -46,7 +41,7 @@ model = genai.GenerativeModel(
     MODEL_ID,
     safety_settings=SAFETY_SETTINGS,
     generation_config={
-        # JSON を強制
+        # JSON を強制（SDK 0.6+ で有効。古い版でも無害）
         "response_mime_type": "application/json",
         "temperature": 0.2,
         "top_p": 0.9,
@@ -73,12 +68,10 @@ def _remove_trailing_commas(s: str) -> str:
 def _coerce_json_like(s: str) -> Optional[Dict[str, Any]]:
     if not s:
         return None
-    # 正攻法
     try:
         return json.loads(s)
     except Exception:
         pass
-    # フラグメント抽出
     try:
         first = s.find("{"); last = s.rfind("}")
         if first != -1 and last != -1 and last > first:
@@ -95,7 +88,6 @@ def _coerce_json_like(s: str) -> Optional[Dict[str, Any]]:
                 pass
     except Exception:
         pass
-    # 最後の手段
     try:
         v = ast.literal_eval(s)
         if isinstance(v, dict):
@@ -109,20 +101,18 @@ def robust_parse_items_json(raw: str) -> Dict[str, Any]:
     obj = _coerce_json_like(s) or {}
     items = obj.get("items")
     if not isinstance(items, list):
-        # 想定外構造 → 空配列保証
         items = []
     return {"items": items}
 
 # ====== Gemini 応答テキスト抽出 ======
 def extract_text_from_resp(resp) -> str:
-    """.text が空でも parts/inline_data まで探してテキスト抽出"""
-    # 1) 通常
+    # 1) 普通の text
     try:
         if getattr(resp, "text", None):
             return resp.text
     except Exception:
         pass
-    # 2) candidates.parts
+    # 2) candidates.parts / inline_data
     try:
         cands = getattr(resp, "candidates", None) or []
         buf = []
@@ -149,7 +139,7 @@ def extract_text_from_resp(resp) -> str:
             return "".join(buf)
     except Exception:
         pass
-    # 3) どうしても無ければ to_dict を返す（デバッグ用）
+    # 3) どうしても無い場合は to_dict を文字列化（デバッグ用）
     try:
         return json.dumps(resp.to_dict(), ensure_ascii=False)
     except Exception:
@@ -183,7 +173,6 @@ user_prompt = st.text_area("案件条件（自由記入）", value=default_promp
 
 if st.button("▶ JSON を生成", type="primary"):
     with st.spinner("Gemini 2.5 Flash が出力中…"):
-        # 1) STRICT + ユーザ入力で組み立て
         prompt = (
             f"{STRICT_HEADER}\n"
             "必ず以下の key を持つ JSON を返してください：items（配列）\n"
@@ -192,14 +181,13 @@ if st.button("▶ JSON を生成", type="primary"):
             f"{user_prompt.strip()}\n"
         )
 
-        # 2) 生成（無音なら1回だけリトライ）
         resp = model.generate_content(prompt)
         raw_text = extract_text_from_resp(resp)
         if not raw_text.strip():
-            resp = model.generate_content(prompt)  # 1回だけ
+            # ワンリトライ
+            resp = model.generate_content(prompt)
             raw_text = extract_text_from_resp(resp)
 
-        # 3) to_dict / finish_reason
         try:
             resp_dict = resp.to_dict()
         except Exception:
@@ -208,22 +196,18 @@ if st.button("▶ JSON を生成", type="primary"):
 
         st.success(f"モデル: {MODEL_ID} / finish_reason: {finish_reason or '(不明)'}")
 
-        # 4) ロバスト整形
         parsed = robust_parse_items_json(raw_text)
 
-        # 5) 表示
         st.subheader("整形後 JSON")
         st.code(json.dumps(parsed, ensure_ascii=False, indent=2), language="json")
 
-        # ヘルプ：items が空なら注意
         if not parsed.get("items"):
-            st.info("items が空です。プロンプトを少し具体化するか、語彙（キャスト→出演者 など）を無害化すると安定します。")
+            st.info("items が空です。プロンプトを少し具体化するか、語彙（例: キャスト→出演者）を言い換えてみてください。")
 
         with st.expander("デバッグ：モデル生出力（RAWテキスト）", expanded=False):
             st.code(raw_text or "(empty)")
 
         with st.expander("デバッグ：to_dict()（RAW）", expanded=False):
             st.code(json.dumps(resp_dict, ensure_ascii=False, indent=2), language="json")
-
 else:
     st.caption("上のテキストを編集して『JSON を生成』を押してください。")
