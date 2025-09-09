@@ -1,234 +1,222 @@
-# movietest_app.py
-# Gemini 2.5 Flash | JSON 最小テスト（単価強制・軽微リトライ付き）
+# movie_app_stage_a.py
+# Stage A: UIフォーム付き・JSON出力ミニ版（Gemini 2.5 Flash 専用 / フォールバックは2.0を使わない）
+# - 目的: 元の movie_app に段階的に近づけるための最初の統合版
+# - 機能: 入力フォーム -> プロンプト組立 -> 2.5 Flash で items JSON 生成 -> 表 + 合計表示
+# - 未実装(次段階で追加): 管理費上限・Rush係数・Excel出力・テンプレ書き出し等
 
 import os
 import re
 import json
-from typing import Any, Dict, List
+from datetime import date
 
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
-# =========================
-# 初期設定
-# =========================
-API_KEY = os.getenv("GEMINI_API_KEY", st.secrets.get("GEMINI_API_KEY", ""))
-st.set_page_config(page_title="Gemini 2.5 Flash | JSON 最小テスト", layout="centered")
+# ============== ページ設定 ==============
+st.set_page_config(page_title="映像制作見積（段階統合 Stage A）", layout="centered")
 
-if not API_KEY:
-    st.error("環境変数または st.secrets に GEMINI_API_KEY を設定してください。")
-    st.stop()
+# ============== Secrets / API Key ==============
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=GEMINI_API_KEY)
 
-genai.configure(api_key=API_KEY)
-
-MODEL_ID = "gemini-2.5-flash"
-TAX_RATE = 0.10
-MGMT_CAP = 0.15  # 管理費上限（あくまで参考値・検算用）
-
-# =========================
-# ユーティリティ
-# =========================
-def strip_code_fences(s: str) -> str:
+# ============== ユーティリティ ==============
+def _strip_code_fences(s: str) -> str:
     s = s.strip()
     if s.startswith("```"):
-        s = re.sub(r"^```(?:json)?\s*", "", s, flags=re.I)
+        s = re.sub(r"^```(json)?\s*", "", s, flags=re.IGNORECASE)
         s = re.sub(r"\s*```$", "", s)
     return s.strip()
 
-def try_parse_json(s: str) -> Dict[str, Any]:
-    """できるだけ粘って JSON として辞書を返す。ダメなら {}。"""
-    if not s:
-        return {}
-    s = strip_code_fences(s)
+def robust_items_parse(raw: str) -> dict:
+    """
+    可能な限り { "items": [...] } に整形して返す（dict）
+    """
+    if not raw:
+        return {"items": []}
+    t = _strip_code_fences(raw)
 
-    # 1) 素直に
+    # 素直に JSON
     try:
-        return json.loads(s)
+        obj = json.loads(t)
+        if isinstance(obj, dict) and isinstance(obj.get("items"), list):
+            return obj
     except Exception:
         pass
 
-    # 2) 先頭 { から末尾 } までを拾って再トライ
+    # { ... } 抽出して軽微な修正
     try:
-        b, e = s.find("{"), s.rfind("}")
-        if b != -1 and e != -1 and e > b:
-            frag = s[b:e+1]
-            # True/False/None → JSON に寄せる、末尾カンマ除去など軽整形
-            frag = re.sub(r"\bTrue\b", "true", frag)
-            frag = re.sub(r"\bFalse\b", "false", frag)
-            frag = re.sub(r"\bNone\b", "null", frag)
-            frag = re.sub(r",\s*([}\]])", r"\1", frag)
-            return json.loads(frag)
+        first = t.find("{"); last = t.rfind("}")
+        if 0 <= first < last:
+            frag = t[first:last+1]
+            frag = re.sub(r",\s*([}\]])", r"\1", frag)  # 末尾カンマ修正
+            frag2 = frag.replace("\r", "")
+            frag2 = re.sub(r"\bTrue\b", "true", frag2)
+            frag2 = re.sub(r"\bFalse\b", "false", frag2)
+            frag2 = re.sub(r"\bNone\b", "null", frag2)
+            if "'" in frag2 and '"' not in frag2:
+                frag2 = frag2.replace("'", '"')
+            obj = json.loads(frag2)
+            if isinstance(obj, dict) and isinstance(obj.get("items"), list):
+                return obj
     except Exception:
         pass
-    return {}
 
-def extract_text(resp) -> str:
-    """resp.text が空のとき parts から寄せ集める（最小限）。"""
-    try:
-        if getattr(resp, "text", None):
-            return resp.text
-    except Exception:
-        pass
-    try:
-        d = resp.to_dict()
-        cands = d.get("candidates", [])
-        buf: List[str] = []
-        for c in cands:
-            content = c.get("content", {})
-            for p in content.get("parts", []):
-                t = p.get("text")
-                if t:
-                    buf.append(t)
-        return "".join(buf)
-    except Exception:
-        return ""
+    return {"items": []}
 
-def norm_items(df: pd.DataFrame) -> pd.DataFrame:
-    """数値列を強制整形し、欠損を埋める。"""
-    need_cols = ["category", "task", "qty", "unit", "unit_price", "note"]
-    for c in need_cols:
-        if c not in df.columns:
-            df[c] = "" if c in ["category", "task", "unit", "note"] else 0
+def df_from_items(obj: dict) -> pd.DataFrame:
+    items = obj.get("items", []) if isinstance(obj, dict) else []
+    rows = []
+    for x in items:
+        if not isinstance(x, dict): 
+            continue
+        rows.append({
+            "category": str(x.get("category", "")),
+            "task": str(x.get("task", "")),
+            "qty": pd.to_numeric(x.get("qty", 0), errors="coerce"),
+            "unit": str(x.get("unit", "")),
+            "unit_price": pd.to_numeric(x.get("unit_price", 0), errors="coerce"),
+            "note": str(x.get("note", "")),
+        })
+    if not rows:
+        return pd.DataFrame(columns=["category","task","qty","unit","unit_price","amount"])
+    df = pd.DataFrame(rows)
+    df["qty"] = df["qty"].fillna(0).astype(float)
+    df["unit_price"] = df["unit_price"].fillna(0).astype(float)
 
-    df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0.0)
-    df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
-    return df[need_cols]
+    # 単価の最低下駄（安全寄り）
+    df.loc[df["unit_price"] < 1000, "unit_price"] = 1000
+    df["amount"] = (df["qty"] * df["unit_price"]).round().astype(int)
+    return df
 
-def compute_totals(df: pd.DataFrame) -> Dict[str, int]:
-    subtotal = int((df["qty"] * df["unit_price"]).round().sum())
-    tax = int(round(subtotal * TAX_RATE))
-    total = subtotal + tax
-    return {"subtotal": subtotal, "tax": tax, "total": total}
+def totals(df: pd.DataFrame, tax_rate=0.10):
+    taxable = int(df["amount"].sum()) if len(df) else 0
+    tax = int(round(taxable * tax_rate))
+    total = taxable + tax
+    return {"taxable": taxable, "tax": tax, "total": total}
 
-# =========================
-# プロンプト
-# =========================
-SCHEMA = """\
-出力は**JSONオブジェクト1個のみ**。絶対に説明文やコードフェンスを含めないでください。
-
-【必須スキーマ】
-{
-  "items": [
-    {
-      "category": "制作費|撮影費|編集費・MA費|出演関連費|諸経費|管理費",
-      "task": "具体的な項目名（例：カメラマン費）",
-      "qty": 数値,                   # 小数可
-      "unit": "日|人|式|本|時間|カット など",
-      "unit_price": 整数(>=1000),   # JPY、必ず 1000 以上の整数
-      "note": "補足（任意）"
-    },
-    ...
-  ]
-}
-
-【厳守事項】
-- 出力は JSON のみ・コードフェンス禁止。
-- 各 item の unit_price は **必ず 1000 以上の整数**。0 や未設定は禁止。
-- 日本の広告映像の一般的な相場レンジで妥当な金額にすること。
-- 項目数は 6〜12 件程度。重複は避ける。
-- 管理費は 1 行だけ（task=管理費（固定）, qty=1, unit=式）。金額は非ゼロで妥当な水準に。
-- 合計/税は出さない。HTMLも禁止。"""
-
-def build_prompt(user_notes: str) -> str:
-    return f"""あなたは広告映像制作の見積り項目を作成するアシスタントです。
-以下の案件条件を読み、上記スキーマに従って items のみを返してください。
-
-【案件条件（自由記入）】
-{user_notes}
-
-{SCHEMA}
-"""
-
-# =========================
-# UI
-# =========================
-st.title("Gemini 2.5 Flash ｜ JSON 最小テスト（見積アイテムのみ）")
-
-with st.form("f"):
-    notes = st.text_area(
-        "案件条件（自由記入）",
-        placeholder="例：\n- 30秒、納品1本\n- 撮影2日 / 編集3日\n- 都内スタジオ / キャスト1名 / MAあり\n- 参考：商品紹介映像、インタビューなし",
-        height=180,
-    )
-    colb = st.columns(2)
-    with colb[0]:
-        submit = st.form_submit_button("▶ JSON を生成", use_container_width=True)
-
-st.caption("モデル: **gemini-2.5-flash**")
-
-# =========================
-# 実行
-# =========================
-if submit:
-    prompt = build_prompt(notes or "(空文字)")
-
-    model = genai.GenerativeModel(
-        MODEL_ID,
-        generation_config={
-            "temperature": 0.3,
-            "top_p": 0.9,
-            "max_output_tokens": 2048,
-        },
+# ============== プロンプト組立 ==============
+def build_case_block(
+    final_duration: str,
+    num_versions: int,
+    shoot_days: int,
+    edit_days: int,
+    cast_main: int,
+    ma_needed: bool,
+    notes: str
+) -> str:
+    return (
+        "【案件条件】\n"
+        f"- 尺: {final_duration}\n"
+        f"- 納品本数: {num_versions}本\n"
+        f"- 撮影日数: {shoot_days}日 / 編集日数: {edit_days}日\n"
+        f"- キャスト（メイン）: {cast_main}人\n"
+        f"- MA: {'あり' if ma_needed else 'なし'}\n"
+        f"- 備考: {notes if notes else '特になし'}\n"
     )
 
-    # 1回目
-    resp1 = model.generate_content(prompt)
-    text = extract_text(resp1)
+# 2.5 Flash に JSON を出させるための“段階的 MIME 設定”ラダー
+# （2.0へは落とさない／同一モデル内で形式だけ緩める）
+_MINI_SYSTEM = (
+    "あなたは広告映像の見積り項目テンプレートを作るアシスタントです。"
+    "出力は安全かつビジネス用途に限定してください。"
+)
+_JSON_SPEC = (
+    "次の仕様で **JSON オブジェクト1個** を返してください。\n"
+    "- ルートは {\"items\": [...]} のみ\n"
+    "- 各要素: category, task, qty, unit, unit_price, note\n"
+    "- 価格は概算で構いませんが 1,000 円未満は 1,000 に揃えてください\n"
+    "- 合計や税は出力に含めない\n"
+)
 
-    # 必要なら 1回だけリトライ（簡易）
-    run_info = [{"run": 1, "finish": getattr(resp1, "finish_reason", None), "text_len": len(text or "")}]
-    if not text or len(text.strip()) < 3:
-        resp2 = model.generate_content(prompt + "\n\n前回の応答が空でした。**必ず JSON オブジェクト1個のみ**を出力してください。")
-        text = extract_text(resp2)
-        run_info.append({"run": 2, "finish": getattr(resp2, "finish_reason", None), "text_len": len(text or "")})
+def call_g25_items_json(prompt_block: str) -> dict:
+    # STEP 1: structured + permissive
+    for mode in [
+        {"mime": "application/json"},
+        {"mime": None},           # structured（MIME 指定なし）
+        {"mime": "text/plain"},   # plain
+    ]:
+        model = genai.GenerativeModel(
+            "gemini-2.5-flash",
+            generation_config={
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "candidate_count": 1,
+                "max_output_tokens": 2048,
+                **({"response_mime_type": mode["mime"]} if mode["mime"] else {}),
+            },
+        )
 
-    obj = try_parse_json(text)
-    items = obj.get("items") if isinstance(obj, dict) else None
-
-    if not isinstance(items, list) or len(items) == 0:
-        st.warning("items が空です。プロンプトを少し具体的にして再試行してください。")
-        with st.expander("デバッグ：モデル生出力（RAWテキスト）", expanded=False):
-            st.code(text or "(empty)")
-        with st.expander("デバッグ：to_dict()（最終応答）", expanded=False):
-            try:
-                st.code((resp2 if len(run_info) > 1 else resp1).to_dict())
-            except Exception:
-                st.write("(to_dict 取得不可)")
-        st.dataframe(pd.DataFrame(run_info))
-        st.stop()
-
-    # 表示用に DataFrame 化
-    df = pd.DataFrame(items)
-    df = norm_items(df)
-
-    # 単価が 1000 未満のものがあれば赤字で示す（検知）
-    bad = df["unit_price"] < 1000
-    if bad.any():
-        st.error("⚠ unit_price に 1000 未満が含まれています（モデルへ強制済みですが、出力が守られなかったケース）。必要に応じて再生成してください。")
-
-    # 計算
-    totals = compute_totals(df)
-
-    st.subheader("整形後 JSON")
-    st.code(json.dumps({"items": json.loads(df.to_json(orient="records", force_ascii=False))}, ensure_ascii=False, indent=2), language="json")
-
-    st.subheader("見積アイテム（検算付き）")
-    df_view = df.copy()
-    df_view["金額（円）"] = (df_view["qty"] * df_view["unit_price"]).round().astype(int)
-    st.dataframe(df_view, use_container_width=True)
-
-    st.write(
-        f"**小計（税抜）**：{totals['subtotal']:,} 円　／　"
-        f"**消費税**：{totals['tax']:,} 円　／　"
-        f"**合計**：**{totals['total']:,} 円**"
-    )
-
-    with st.expander("デバッグ：to_dict()（最終応答）", expanded=False):
+        full_prompt = (
+            f"{_MINI_SYSTEM}\n\n"
+            f"{prompt_block}\n\n"
+            "【出力仕様】\n"
+            f"{_JSON_SPEC}\n"
+            "JSON 以外の文章は出力しないでください。"
+        )
         try:
-            st.code((resp2 if len(run_info) > 1 else resp1).to_dict())
+            resp = model.generate_content(full_prompt)
+            raw = (resp.text or "").strip()
+            obj = robust_items_parse(raw)
+            # items が入っていれば採用
+            if isinstance(obj, dict) and isinstance(obj.get("items"), list) and len(obj["items"]) > 0:
+                return obj
         except Exception:
-            st.write("(to_dict 取得不可)")
+            pass
 
-    with st.expander("サマリ（各 run）", expanded=False):
-        st.dataframe(pd.DataFrame(run_info), use_container_width=True)
+    # すべて空/失敗 -> 空 items を返す
+    return {"items": []}
+
+# ============== UI ==============
+st.title("映像制作見積（段階統合 Stage A / Gemini 2.5 Flash 専用）")
+
+st.subheader("制作条件（縮小版）")
+col1, col2 = st.columns(2)
+with col1:
+    final_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"], index=1)
+    if final_duration == "その他":
+        final_duration = st.text_input("尺（自由記入）", value="45秒")
+    num_versions = st.number_input("納品本数", min_value=1, max_value=10, value=1)
+    cast_main = st.number_input("メインキャスト人数", min_value=0, max_value=10, value=1)
+
+with col2:
+    shoot_days = st.number_input("撮影日数", min_value=1, max_value=10, value=2)
+    edit_days = st.number_input("編集日数", min_value=1, max_value=10, value=3)
+    ma_needed = st.checkbox("MAあり", value=True)
+
+notes = st.text_area("備考（任意）", placeholder="案件概要・媒体などを簡単に")
+
+st.markdown("---")
+if st.button("▶ 見積アイテムを生成（Gemini 2.5 Flash）", type="primary"):
+    with st.spinner("生成中..."):
+        case_block = build_case_block(
+            final_duration=final_duration,
+            num_versions=int(num_versions),
+            shoot_days=int(shoot_days),
+            edit_days=int(edit_days),
+            cast_main=int(cast_main),
+            ma_needed=bool(ma_needed),
+            notes=notes,
+        )
+        items_obj = call_g25_items_json(case_block)
+        df = df_from_items(items_obj)
+        meta = totals(df, tax_rate=0.10)
+
+    st.success(f"モデル: gemini-2.5-flash / 行数: {len(df)}")
+
+    if len(df):
+        st.dataframe(df[["category","task","qty","unit","unit_price","note","amount"]], use_container_width=True)
+    else:
+        st.info("items が空でした。備考にもう少し具体的な条件（例: スタジオ / ロケ、BGM、ナレーション等）を加えて再実行してみてください。")
+
+    st.markdown(
+        f"**小計（税抜）** : {meta['taxable']:,} 円　/　"
+        f"**消費税** : {meta['tax']:,} 円　/　"
+        f"**合計** : **{meta['total']:,} 円**"
+    )
+
+    with st.expander("デバッグ：生成 JSON"):
+        st.code(json.dumps(items_obj, ensure_ascii=False, indent=2), language="json")
+
+else:
+    st.caption("※ このバージョンでは、2.5 Flash 以外のモデルや 2.0 への切替・他社APIへのフォールバックは一切行いません。")
