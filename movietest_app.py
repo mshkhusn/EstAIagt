@@ -1,4 +1,4 @@
-# movie_app.py — 段階2: Gemini 2.5 Flash 専用 + 計算/HTML/Excel まで復活
+# movie_app.py — 段階2b: Gemini 2.5 Flash 専用 + JSONモード + 計算/HTML/Excel
 # 依存: streamlit, pandas, google-generativeai, python-dateutil, openpyxl or xlsxwriter
 # Secrets: GEMINI_API_KEY, APP_PASSWORD
 
@@ -15,15 +15,10 @@ import pandas as pd
 import google.generativeai as genai
 from dateutil.relativedelta import relativedelta
 
-# ===== Excel（xlsxwriter あれば使う。なければ openpyxl） =====
-from openpyxl import load_workbook  # not used yet, but harmless
-# ------------------------------------------------------------
+from openpyxl import load_workbook  # noqa
 
-# =========================
-# ページ設定 / Secrets
-# =========================
+# ============== ページ / Secrets ==============
 st.set_page_config(page_title="映像制作概算見積（Gemini 2.5 Flash）", layout="centered")
-
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 APP_PASSWORD   = st.secrets.get("APP_PASSWORD", "")
 
@@ -34,23 +29,26 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 GEMINI_MODEL_ID = "gemini-2.5-flash"
 
-# =========================
-# 定数
-# =========================
+# ============== 定数 ==============
 TAX_RATE = 0.10
 MGMT_FEE_CAP_RATE = 0.15
 RUSH_K = 0.75
 
-# =========================
-# セッション初期化
-# =========================
-for k in ["items_json_raw", "items_json", "df", "meta", "final_html", "model_used", "gemini_raw_dict"]:
+FINISH_REASON_MAP = {
+    0: "FINISH_REASON_UNSPECIFIED",
+    1: "STOP",        # 正常終了
+    2: "SAFETY",      # 安全性等でブロック
+    3: "RECITATION",  # 暗唱/著作物防止
+    4: "OTHER",
+}
+
+# ============== セッション ==============
+for k in ["items_json_raw", "items_json", "df", "meta", "final_html",
+          "model_used", "gemini_raw_dict", "gemini_finish_reason"]:
     if k not in st.session_state:
         st.session_state[k] = None
 
-# =========================
-# 認証
-# =========================
+# ============== 認証 ==============
 st.title("映像制作概算見積（Gemini 2.5 Flash）")
 if APP_PASSWORD:
     pw = st.text_input("パスワード", type="password")
@@ -58,9 +56,7 @@ if APP_PASSWORD:
         st.warning("🔒 認証が必要です")
         st.stop()
 
-# =========================
-# 入力UI
-# =========================
+# ============== 入力UI ==============
 st.header("制作条件の入力")
 video_duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "その他"])
 final_duration = st.text_input("尺の長さ（自由記入）") if video_duration == "その他" else video_duration
@@ -100,9 +96,7 @@ extra_notes = st.text_area("備考（案件概要・要件など自由記入）"
 do_normalize = st.checkbox("LLMで正規化パスをかける（推奨）", value=True)
 do_infer_from_notes = st.checkbox("備考から不足項目を補完（推奨）", value=True)
 
-# =========================
-# ユーティリティ
-# =========================
+# ============== ユーティリティ ==============
 def join_or(value_list, empty="なし", sep=", "):
     if not value_list:
         return empty
@@ -117,21 +111,17 @@ def rush_coeff(base_days: int, target_days: int) -> float:
 def parse_budget_hint_jpy(s: str) -> Optional[int]:
     if not s:
         return None
-    t = str(s).strip().replace(",", "").replace(" ", "")
-    t = t.replace("円", "")
+    t = str(s).strip().replace(",", "").replace(" ", "").replace("円", "")
     try:
         if "億" in t:
-            n = float(t.replace("億", "") or "0")
-            return int(n * 100_000_000)
+            n = float(t.replace("億", "") or "0"); return int(n * 100_000_000)
         if "万" in t:
-            n = float(t.replace("万円", "").replace("万", "") or "0")
-            return int(n * 10_000)
-        n = float(t)
-        return int(n)
+            n = float(t.replace("万円", "").replace("万", "") or "0"); return int(n * 10_000)
+        return int(float(t))
     except Exception:
         return None
 
-# ---------- JSON ロバストパース ----------
+# ---- JSON ロバストパース ----
 def _strip_code_fences(s: str) -> str:
     s = s.strip()
     if s.startswith("```"):
@@ -187,10 +177,10 @@ def robust_parse_items_json(raw: str) -> str:
     obj["items"] = items
     return json.dumps(obj, ensure_ascii=False)
 
-# ---------- プロンプト ----------
+# ---- プロンプト ----
 STRICT_JSON_HEADER = (
     "必ずコードフェンス無しの JSON 1オブジェクトのみを返してください。"
-    "説明文は付けないでください。生成できない場合も {\"items\": []} を返してください。"
+    "説明文は不要です。生成に失敗する場合は {\"items\": []} を返してください。"
 )
 
 def _common_case_block() -> str:
@@ -214,14 +204,13 @@ def _common_case_block() -> str:
 def _inference_block() -> str:
     if not do_infer_from_notes:
         return ""
-    return """
-- 備考や一般的な広告映像制作の慣行から、未指定の必須/付随項目を推論して補完してください。
-"""
+    return "\n- 備考や一般的な慣行から未指定項目を推論・補完してください。\n"
 
 def build_prompt_json() -> str:
+    # 少し短めにしてブロック率を下げる
     return f"""{STRICT_JSON_HEADER}
 
-あなたは広告映像制作の見積り項目を作成するエキスパートです。
+あなたは広告映像制作の見積り項目を作成するアシスタントです。
 以下の仕様で **JSONオブジェクトのみ** を返してください。
 
 {_common_case_block()}
@@ -229,16 +218,27 @@ def build_prompt_json() -> str:
 【出力仕様】
 - ルート: items（配列）
 - 要素キー: category / task / qty / unit / unit_price / note
-- category は「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」のいずれか
+- category: 「制作人件費」「企画」「撮影費」「出演関連費」「編集費・MA費」「諸経費」「管理費」
 {_inference_block()}
-- qty / unit は妥当な単位（日/式/人/時間 等）。単価は日本の広告映像相場の一般レンジで推定。
-- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。
-- 合計/税などは出力しない。
+- qty/unit は妥当な単位（日/式/人/時間 等）
+- 単価は日本の広告映像の一般相場レンジで推定
+- 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）
 """
 
-# =========================
-# Gemini 呼び出し（堅牢抽出）
-# =========================
+# ============== Gemini 呼び出し（JSONモード + 堅牢抽出） ==============
+def _gemini25_model():
+    # ★ JSONモードを有効化
+    return genai.GenerativeModel(
+        GEMINI_MODEL_ID,
+        generation_config={
+            "candidate_count": 1,
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "max_output_tokens": 2500,
+            "response_mime_type": "application/json",
+        },
+    )
+
 def _robust_extract_gemini_text(resp) -> str:
     # 1) text
     try:
@@ -246,7 +246,7 @@ def _robust_extract_gemini_text(resp) -> str:
             return resp.text
     except Exception:
         pass
-    # 2) candidates → parts
+    # 2) parts（JSONモードでも text に入らないことがあるため総当たり）
     try:
         cands = getattr(resp, "candidates", None) or []
         buf = []
@@ -259,24 +259,11 @@ def _robust_extract_gemini_text(resp) -> str:
                 t = getattr(p, "text", None)
                 if t:
                     buf.append(t)
-                    continue
-                inline = getattr(p, "inline_data", None)
-                if inline:
-                    mime = getattr(inline, "mime_type", "") or getattr(inline, "mimeType", "")
-                    data_b64 = getattr(inline, "data", None)
-                    if data_b64 and "json" in (mime or "").lower():
-                        import base64
-                        try:
-                            decoded = base64.b64decode(data_b64).decode("utf-8", errors="ignore")
-                            if decoded:
-                                buf.append(decoded)
-                        except Exception:
-                            pass
         if buf:
             return "".join(buf)
     except Exception:
         pass
-    # 3) to_dict のダンプ（最終手段）
+    # 3) 最後の手段：to_dict ダンプ
     try:
         d = resp.to_dict()
         import json as _json
@@ -284,43 +271,44 @@ def _robust_extract_gemini_text(resp) -> str:
     except Exception:
         return ""
 
-def _gemini25_model():
-    return genai.GenerativeModel(
-        GEMINI_MODEL_ID,
-        generation_config={
-            "candidate_count": 1,
-            "temperature": 0.3,
-            "top_p": 0.9,
-            "max_output_tokens": 2500,
-        },
-    )
+def _finish_reason_name(resp_dict: dict) -> str:
+    try:
+        fr = (resp_dict.get("candidates") or [{}])[0].get("finish_reason", 0)
+        return FINISH_REASON_MAP.get(fr, str(fr))
+    except Exception:
+        return "UNKNOWN"
 
 def llm_generate_items_json(prompt: str) -> str:
     try:
         m = _gemini25_model()
-        r = m.generate_content(prompt)
-        try:
-            st.session_state["gemini_raw_dict"] = r.to_dict()
-        except Exception:
-            st.session_state["gemini_raw_dict"] = {"_note": "to_dict failed"}
-        raw = _robust_extract_gemini_text(r)
 
+        # 1) 通常プロンプト
+        r1 = m.generate_content(prompt)
+        d1 = r1.to_dict()
+        st.session_state["gemini_raw_dict"] = d1
+        st.session_state["gemini_finish_reason"] = _finish_reason_name(d1)
+        raw = _robust_extract_gemini_text(r1)
+
+        # 2) 空なら短縮版プロンプトで再試行
         if not raw or not raw.strip():
-            chat = m.start_chat(history=[])
-            r2 = chat.send_message(prompt)
-            try:
-                st.session_state["gemini_raw_dict"] = {"first": st.session_state["gemini_raw_dict"], "retry_chat": r2.to_dict()}
-            except Exception:
-                pass
+            short_prompt = (
+                'JSONのみ。items 配列に {category, task, qty, unit, unit_price, note}。'
+                '管理費は固定1行（task=管理費（固定）, qty=1, unit=式）。'
+                '説明文は禁止。'
+            )
+            r2 = m.generate_content(short_prompt)
+            d2 = r2.to_dict()
+            st.session_state["gemini_raw_dict"] = {"first": d1, "retry_short": d2}
+            st.session_state["gemini_finish_reason"] = _finish_reason_name(d2)
             raw = _robust_extract_gemini_text(r2)
 
+        # 3) まだ空なら最小JSONで再試行（≒生成を強制）
         if not raw or not raw.strip():
             minimal = '{"items":[{"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":0,"note":""}]}'
             r3 = m.generate_content(minimal)
-            try:
-                st.session_state["gemini_raw_dict"] = {"prev": st.session_state["gemini_raw_dict"], "final_minimal": r3.to_dict()}
-            except Exception:
-                pass
+            d3 = r3.to_dict()
+            st.session_state["gemini_raw_dict"] = {"prev": st.session_state["gemini_raw_dict"], "final_minimal": d3}
+            st.session_state["gemini_finish_reason"] = _finish_reason_name(d3)
             raw = _robust_extract_gemini_text(r3)
 
         if not raw or not raw.strip():
@@ -331,7 +319,8 @@ def llm_generate_items_json(prompt: str) -> str:
         return robust_parse_items_json(raw)
     except Exception as e:
         st.warning(f"⚠️ Gemini 呼び出し失敗: {type(e).__name__}: {str(e)[:200]}")
-        st.session_state["items_json_raw"] = '{"items":[]}'
+        st.session_state["items_json_raw"] = '{"items": []}'
+        st.session_state["gemini_finish_reason"] = "EXCEPTION"
         return '{"items": []}'
 
 def llm_normalize_items_json(items_json: str) -> str:
@@ -340,7 +329,7 @@ def llm_normalize_items_json(items_json: str) -> str:
 次のJSONを検査・正規化してください。返答は**修正済みJSONのみ**です。
 - スキーマ外キー削除、欠損補完（qty/unit/unit_price/note）
 - category 正規化（制作人件費/企画/撮影費/出演関連費/編集費・MA費/諸経費/管理費）
-- 単位表記ゆれの正規化
+- 単位表記のゆれを正規化
 - 管理費は固定1行（task=管理費（固定）, qty=1, unit=式）
 【入力JSON】
 {items_json}
@@ -354,9 +343,7 @@ def llm_normalize_items_json(items_json: str) -> str:
     except Exception:
         return items_json
 
-# =========================
-# 計算
-# =========================
+# ============== 計算 ==============
 def df_from_items_json(items_json: str) -> pd.DataFrame:
     try:
         data = json.loads(items_json) if items_json else {}
@@ -441,7 +428,6 @@ def scale_prices_to_budget(df_items: pd.DataFrame,
         df_scaled.loc[~is_mgmt, "unit_price"] = df_scaled.loc[~is_mgmt, "unit_price"].map(_r)
     return df_scaled
 
-# ---------- 表示 ----------
 def render_html(df_items: pd.DataFrame, meta: dict) -> str:
     def td_r(x): return f"<td style='text-align:right'>{x}</td>"
     html = []
@@ -491,9 +477,7 @@ def download_excel(df_items: pd.DataFrame, meta: dict):
     st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# =========================
-# 実行
-# =========================
+# ============== 実行 ==============
 if st.button("💡 見積もりを作成"):
     with st.spinner("Gemini 2.5 Flash が見積もり項目を作成中…"):
         prompt = build_prompt_json()
@@ -512,7 +496,6 @@ if st.button("💡 見積もりを作成"):
         base_days = int(shoot_days + edit_days + 5)
         target_days = (delivery_date - date.today()).days
 
-        # 予算寄せ（税抜）任意
         budget_total = parse_budget_hint_jpy(budget_hint)
         if budget_total:
             df_items = scale_prices_to_budget(df_items, base_days, target_days, budget_total)
@@ -525,12 +508,13 @@ if st.button("💡 見積もりを作成"):
         st.session_state["meta"] = meta
         st.session_state["final_html"] = final_html
 
-# =========================
-# 表示/ダウンロード
-# =========================
+# ============== 表示/デバッグ ==============
 if st.session_state["final_html"]:
-    st.info({"model_used": st.session_state.get("model_used") or "(n/a)",
-             "normalize_pass": do_normalize})
+    st.info({
+        "model_used": st.session_state.get("model_used") or "(n/a)",
+        "normalize_pass": do_normalize,
+        "finish_reason": st.session_state.get("gemini_finish_reason")
+    })
     st.success("✅ 見積もり結果（計算済み）")
     st.components.v1.html(st.session_state["final_html"], height=900, scrolling=True)
     download_excel(st.session_state["df"], st.session_state["meta"])
