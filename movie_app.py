@@ -344,7 +344,6 @@ def llm_generate_items_json(prompt: str) -> str:
                     "top_p": 0.9,
                     "max_output_tokens": 2500,
                 },
-                # Civic Integrity / Toxicity は指定しない（SDK未対応版があるため）
                 safety_settings=[
                     {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
@@ -360,17 +359,8 @@ def llm_generate_items_json(prompt: str) -> str:
                 pass
             res = _robust_extract_gemini_text(resp)
             if not res or len(res.strip()) < 5:
-                model2 = genai.GenerativeModel(
-                    model_id,
-                    generation_config={"candidate_count": 1, "temperature": 0.4, "top_p": 0.9, "max_output_tokens": 2500},
-                    safety_settings=[
-                        {"category": "HARM_CATEGORY_HARASSMENT",       "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_HATE_SPEECH",       "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_SEXUAL",            "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                    ],
-                )
-                resp2 = model2.generate_content(prompt)
+                # リトライ
+                resp2 = model.generate_content(prompt)
                 res = _robust_extract_gemini_text(resp2)
             st.session_state["model_used"] = model_id
 
@@ -404,20 +394,26 @@ def llm_generate_items_json(prompt: str) -> str:
         return parsed
 
     except Exception as e:
+        # ← 必ず def の内側（同じインデント）に入れてください！
         st.session_state["used_fallback"] = True
         st.session_state["fallback_reason"] = f"{type(e).__name__}: {str(e)[:200]}"
-        st.warning("⚠️ モデル応答の解析に失敗しました。固定のfallbackを使用します。\n"
-                   f"reason={type(e).__name__}: {str(e)[:200]}")
+        st.warning(
+            "⚠️ モデル応答の解析に失敗しました。固定のfallbackを使用します。\n"
+            f"reason={type(e).__name__}: {str(e)[:200]}"
+        )
+
+        # 必ずスキーマが揃った JSON を返す
         fallback = {
-            "items":[
-                {"category":"制作人件費","task":"制作プロデューサー","qty":1,"unit":"日","unit_price":80000,"note":"fallback"},
-                {"category":"撮影費","task":"カメラマン","qty":max(1, int(shoot_days)),"unit":"日","unit_price":80000,"note":"fallback"},
-                {"category":"編集費・MA費","task":"編集","qty":max(1, int(edit_days)),"unit":"日","unit_price":70000,"note":"fallback"},
-                {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":120000,"note":"fallback"}
+            "items": [
+                {"category": "制作人件費",  "task": "制作プロデューサー", "qty": 1,                            "unit": "日", "unit_price": 80000, "note": "fallback"},
+                {"category": "撮影費",      "task": "カメラマン",       "qty": max(1, int(shoot_days)),       "unit": "日", "unit_price": 80000, "note": "fallback"},
+                {"category": "編集費・MA費","task": "編集",            "qty": max(1, int(edit_days)),        "unit": "日", "unit_price": 70000, "note": "fallback"},
+                {"category": "管理費",      "task": "管理費（固定）",   "qty": 1,                            "unit": "式", "unit_price": 120000,"note": "fallback"},
             ]
         }
-        st.session_state["items_json_raw"] = json.dumps(fallback, ensure_ascii=False)
-        return json.dumps(fallback, ensure_ascii=False)
+        parsed = json.dumps(fallback, ensure_ascii=False)
+        st.session_state["items_json_raw"] = parsed
+        return parsed
 
 def llm_normalize_items_json(items_json: str) -> str:
     try:
@@ -463,19 +459,37 @@ def llm_normalize_items_json(items_json: str) -> str:
 
 # ---------- 計算 ----------
 def df_from_items_json(items_json: str) -> pd.DataFrame:
-    data = json.loads(items_json)
-    items = data.get("items", [])
+    # JSONの壊れに耐える
+    try:
+        data = json.loads(items_json) if items_json else {}
+    except Exception:
+        data = {}
+
+    items = data.get("items", []) or []
     norm = []
     for x in items:
+        # 文字列や None が混じっても安全に拾う
         norm.append({
-            "category": str(x.get("category","")),
-            "task": str(x.get("task","")),
-            "qty": float(x.get("qty", 0) or 0),
-            "unit": str(x.get("unit","")),
-            "unit_price": int(float(x.get("unit_price", 0) or 0)),
-            "note": str(x.get("note","")),
+            "category": str((x or {}).get("category", "")),
+            "task": str((x or {}).get("task", "")),
+            "qty": (x or {}).get("qty", 0),
+            "unit": str((x or {}).get("unit", "")),
+            "unit_price": (x or {}).get("unit_price", 0),
+            "note": str((x or {}).get("note", "")),
         })
-    return pd.DataFrame(norm)
+
+    df = pd.DataFrame(norm)
+
+    # 必須カラムを補完（存在しない場合に作る）
+    for col in ["category", "task", "qty", "unit", "unit_price", "note"]:
+        if col not in df.columns:
+            df[col] = "" if col in ["category", "task", "unit", "note"] else 0
+
+    # 数値カラムは強制的に数値化（文字列/NoneでもOKにする）
+    df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0.0)
+    df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
+
+    return df
 
 def compute_totals(df_items: pd.DataFrame, base_days: int, target_days: int):
     accel = rush_coeff(base_days, target_days)
