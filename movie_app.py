@@ -369,7 +369,6 @@ def llm_generate_items_json(prompt: str) -> str:
             model = genai.GenerativeModel(
                 model_id,
                 generation_config={
-                    "response_mime_type": "application/json",
                     "candidate_count": 1,
                     "temperature": 0.4,
                     "top_p": 0.9,
