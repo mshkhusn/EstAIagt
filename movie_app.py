@@ -301,31 +301,59 @@ def _map_openai_model(choice: str) -> str:
 def llm_generate_items_json(prompt: str) -> str:
     """
     選択モデルで items JSON を生成。
-    Geminiは .text が空のとき candidates.parts[].text から復元。
+    Geminiは .text が空のとき candidates.parts から復元。
     """
+
     def _robust_extract_gemini_text(resp) -> str:
+        """Gemini 2.5 が JSON を inline_data(base64) で返すケースも吸い上げる"""
+        # 1) 普通に text があれば使う
         try:
-            if hasattr(resp, "text") and resp.text:
+            if getattr(resp, "text", None):
                 return resp.text
         except Exception:
             pass
+
+        # 2) candidates.parts を調べる
         try:
             cands = getattr(resp, "candidates", None) or []
+            buf = []
             for c in cands:
                 content = getattr(c, "content", None)
                 if not content:
                     continue
                 parts = getattr(content, "parts", None) or []
-                buf = []
                 for p in parts:
+                    # a) text がある場合
                     t = getattr(p, "text", None)
                     if t:
                         buf.append(t)
-                if buf:
-                    return "".join(buf)
+                        continue
+                    # b) JSON が inline_data で来る場合
+                    inline = getattr(p, "inline_data", None)
+                    if inline:
+                        mime = getattr(inline, "mime_type", "") or getattr(inline, "mimeType", "")
+                        data_b64 = getattr(inline, "data", None)
+                        if data_b64 and "json" in mime:
+                            import base64
+                            try:
+                                decoded = base64.b64decode(data_b64).decode("utf-8", errors="ignore")
+                                if decoded:
+                                    buf.append(decoded)
+                                    continue
+                            except Exception:
+                                pass
+            if buf:
+                return "".join(buf)
         except Exception:
             pass
-        return ""
+
+        # 3) 最後の手段（デバッグ用）
+        try:
+            d = resp.to_dict()
+            import json as _json
+            return _json.dumps(d, ensure_ascii=False)
+        except Exception:
+            return ""
 
     try:
         st.session_state["used_fallback"] = False
