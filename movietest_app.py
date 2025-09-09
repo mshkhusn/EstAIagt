@@ -1,151 +1,105 @@
-# gemini25_probe_app.py
+# movietest_app.py
+# Gemini 2.5 flash シンプル動作確認用（fallback なし）
+
 import json
+import base64
 import streamlit as st
 import google.generativeai as genai
 
-st.set_page_config(page_title="Gemini 2.5 Probe (SAFETY切り分け)", layout="centered")
+st.set_page_config(page_title="Gemini 2.5 Flash 簡易テスト", layout="centered")
 
-# --- Secrets ---
+# --- Secrets / 初期化 ---
 API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 if not API_KEY:
     st.error("GEMINI_API_KEY が未設定です。Streamlit Secrets に追加してください。")
     st.stop()
-
 genai.configure(api_key=API_KEY)
 
-# --- Safety settings helper (BLOCK_NONE を付与してみる) ---
-def permissive_safety():
-    try:
-        from google.generativeai.types import HarmCategory, HarmBlockThreshold
-        return {
-            HarmCategory.HARM_CATEGORY_SEXUAL: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-        }
-    except Exception:
-        # SDK が古い等で import できない場合は None を返す
-        return None
-
-# --- 3つの最小テストパターン ----------------------------------------------
-TESTS = {
-    "A) 最小JSON（テキスト指定）": {
-        "prompt": '必ず {"ok": true} だけを、コードフェンス無しで返してください。説明は禁止。',
-        "gen_cfg": {"max_output_tokens": 32},  # テキスト返答
-        "schema": None,
-    },
-    "B) 最小JSON（構造化出力）": {
-        "prompt": "次のスキーマに従って JSON を1個だけ返してください。",
-        "gen_cfg": {
-            "max_output_tokens": 32,
-            "response_mime_type": "application/json",
-            "response_schema": {
-                "type": "object",
-                "properties": {"ok": {"type": "boolean"}},
-                "required": ["ok"],
-            },
-        },
-        "schema": {"ok": True},
-    },
-    "C) 最小テキスト（echo）": {
-        "prompt": "次の文字列をそのまま返してください: hello",
-        "gen_cfg": {"max_output_tokens": 16},
-        "schema": None,
-    },
-}
-
-# --- UI -----------------------------------------------------------------------
-st.title("Gemini 2.5 Probe（SAFETY 無音切り分け）")
-
-model = st.selectbox("モデル", ["gemini-2.5-flash", "gemini-2.5-pro"], index=0)
-test_name = st.radio("テスト内容", list(TESTS.keys()), index=0)
-permissive = st.checkbox("Permissive Safety（BLOCK_NONE を付与して試す）", value=True)
-repeat = st.number_input("繰り返し回数（統計/ブレ確認）", min_value=1, max_value=10, value=1, step=1)
-
-colA, colB = st.columns(2)
-with colA:
-    temp = st.number_input("temperature", 0.0, 1.0, 0.0, 0.05)
-with colB:
-    top_p = st.number_input("top_p", 0.0, 1.0, 0.9, 0.05)
-
-run = st.button("▶︎ 実行")
-
-# --- 実行ロジック -------------------------------------------------------------
-def finish_reason_name(d: dict) -> str:
-    try:
-        cand = (d.get("candidates") or [{}])[0]
-        fr = cand.get("finish_reason", 0)
-        return {0: "UNSPEC", 1: "STOP", 2: "SAFETY", 3: "RECIT", 4: "OTHER"}.get(fr, str(fr))
-    except Exception:
-        return "UNKNOWN"
-
+# --- 安全側: 応答テキスト抽出関数（textが空でもpartsやinline_dataから拾う） ---
 def extract_text(resp) -> str:
-    # resp.text が空でも parts 経由で拾う
+    # 1) 普通に text があればそれを使う
     try:
         if getattr(resp, "text", None):
             return resp.text
     except Exception:
         pass
+
+    # 2) candidates -> content.parts を調べて text / inline_data(json) を拾う
     try:
-        cands = getattr(resp, "candidates", []) or []
-        parts = getattr(getattr(cands[0], "content", None), "parts", []) if cands else []
+        cands = getattr(resp, "candidates", None) or []
+        if not cands:
+            return ""
+        parts = getattr(cands[0].content, "parts", None) or []
         buf = []
         for p in parts:
+            # a) plain text
             t = getattr(p, "text", None)
             if t:
                 buf.append(t)
+                continue
+            # b) inline_data（application/jsonなど）
+            inline = getattr(p, "inline_data", None)
+            if inline and "json" in (getattr(inline, "mime_type", "") or getattr(inline, "mimeType", "")):
+                data_b64 = getattr(inline, "data", None)
+                if data_b64:
+                    try:
+                        buf.append(base64.b64decode(data_b64).decode("utf-8", errors="ignore"))
+                    except Exception:
+                        pass
         return "".join(buf)
     except Exception:
         return ""
 
+# --- 画面 ---
+st.title("Gemini 2.5 Flash 簡易テスト（fallback無し）")
+
+st.sidebar.markdown("### 実行設定")
+model_id = st.sidebar.selectbox("モデル", ["gemini-2.5-flash", "gemini-2.5-pro"], index=0)
+max_tokens = st.sidebar.number_input("max_output_tokens", 16, 8192, 1024, step=16)
+temperature = st.sidebar.slider("temperature", 0.0, 1.0, 0.6, 0.05)
+top_p = st.sidebar.slider("top_p", 0.0, 1.0, 0.9, 0.05)
+st.sidebar.caption("※ ここでは自動フォールバックはしません。")
+
+st.markdown("#### プロンプト")
+prompt = st.text_area(
+    "自由に入力して「実行」を押してください。",
+    value="こんにちは！何かお手伝いできることはありますか？",
+    height=160,
+)
+
+col1, col2 = st.columns(2)
+run = col1.button("▶︎ 実行", use_container_width=True, type="primary")
+clear = col2.button("クリア", use_container_width=True)
+
+if clear:
+    st.experimental_rerun()
+
 if run:
-    spec = TESTS[test_name]
-    safety_settings = permissive_safety() if permissive else None
-
-    st.subheader("実行パラメータ")
-    st.write({
-        "model": model,
-        "test": test_name,
-        "permissive_safety": bool(safety_settings),
-        "repeat": int(repeat),
-    })
-
-    results = []
-    for i in range(int(repeat)):
-        model_obj = genai.GenerativeModel(
-            model,
-            generation_config={
-                "candidate_count": 1,
-                "temperature": temp,
-                "top_p": top_p,
-                **spec["gen_cfg"],
-            },
-            safety_settings=safety_settings,
-        )
-        prompt = spec["prompt"]
-        if spec["schema"] is not None:
-            prompt += f"\nサンプル: {json.dumps(spec['schema'], ensure_ascii=False)}"
-
+    # safety設定はデフォルトのまま（BLOCK_NONEは付けない）
+    model = genai.GenerativeModel(
+        model_id,
+        generation_config={
+            "candidate_count": 1,
+            "max_output_tokens": int(max_tokens),
+            "temperature": float(temperature),
+            "top_p": float(top_p),
+        },
+    )
+    try:
+        resp = model.generate_content(prompt)
+        raw = resp.to_dict()
+        text = extract_text(resp)
+        # finish_reason を表示（2 = SAFETY）
         try:
-            resp = model_obj.generate_content(prompt)
-            d = resp.to_dict()
-            txt = extract_text(resp)
-            fin = finish_reason_name(d)
+            finish_reason = (raw.get("candidates") or [{}])[0].get("finish_reason", None)
+        except Exception:
+            finish_reason = None
 
-            # 表示
-            st.markdown(f"### Run {i+1}")
-            st.code(txt or "(空文字)", language="json" if "{" in (txt or "") else None)
-            with st.expander("to_dict()（RAW）", expanded=False):
-                st.code(json.dumps(d, ensure_ascii=False, indent=2), language="json")
+        st.success(f"実行モデル: {model_id} / finish_reason: {finish_reason}")
+        st.write(text if text else "（空文字）")
 
-            results.append({"run": i + 1, "finish": fin, "text_len": len(txt or "")})
+        with st.expander("デバッグ：to_dict()（RAW）", expanded=False):
+            st.code(json.dumps(raw, ensure_ascii=False, indent=2), language="json")
 
-        except Exception as e:
-            results.append({"run": i + 1, "finish": f"EXC:{type(e).__name__}", "text_len": 0})
-            st.error(f"例外: {type(e).__name__}: {str(e)[:200]}")
-
-    st.subheader("サマリ")
-    st.table(results)
-
-st.markdown("---")
-st.caption("※ ここで A/B/C すべてが SAFETY になる場合、モデル/アカウント/リージョン側の Safety レイヤーでブロックされている可能性が高いです。")
+    except Exception as e:
+        st.error(f"例外発生: {type(e).__name__}: {str(e)[:300]}")
