@@ -1,14 +1,10 @@
-# app.py （AI見積もりくん２ / GPT系のみ対応・広告制作全般カテゴリ例付き・DDテンプレ出力あり）
+# app.py （AI見積もりくん２ / GPT系のみ対応・広告制作カテゴリ例付き・安全化済み）
 
 import os
 import json
-import importlib
 from io import BytesIO
-from datetime import date
 import pandas as pd
-
 import streamlit as st
-from dateutil.relativedelta import relativedelta
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 from openpyxl.utils import column_index_from_string, get_column_letter
@@ -110,7 +106,6 @@ def build_prompt_for_estimation(chat_history):
 {json.dumps(chat_history, ensure_ascii=False, indent=2)}
 
 【カテゴリ例】
-以下は広告制作でよく使われるカテゴリの例です：
 - 企画・戦略関連（企画費、リサーチ費、コピーライティング、ディレクション など）
 - デザイン・クリエイティブ制作（デザイン費、アートディレクション、イラスト制作 など）
 - 撮影・映像関連（撮影費、スタッフ費、出演費、撮影機材費 など）
@@ -122,16 +117,15 @@ def build_prompt_for_estimation(chat_history):
 - 管理費（固定・一式）
 
 【ルール】
-- 上記カテゴリを参考にしつつ、案件内容に応じて適切に選択・追加・削除して構成してください。
+- 上記カテゴリを参考にしつつ、案件内容に応じて適切に選択・追加・削除してください。
 - 各要素キー: category / task / qty / unit / unit_price / note
-- qty, unit は妥当な値（日/式/人/時間/カット等）
-- 単価は広告制作の一般相場で推定
+- 欠損がある場合は補完してください
 - 「管理費」は必ず含める（task=管理費（固定）, qty=1, unit=式）
 - 合計や税は含めない
 """
 
 # =========================
-# JSONパース
+# JSONパース & 安全化
 # =========================
 def robust_parse_items_json(raw: str) -> str:
     try:
@@ -145,7 +139,7 @@ def robust_parse_items_json(raw: str) -> str:
         return json.dumps({"items":[]}, ensure_ascii=False)
 
 # =========================
-# 計算
+# DataFrame生成（安全版）
 # =========================
 def df_from_items_json(items_json: str) -> pd.DataFrame:
     try:
@@ -156,26 +150,30 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
     norm = []
     for x in items:
         norm.append({
-            "category": str(x.get("category", "")),
-            "task": str(x.get("task", "")),
-            "qty": x.get("qty", 0),
-            "unit": str(x.get("unit", "")),
-            "unit_price": x.get("unit_price", 0),
-            "note": str(x.get("note", "")),
+            "category": str((x or {}).get("category", "")),
+            "task": str((x or {}).get("task", "")),
+            "qty": (x or {}).get("qty", 0) or 0,
+            "unit": str((x or {}).get("unit", "")),
+            "unit_price": (x or {}).get("unit_price", 0) or 0,
+            "note": str((x or {}).get("note", "")),
         })
     df = pd.DataFrame(norm)
-    df["小計"] = (df["qty"].astype(float) * df["unit_price"].astype(float)).astype(int)
+    for col in ["category", "task", "qty", "unit", "unit_price", "note"]:
+        if col not in df.columns:
+            df[col] = "" if col in ["category","task","unit","note"] else 0
+    df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0).astype(float)
+    df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
+    df["小計"] = (df["qty"] * df["unit_price"]).astype(int)
     return df
 
+# =========================
+# 合計計算
+# =========================
 def compute_totals(df: pd.DataFrame):
     taxable = int(df["小計"].sum())
     tax = int(round(taxable * TAX_RATE))
     total = taxable + tax
-    return {
-        "taxable": taxable,
-        "tax": tax,
-        "total": total
-    }
+    return {"taxable": taxable, "tax": tax, "total": total}
 
 # =========================
 # DDテンプレ出力
@@ -211,7 +209,6 @@ def _write_items_to_template(ws, df_items: pd.DataFrame):
 
     r = start_row
     current_cat = None
-
     for _, row in df_items.iterrows():
         cat = str(row.get("category", "")) or ""
         if cat != current_cat:
@@ -220,7 +217,6 @@ def _write_items_to_template(ws, df_items: pd.DataFrame):
             _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
             current_cat = cat
             r += 1
-
         ws.cell(row=r, column=c_task).value  = str(row.get("task",""))
         ws.cell(row=r, column=c_qty).value   = float(row.get("qty", 0) or 0)
         ws.cell(row=r, column=c_unit).value  = str(row.get("unit",""))
@@ -240,26 +236,33 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 # =========================
 # 実行
 # =========================
-if st.button("📝 AI見積もりくんで見積もりを生成する"):
-    with st.spinner("AIが見積もりを生成中…"):
-        prompt = build_prompt_for_estimation(st.session_state["chat_history"])
-        resp = openai_client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[{"role":"system","content":"You MUST return only valid JSON."},
-                      {"role":"user","content":prompt}],
-            response_format={"type":"json_object"},
-            temperature=0.2,
-            max_tokens=4000
-        )
-        raw = resp.choices[0].message.content or '{"items":[]}'
-        items_json = robust_parse_items_json(raw)
-        df = df_from_items_json(items_json)
-        meta = compute_totals(df)
+# 要件入力がなければボタンを表示しない
+has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
-        st.session_state["items_json_raw"] = raw
-        st.session_state["items_json"] = items_json
-        st.session_state["df"] = df
-        st.session_state["meta"] = meta
+if has_user_input:
+    if st.button("📝 AI見積もりくんで見積もりを生成する"):
+        with st.spinner("AIが見積もりを生成中…"):
+            prompt = build_prompt_for_estimation(st.session_state["chat_history"])
+            resp = openai_client.chat.completions.create(
+                model="gpt-4.1",
+                messages=[{"role":"system","content":"You MUST return only valid JSON."},
+                          {"role":"user","content":prompt}],
+                response_format={"type":"json_object"},
+                temperature=0.2,
+                max_tokens=4000
+            )
+            raw = resp.choices[0].message.content or '{"items":[]}'
+            items_json = robust_parse_items_json(raw)
+            df = df_from_items_json(items_json)
+
+            if df.empty or df["小計"].sum() == 0:
+                st.warning("見積もりを出せませんでした。追加で要件を教えてください。")
+            else:
+                meta = compute_totals(df)
+                st.session_state["items_json_raw"] = raw
+                st.session_state["items_json"] = items_json
+                st.session_state["df"] = df
+                st.session_state["meta"] = meta
 
 # =========================
 # 表示 & ダウンロード
@@ -267,12 +270,10 @@ if st.button("📝 AI見積もりくんで見積もりを生成する"):
 if st.session_state["df"] is not None:
     st.success("✅ 見積もり結果プレビュー")
     st.dataframe(st.session_state["df"])
-
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
 
-    # Excel DL
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
@@ -280,7 +281,6 @@ if st.session_state["df"] is not None:
     st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # DD見積書テンプレ
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
     if tmpl is not None:
         out = export_with_template(tmpl.read(), st.session_state["df"])
