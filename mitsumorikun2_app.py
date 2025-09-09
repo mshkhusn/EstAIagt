@@ -1,4 +1,4 @@
-# app.py （AI見積もりくん２ / GPT系のみ対応・広告制作カテゴリ例付き・安全化済み）
+# app.py （AI見積もりくん２ / GPT系のみ対応・JSON強制＆質問カテゴリフォールバック付き）
 
 import os
 import json
@@ -8,8 +8,6 @@ import streamlit as st
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 from openpyxl.utils import column_index_from_string, get_column_letter
-
-# ===== OpenAI v1 SDK =====
 from openai import OpenAI
 import httpx
 
@@ -33,7 +31,6 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 if OPENAI_ORG_ID:
     os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
 
-# OpenAI クライアント
 openai_client = OpenAI(http_client=httpx.Client(timeout=60.0))
 
 # =========================
@@ -97,7 +94,7 @@ if user_input := st.chat_input("要件を入力してください..."):
 # =========================
 def build_prompt_for_estimation(chat_history):
     return f"""
-必ず有効な JSON のみを返してください。説明文は禁止です。
+必ず有効な JSON のみを返してください。説明文・文章・Markdown・テーブルは禁止です。
 
 あなたは広告制作の見積もり作成エキスパートです。
 以下の会話履歴をもとに、見積もりの内訳を作成してください。
@@ -117,29 +114,39 @@ def build_prompt_for_estimation(chat_history):
 - 管理費（固定・一式）
 
 【ルール】
-- 上記カテゴリを参考にしつつ、案件内容に応じて適切に選択・追加・削除してください。
+- 必ず items 配列には1行以上の見積もり項目を返してください（空配列は禁止）。
 - 各要素キー: category / task / qty / unit / unit_price / note
-- 欠損がある場合は補完してください
-- 「管理費」は必ず含める（task=管理費（固定）, qty=1, unit=式）
-- 合計や税は含めない
+- 欠損がある場合は補完してください。
+- 「管理費」は必ず含める（task=管理費（固定）, qty=1, unit=式）。
+- 合計や税は含めない。
+- もし情報不足で正しい見積もりが作れない場合は、items に1行だけ
+  {{"category":"質問","task":"追加で必要な情報を教えてください","qty":0,"unit":"","unit_price":0,"note":"不足情報あり"}}
+  を返してください。
 """
 
 # =========================
-# JSONパース & 安全化
+# JSONパース & フォールバック
 # =========================
 def robust_parse_items_json(raw: str) -> str:
     try:
         obj = json.loads(raw)
-        if not isinstance(obj, dict):
-            obj = {"items": []}
-        if "items" not in obj:
-            obj["items"] = []
-        return json.dumps(obj, ensure_ascii=False)
     except Exception:
-        return json.dumps({"items":[]}, ensure_ascii=False)
+        return json.dumps({
+            "items":[
+                {"category":"質問","task":"要件を詳しく教えてください","qty":0,"unit":"","unit_price":0,"note":"AIがテキストを返しました"}
+            ]
+        }, ensure_ascii=False)
+
+    if not isinstance(obj, dict):
+        obj = {"items":[]}
+    if "items" not in obj or not obj["items"]:
+        obj["items"] = [{
+            "category":"質問","task":"追加で要件を教えてください","qty":0,"unit":"","unit_price":0,"note":"不足情報あり"
+        }]
+    return json.dumps(obj, ensure_ascii=False)
 
 # =========================
-# DataFrame生成（安全版）
+# DataFrame生成
 # =========================
 def df_from_items_json(items_json: str) -> pd.DataFrame:
     try:
@@ -236,7 +243,6 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 # =========================
 # 実行
 # =========================
-# 要件入力がなければボタンを表示しない
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
@@ -255,7 +261,7 @@ if has_user_input:
             items_json = robust_parse_items_json(raw)
             df = df_from_items_json(items_json)
 
-            if df.empty or df["小計"].sum() == 0:
+            if df.empty:
                 st.warning("見積もりを出せませんでした。追加で要件を教えてください。")
             else:
                 meta = compute_totals(df)
