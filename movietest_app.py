@@ -1,365 +1,382 @@
+# movie_app.py
 # -*- coding: utf-8 -*-
-"""
-movie_app.py  —  Gemini 2.5 Flash 専用・概算見積（JSON生成）
-- 映像制作ドメインを既定（備考に非映像が明示される場合のみ許可）
-- JSON のみの出力（{"items":[...]}）
-- 各行: category, task, qty, unit, unit_price, note（内訳）
-- 最低3行 + 管理費（固定）必須
-- UI 幅広 / Excel ダウンロード（note入り） / ドメイン漂流の自動1回リトライ（任意）
-"""
+#
+# 概算見積（movie_app 風 UI）
+# - プロンプト入力 + Gemini 2.5 Flash で JSON 生成
+# - 正規化（カテゴリ/単位/数字）& 金額計算
+# - note（内訳）を保持
+# - （任意）映像ドメインを優先する「軽いガード」
+# - Excel ダウンロード
+# - デバッグ（モデル/finish_reason/RAWプレビュー）
+#
+# 必要: pip install streamlit pandas google-generativeai xlsxwriter
 
 from __future__ import annotations
 
-import json
 import os
-from io import BytesIO
-from typing import Any, Dict, List, Tuple
+import io
+import re
+import json
+import math
+import time
+import datetime as dt
+from decimal import Decimal, InvalidOperation
 
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
-# ---- Gemini ---------------------------------------------------------------
+# Google Generative AI (Gemini)
 import google.generativeai as genai
 
-# ここに環境変数で API キーを入れておくか、直接文字列で設定してください
-# os.environ["GEMINI_API_KEY"] = "YOUR_API_KEY"
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
-# --------------------------------------------------------------------------
-# 画面設定
-# --------------------------------------------------------------------------
-st.set_page_config(
-    page_title="概算見積（Gemini 2.5 Flash）",
-    page_icon="🎬",
-    layout="wide",
-)
+# -----------------------------
+# 設定
+# -----------------------------
+APP_TITLE = "概算見積（movie_app スタイル / Gemini 2.5 Flash）"
+MODEL_NAME = "gemini-2.5-flash"
+TAX_RATE = Decimal("0.10")  # 消費税率 10%
 
-# --------------------------------------------------------------------------
-# 強力なシステム指示（常時有効）
-# --------------------------------------------------------------------------
-SYSTEM_INSTRUCTION_JA = """
-あなたは広告映像制作の見積りを作成するエキスパートです。
-以降のやり取りでは、原則として広告映像の見積りのみを扱います。
-- ただし「備考」に非映像（印刷、配布、Web/サイト制作等）が【明示】されている場合のみ、そのドメインで見積りを作成して構いません。
-- 曖昧な場合は広告映像に限定します。
-- 返答は JSON のみ（マークダウンや説明文を出力しない）。
-- ルートは {"items": [...]}。各要素は {category, task, qty, unit, unit_price, note} を必須。
-- 最低3行以上。管理費（固定：qty=1, unit=式）を必ず含める。
-- note は各行の内訳を端的に記す（例：機材種別、作業範囲、含まれる工程など）。
-"""
+# Streamlit ページ設定
+st.set_page_config(page_title=APP_TITLE, layout="wide")
 
-STRICT_JSON_HEADER = """あなたはJSONバリデータでもあります。以下を満たさない出力は無効です。
-- 返答は JSON のみ。マークダウンや説明文は出力しない。
-- ルート: {"items": [...]}
-- 各要素: {"category": str, "task": str, "qty": int, "unit": str, "unit_price": int, "note": str}
-- 数値は整数、日本円。unit は「式/日/人/部/本/回/曲」など自然な単位を用いる。
-- note は各行の内訳（機材/役割/作業範囲等）を短く明記。
-"""
 
-def _inference_block() -> str:
-    # ドメイン漂流を抑えるためのルール（system_instruction と同じ方向性）
-    return """
-- 原則：広告映像の概算見積りとして作成する。
-- 「備考」に非映像（印刷/配布、Web/サイト制作等）が【明示】されているときのみ、そのドメインを許可。
-- 曖昧なら映像に限定する。
-- 最低3行以上、管理費（固定：qty=1, unit=式）を必ず含める。
-- 各行の note に内訳（機材種別、含まれる工程 等）を簡潔に記す。
-"""
+# -----------------------------
+# API キー設定
+# -----------------------------
+def get_api_key() -> str | None:
+    if "GOOGLE_API_KEY" in st.secrets:
+        return st.secrets["GOOGLE_API_KEY"]
+    return os.environ.get("GOOGLE_API_KEY")
 
-def get_gemini_model():
-    """system_instruction を常時付与した 2.5 Flash モデル"""
-    return genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=SYSTEM_INSTRUCTION_JA
-    )
 
-# --------------------------------------------------------------------------
-# プロンプトビルド
-# --------------------------------------------------------------------------
-def build_structured_prompt(
-    duration_label: str,
-    deliverables: int,
-    shoot_days: int,
-    edit_days: int,
-    notes: str,
-    restrict_video_domain: bool,
-) -> str:
-    domain_guard = "（映像限定で作成）" if restrict_video_domain else "（備考に明示が無ければ映像限定）"
-    return f"""{STRICT_JSON_HEADER}
-{_inference_block()}
+api_key = get_api_key()
+if not api_key:
+    st.error("❌ Google API キーが未設定です。`GOOGLE_API_KEY` を環境変数または `st.secrets` に設定してください。")
+    st.stop()
 
-【案件条件 {domain_guard}】
-- 尺の長さ: {duration_label}
-- 納品本数: {deliverables} 本
-- 撮影日数: {shoot_days} 日
-- 編集日数: {edit_days} 日
-- 備考: {notes if notes else "特になし"}
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel(MODEL_NAME)
 
-出力は JSON のみ（説明は不要）。"""
 
-def build_minimal_prompt() -> str:
-    return f"""{STRICT_JSON_HEADER}
-{_inference_block()}
-【最小要件】最低3行以上、管理費（固定）必須。JSONのみ。"""
+# -----------------------------
+# プロンプト（システム前置き）
+# -----------------------------
+SYSTEM_ROLE = """
+あなたは**広告映像制作の見積りを作成するエキスパート**です。
+日本の映像業界の一般的な区分と相場感に沿って、合理的で説明可能な概算見積のテンプレートを生成します。
 
-def build_seed_prompt() -> str:
-    seed = {
-        "items": [
-            {"category":"制作費","task":"企画構成費","qty":1,"unit":"式","unit_price":50000,"note":"構成案・進行管理"},
-            {"category":"撮影費","task":"カメラマン費","qty":2,"unit":"日","unit_price":80000,"note":"撮影一式"},
-            {"category":"編集費・MA費","task":"編集","qty":3,"unit":"日","unit_price":70000,"note":"編集一式"},
-            {"category":"管理費","task":"管理費（固定）","qty":1,"unit":"式","unit_price":60000,"note":"全体進行"}
-        ]
+必ず JSON だけを返してください。コードフェンスは不要です。
+スキーマ:
+{
+  "items":[
+    {
+      "category": "制作費|撮影費|編集費・MA費|音楽・効果音|その他|管理費",
+      "task": "項目名（例: 企画構成費 / カメラマン費 / 編集費 / MA費 など）",
+      "qty": 数量（整数）,
+      "unit": "式|日|人|曲|本|回|部|式など",
+      "unit_price": 単価（整数・円）,
+      "note": "内訳・条件・補足（日本語で簡潔に。機材/人員/範囲など）"
     }
-    return f"""{STRICT_JSON_HEADER}
-{_inference_block()}
-以下の例に近い構造で、案件条件に合わせた値へ置換して JSON のみを返してください。
-{json.dumps(seed, ensure_ascii=False)}"""
+  ]
+}
 
-# --------------------------------------------------------------------------
-# 生成呼び出し・整形
-# --------------------------------------------------------------------------
-def gemini_call(user_prompt: str) -> Tuple[str, str, Dict[str, Any]]:
-    """
-    Gemini に投げて text, finish_reason, meta を返す。
-    text が空文字のときはモデルの 'to_dict()' から拾えないケースなので空で返す。
-    """
-    model = get_gemini_model()
-    resp = model.generate_content(user_prompt)
+制約:
+- 「note」には内訳（機材・人員・編集工程・拘束時間など）を短文で残す
+- 不明点は常識的に補い、冗長な文章は避ける
+- 金額は整数（円）で出す
+- 映像以外の依頼だと判断できる場合は、そのドメインで自然な見積項目を作成してよい
+- ただし依頼文に映像/動画の意図が読み取れる場合は映像ドメインを優先
 
-    text_out = ""
-    finish = None
+出力以外のテキストは禁止。JSONのみ返すこと。
+""".strip()
 
-    # まずは .text（通常はここに JSON が来る）
-    if hasattr(resp, "text") and resp.text:
-        text_out = resp.text.strip()
 
-    # finish_reason を補足
+# -----------------------------
+# 軽いバリデーション / 正規化
+# -----------------------------
+CANON_UNITS = {
+    "式": {"式", "一式", "パッケージ"},
+    "日": {"日", "day", "days"},
+    "人": {"人", "名"},
+    "曲": {"曲"},
+    "本": {"本"},
+    "回": {"回"},
+    "部": {"部"},
+}
+
+VIDEO_FAVOR_KEYWORDS = {
+    "制作費", "撮影", "編集", "MA", "BGM", "SE", "ナレーション", "スタジオ",
+    "カメラ", "照明", "機材", "撮影機材", "ロケ", "ディレクター", "プロデューサー",
+    "プロジェクト管理", "進行管理", "色調整", "効果音", "音声", "収録"
+}
+
+# カテゴリの優先順（並び替え用）
+CATEGORY_ORDER = {
+    "制作費": 0,
+    "撮影費": 1,
+    "編集費・MA費": 2,
+    "音楽・効果音": 3,
+    "その他": 8,
+    "管理費": 9,
+}
+
+
+def _to_int(v, default=0) -> int:
+    if v is None:
+        return default
+    if isinstance(v, (int, float)):
+        return int(v)
+    s = str(v).strip().replace(",", "")
     try:
-        finish = getattr(resp, "finish_reason", None)
-        if finish is None and getattr(resp, "candidates", None):
-            finish = resp.candidates[0].finish_reason
-    except Exception:
-        pass
+        return int(Decimal(s))
+    except (InvalidOperation, ValueError):
+        return default
 
-    meta = {
-        "prompt_token_count": getattr(getattr(resp, "usage_metadata", None), "prompt_token_count", None),
-        "total_token_count": getattr(getattr(resp, "usage_metadata", None), "total_token_count", None),
-        "finish_reason": finish,
-        "model_used": "gemini-2.5-flash",
-    }
 
-    return text_out, finish, meta
+def _canon_unit(unit: str) -> str:
+    if not unit:
+        return "式"
+    s = str(unit).strip()
+    for k, alts in CANON_UNITS.items():
+        if s in alts:
+            return k
+    # 単位に数字や未知文字が来たら式に寄せる
+    return "式" if len(s) > 3 or any(ch.isdigit() for ch in s) else s
 
-def extract_json_from_text(text: str) -> Dict[str, Any]:
-    """
-    モデル出力から JSON を抽出・パース。
-    - ```json ... ``` や ``` ... ``` のフェンスに対応
-    - それ以外は生文字列そのまま json.loads にかける
-    """
+
+def normalize_items(items: list[dict], video_only_hint: bool) -> list[dict]:
+    """数量/単価/カテゴリ/単位/メモなどを正規化。"""
+    norm = []
+    for raw in items or []:
+        category = str(raw.get("category", "")).strip() or "その他"
+        task = str(raw.get("task", "")).strip() or "未定義"
+        qty = _to_int(raw.get("qty"), 1)
+        unit_price = _to_int(raw.get("unit_price"), 0)
+        unit = _canon_unit(raw.get("unit", "式"))
+        note = str(raw.get("note", "")).strip()
+
+        # あり得ない数値の矯正（マイナス/巨大値など）
+        qty = max(0, min(qty, 10**6))
+        unit_price = max(0, min(unit_price, 10**9))
+
+        # カテゴリゆれを軽く吸収
+        cat_alias = {
+            "編集費": "編集費・MA費",
+            "MA費": "編集費・MA費",
+            "音響": "音楽・効果音",
+            "効果音": "音楽・効果音",
+            "管理費（固定）": "管理費",
+            "企画・構成": "制作費",
+            "制作": "制作費",
+        }
+        category = cat_alias.get(category, category)
+
+        # 動画ドメイン優先ヒントがオン → 明らかに非映像ドメインの可能性が高い（Web, 印刷など）
+        # ただしユーザーが明示している場合は残すため「除外」はせず、優先カテゴリの方へ寄せるだけ
+        if video_only_hint:
+            if any(k in task for k in VIDEO_FAVOR_KEYWORDS) or any(k in note for k in VIDEO_FAVOR_KEYWORDS):
+                pass
+            else:
+                # ざっくり映像寄りのカテゴリに寄せる（タスク名はそのまま）
+                non_video_triggers = {"チラシ", "印刷", "ウェブ", "Web", "LP", "バナー", "DTP", "コピー用紙", "オフィスチェア"}
+                if any(t in task + note for t in non_video_triggers):
+                    # 触らない（ユーザーの意図で非映像も残したいケースがあったため）
+                    pass
+                else:
+                    # どれにも該当しない場合は、制作費に寄せる
+                    category = "制作費"
+
+        # 1行の辞書に正規化
+        norm.append({
+            "category": category,
+            "task": task,
+            "qty": qty,
+            "unit": unit,
+            "unit_price": unit_price,
+            "note": note,
+            "amount": qty * unit_price,
+        })
+
+    # 並び替え（カテゴリ順→管理費は最後、同カテゴリはそのまま）
+    norm.sort(key=lambda r: (CATEGORY_ORDER.get(r["category"], 50)))
+    return norm
+
+
+def compute_totals(rows: list[dict]) -> tuple[int, int, int]:
+    subtotal = sum(r.get("amount", 0) for r in rows)
+    tax = int(Decimal(subtotal) * TAX_RATE)
+    total = subtotal + tax
+    return subtotal, tax, total
+
+
+# -----------------------------
+# JSON 抽出ユーティリティ
+# -----------------------------
+RE_JSON_BLOCK = re.compile(r"\{(?:.|\n)*\}", re.MULTILINE)
+
+def extract_json_from_text(text: str) -> dict | None:
+    """レスポンステキストから最初の JSON ブロックを抽出して読み込む。"""
     if not text:
-        return {}
-
-    s = text.strip()
-    fences = ["```json", "```"]
-    if s.startswith("```"):
-        # 最初の ``` を外して末尾 ``` まで
+        return None
+    # 「```json ... ```」も「{...}」も拾う
+    # まず code fence を優先
+    fence = re.search(r"```json\s*(\{(?:.|\n)*?\})\s*```", text, re.IGNORECASE)
+    if fence:
         try:
-            s_ = s.strip("`")
-            # 先頭に "json" が付いている場合もあるが json.loads は同じ
-            if s_.lower().startswith("json"):
-                s_ = s_[4:].strip()
-            s = s_
+            return json.loads(fence.group(1))
         except Exception:
             pass
+    # 次に最初の { ... } ブロック
+    m = RE_JSON_BLOCK.search(text)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return None
 
-    # たまにコードフェンスが中途半端なことがあるので最後の ``` を除去
-    if s.endswith("```"):
-        s = s[:-3].strip()
+
+# -----------------------------
+# LLM 呼び出し
+# -----------------------------
+def call_gemini(prompt: str) -> dict:
+    """Gemini 呼び出し → JSON 返却（失敗時は空 stub）"""
+    full_prompt = SYSTEM_ROLE + "\n\n" + prompt.strip()
 
     try:
-        data = json.loads(s)
-        if isinstance(data, dict) and "items" in data and isinstance(data["items"], list):
-            return data
-    except Exception:
-        pass
+        res = model.generate_content(full_prompt)
+        # 基本は text を使う
+        text = getattr(res, "text", "") or ""
+        data = extract_json_from_text(text) or {}
 
-    # ダメなら空
-    return {}
+        meta = {
+            "model_used": MODEL_NAME,
+            "finish_reason": getattr(res.candidates[0], "finish_reason", None) if getattr(res, "candidates", None) else None,
+            "usage": getattr(res, "usage_metadata", None),
+            "raw_preview": (text[:1000] + " ...") if len(text) > 1000 else text,
+        }
 
-def add_amount_and_format(df: pd.DataFrame) -> pd.DataFrame:
-    """amount 列を追加（qty*unit_price）し、表示用のフォーマット列は UI 側で設定"""
-    if df.empty:
-        return df
-    df["amount"] = df["qty"].astype(int) * df["unit_price"].astype(int)
-    return df
+        # items が無い・空なら空 stub を返す
+        if not isinstance(data, dict) or "items" not in data:
+            data = {"items": []}
+        return {"data": data, "meta": meta}
 
-def ensure_admin_row(df: pd.DataFrame) -> pd.DataFrame:
-    """管理費（固定）行が無ければ追加する"""
-    if df.empty:
-        return df
-    has_admin = any(df["category"].astype(str).str.contains("管理費", na=False))
-    if not has_admin:
-        df = pd.concat([
-            df,
-            pd.DataFrame([{
-                "category": "管理費",
-                "task": "管理費（固定）",
-                "qty": 1,
-                "unit": "式",
-                "unit_price": 60000,
-                "note": "全体進行・品質管理"
-            }])
-        ], ignore_index=True)
-    return df
+    except Exception as e:
+        return {"data": {"items": []}, "meta": {"error": str(e), "model_used": MODEL_NAME}}
 
-DRIFT_KEYWORDS = ["印刷", "チラシ", "フライヤ", "ポスター", "配送", "配布", "Web", "ウェブ", "サイト制作", "DM", "封入", "折込"]
 
-def looks_like_non_video(items: List[Dict[str, Any]], notes: str) -> bool:
-    """ドメイン漂流（非映像）らしさの簡易検出。備考に明示されていれば True。"""
-    src = notes or ""
-    for it in items or []:
-        src += " " + str(it.get("category", "")) + " " + str(it.get("task", "")) + " " + str(it.get("note", ""))
-    return any(k in src for k in DRIFT_KEYWORDS)
+# -----------------------------
+# Excel ダウンロード
+# -----------------------------
+def build_excel_download(df: pd.DataFrame, subtotal: int, tax: int, total: int) -> bytes:
+    """note 列込みの Excel を作成（XlsxWriter）。"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="estimate")
+        wb = writer.book
+        ws = writer.sheets["estimate"]
 
-# --------------------------------------------------------------------------
+        # 通貨書式
+        fmt_money = wb.add_format({"num_format": "#,##0", "align": "right"})
+        fmt_head = wb.add_format({"bold": True, "bg_color": "#F2F2F2"})
+
+        # 先頭行をヘッダ書式
+        ws.set_row(0, 20, fmt_head)
+
+        # 金額関連列にフォーマット
+        for col_name in ("qty", "unit_price", "amount"):
+            if col_name in df.columns:
+                col_idx = df.columns.get_loc(col_name)
+                ws.set_column(col_idx, col_idx, 12, fmt_money)
+
+        # note 列幅・任意調整
+        if "note" in df.columns:
+            note_idx = df.columns.get_loc("note")
+            ws.set_column(note_idx, note_idx, 50)
+
+        # 最終行の下に totals
+        row = len(df) + 2
+        ws.write(row + 0, 0, "小計（税抜）")
+        ws.write(row + 0, 1, subtotal, fmt_money)
+        ws.write(row + 1, 0, "消費税")
+        ws.write(row + 1, 1, tax, fmt_money)
+        ws.write(row + 2, 0, "合計")
+        ws.write(row + 2, 1, total, fmt_money)
+
+    return output.getvalue()
+
+
+# -----------------------------
 # UI
-# --------------------------------------------------------------------------
-st.title("概算見積（柔軟版：Gemini 2.5 Flash）")
+# -----------------------------
+st.title(APP_TITLE)
 
-with st.expander("入力（自由記入）", expanded=True):
-    colL, colR = st.columns([1, 1])
-    with colL:
-        duration = st.selectbox("尺の長さ", ["15秒", "30秒", "60秒", "90秒", "120秒"], index=1)
-        deliverables = st.number_input("納品本数", min_value=1, max_value=20, value=1, step=1)
-    with colR:
-        shoot_days = st.number_input("撮影日数", min_value=0, max_value=30, value=2, step=1)
-        edit_days = st.number_input("編集日数", min_value=0, max_value=60, value=3, step=1)
+with st.expander("入力（プロンプト）", expanded=True):
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        st.markdown("**案件条件（自由記入）**")
+        default_text = (
+            "案件:\n"
+            "- 30秒、納品1本\n"
+            "- 撮影2日 / 編集3日\n"
+            "- 構成: 通常的な広告映像（インタビュー無し）\n"
+            "- 参考: 撮影は都内スタジオ、キャスト1名、MAあり\n"
+        )
+        user_free = st.text_area(" ", value=default_text, height=180, label_visibility="collapsed")
 
-    notes = st.text_area(
-        "備考（自由記入）",
-        placeholder="例：スタジオ撮影、出演者1名、MAあり など（※印刷/Web等は明示した場合のみ可）",
-        height=110,
-    )
-    restrict_video = st.checkbox("映像ドメインに限定（印刷/媒体/Web を含めない）", value=False)
+    with c2:
+        st.markdown("**補足オプション**")
+        hint_video_only = st.checkbox("映像ドメインを優先（印刷/Webを含めないわけではない）", value=True)
+        st.caption("※ 完全なフィルタではなく、映像系カテゴリへ軽く寄せるヒントです。")
+        st.markdown("---")
+        st.markdown("**注意**: 生成は *Gemini 2.5 Flash* を使用。返答不安定時は備考を少し具体化して再生成してください。")
 
-st.write("---")
+btn = st.button("▶︎ 見積アイテムを生成（Gemini 2.5 Flash）", type="primary")
 
-# 生成ボタン
-btn = st.button("▶ 見積アイテムを生成（Gemini 2.5 Flash）", type="primary")
-
-# セッション状態で表を持つ（DLしても消えない）
-if "df_result" not in st.session_state:
-    st.session_state.df_result = pd.DataFrame()
-if "meta_result" not in st.session_state:
-    st.session_state.meta_result = {}
+st.markdown("---")
 
 if btn:
-    # 1st トライ
-    prompt = build_structured_prompt(duration, deliverables, shoot_days, edit_days, notes, restrict_video)
-    text, finish, meta = gemini_call(prompt)
+    with st.spinner("生成中..."):
+        call = call_gemini(user_free)
 
-    data = extract_json_from_text(text)
-    run_count = 1
+    data = call["data"]
+    meta = call["meta"]
 
-    # 失敗（空 or items 無し）の場合、保険で最小/シードを順に当てる
-    if not data.get("items"):
-        run_count += 1
-        text2, finish2, _ = gemini_call(build_minimal_prompt())
-        data = extract_json_from_text(text2)
+    # モデルメタ
+    with st.expander("モデル情報", expanded=False):
+        st.write({k: v for k, v in meta.items() if k != "raw_preview"})
+        st.text_area("RAWテキスト（プレビュー）", meta.get("raw_preview", ""), height=180)
 
-    if not data.get("items"):
-        run_count += 1
-        text3, finish3, _ = gemini_call(build_seed_prompt())
-        data = extract_json_from_text(text3)
-
-    # 漂流検知（備考に映像外が明示でない・かつ restrict_video=ON のときのみ、1回だけ映像限定リトライ）
-    if data.get("items") and restrict_video and looks_like_non_video(data["items"], notes):
-        run_count += 1
-        strict_prompt = build_structured_prompt(duration, deliverables, shoot_days, edit_days, notes + "（映像に限定して作成）", True)
-        text4, finish4, _ = gemini_call(strict_prompt)
-        data2 = extract_json_from_text(text4)
-        if data2.get("items"):
-            data = data2
-
-    # DataFrame 化
+    # 正規化
     items = data.get("items", [])
-    if items:
-        df = pd.DataFrame(items, columns=["category", "task", "qty", "unit", "unit_price", "note"])
-        # 型整形
-        for c in ("qty", "unit_price"):
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
-        df = ensure_admin_row(df)
-        df = add_amount_and_format(df)
-        st.session_state.df_result = df.copy()
-    else:
-        st.session_state.df_result = pd.DataFrame()
+    norm_rows = normalize_items(items, video_only_hint=hint_video_only)
 
-    # メタ情報
-    meta["runs"] = run_count
-    st.session_state.meta_result = meta
+    # DataFrame
+    df = pd.DataFrame(norm_rows, columns=["category", "task", "qty", "unit", "unit_price", "note", "amount"])
+    subtotal, tax, total = compute_totals(norm_rows)
 
-# モデル情報
-if st.session_state.meta_result:
-    meta = st.session_state.meta_result
-    st.info(
-        f"モデル: {meta.get('model_used')} / 行数: {meta.get('runs')} / finish: {meta.get('finish_reason')}  "
-        f"/ prompt_tokens: {meta.get('prompt_token_count')} / total_tokens: {meta.get('total_token_count')}"
-    )
-
-# 結果表示
-df_show = st.session_state.df_result.copy()
-
-if df_show.empty:
-    st.warning("items が空でした。備考をもう少し具体的にすると安定します。")
-else:
-    # 表示
+    # 結果表示
     st.subheader("見積アイテム（note＝内訳を保持）")
-    fmt_df = df_show.copy()
-    # 表示用フォーマット
-    fmt_df["qty"] = fmt_df["qty"].map(lambda x: f"{x:,}")
-    fmt_df["unit_price"] = fmt_df["unit_price"].map(lambda x: f"{x:,}")
-    fmt_df["amount"] = fmt_df["amount"].map(lambda x: f"{x:,}")
+    st.caption(f"モデル: {meta.get('model_used')} / 行数: {len(df)} / finish: {meta.get('finish_reason')}")
+    st.dataframe(df, use_container_width=True)
 
-    st.dataframe(
-        fmt_df[["category", "task", "qty", "unit", "unit_price", "note", "amount"]],
-        use_container_width=True,
-        hide_index=True,
-        height=min(480, 120 + 35 * len(fmt_df)),
-    )
+    # 合計
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("小計（税抜）", f"{subtotal:,.0f} 円")
+    with c2:
+        st.metric("消費税", f"{tax:,.0f} 円")
+    with c3:
+        st.metric("合計", f"{total:,.0f} 円")
 
-    # 小計
-    subtotal = st.session_state.df_result["amount"].sum()
-    tax = int(round(subtotal * 0.10))
-    total = subtotal + tax
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("小計（税抜）", f"{subtotal:,} 円")
-    with col2:
-        st.metric("消費税", f"{tax:,} 円")
-    with col3:
-        st.metric("合計", f"{total:,} 円")
-
-    # Excel ダウンロード（note入り、表は消えない）
-    def to_excel_bytes(df: pd.DataFrame) -> bytes:
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            df.to_excel(writer, sheet_name="estimate", index=False)
-        return output.getvalue()
-
-    xls = to_excel_bytes(st.session_state.df_result)
+    # Excel DL
+    excel_bytes = build_excel_download(df, subtotal, tax, total)
     st.download_button(
         "📥 Excelダウンロード（note入り）",
-        data=xls,
-        file_name="estimate_items.xlsx",
+        data=excel_bytes,
+        file_name=f"estimate_{dt.datetime.now():%Y%m%d_%H%M}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=False,
     )
 
-# Debug（任意）
-with st.expander("デバッグ：生成 RAW（JSONテキストとして整形前）", expanded=False):
-    st.caption("モデルが ```json フェンスで返す場合があるので、そのまま貼っています。")
-    # 直近呼び出しテキストは保持していないため、UI簡潔化の都合で省略
-
-st.write("※ フィルタ除去は行いません。備考に応じて「映像ドメインに限定」チェックでガードをかけられます。")
+else:
+    st.info("左上のプロンプトを編集して『見積アイテムを生成』を押してください。")
