@@ -20,13 +20,22 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# フォント（Dela Gothic One）適用
+# フォント（Dela Gothic One）をアプリ全体へ強制適用
 # =========================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
-html, body, [class*="css"], .stApp {
-    font-family: 'Dela Gothic One', sans-serif !important;
+
+/* Streamlit本体のルートと、その配下すべてに強制適用 */
+html, body { font-family: 'Dela Gothic One', sans-serif !important; }
+
+/* アプリ領域全体（中央カラム・サイドバー・ウィジェット内部まで） */
+.stApp, .stApp * ,
+[data-testid="stMarkdownContainer"] * ,
+[data-testid="stSidebar"] * ,
+.stTextInput input, .stTextArea textarea, .stSelectbox div, .stButton button,
+.stChatInput textarea, [data-baseweb] * {
+  font-family: 'Dela Gothic One', sans-serif !important;
 }
 </style>
 """, unsafe_allow_html=True)
