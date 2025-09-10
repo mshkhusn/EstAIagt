@@ -47,8 +47,52 @@ footer, [data-testid="stToolbar"], [data-testid="stStatusWidget"] {
 
 /* --- 入力系 --- */
 .stTextInput label, .stTextArea label, .stSelectbox label {
-  color:#fff !
+  color:#fff !important;
+}
+.stTextInput input, .stTextArea textarea, .stSelectbox div {
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stTextInput input::placeholder,
+.stTextArea textarea::placeholder,
+.stChatInput textarea::placeholder {
+  color:#ddd !important;
+}
+/* パスワード目アイコン */
+.stTextInput [data-baseweb="button"]{
+  background:#333 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
 
+/* --- ボタン --- */
+.stButton button {
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
+.stButton button:hover { background:#2c2c2c !important; }
+
+/* --- チャット --- */
+[data-testid="stChatMessage"] {
+  background:transparent !important;   /* ← 黒やグレーをやめて透明 */
+  border:none !important;
+  border-radius:14px !important;
+}
+[data-testid="stChatInput"] {
+  background:transparent !important;
+}
+[data-testid="stChatInput"]>div {
+  background:transparent !important;
+}
+.stChatInput textarea {
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stChatInput [data-baseweb="button"] {
+  background:#222 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # =========================
