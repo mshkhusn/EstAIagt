@@ -159,6 +159,14 @@ html, body { background:#000 !important; }
               0 0 24px rgba(0, 195, 255, 0.4) !important;
   outline: none !important;
 }
+/* ===== 入力欄の文字を細くして視認性UP ===== */
+.stTextInput input,
+.stTextArea textarea,
+.stChatInput textarea {
+  font-weight: 400 !important;   /* ← 細めに戻す */
+  font-size: 16px !important;    /* ← お好みで調整 */
+  color: #fff !important;        /* 白文字を維持 */
+}
 
 
 </style>
