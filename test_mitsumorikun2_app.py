@@ -24,10 +24,47 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-/* ===========================
-   ① ダウンロードボタンも同じ見た目に
-   =========================== */
-/* 生成ボタンと同じトーンを .stDownloadButton にも適用 */
+@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
+
+/* --- ベース: 黒背景 + フォント --- */
+html, body {
+  background:#000 !important;
+}
+.stApp, .stApp * {
+  background:transparent !important;
+  color:#fff !important;
+  font-family:'Mochiy Pop One',sans-serif !important;
+  font-weight:400 !important;
+  font-synthesis-weight:none !important;
+}
+
+/* --- ヘッダー／フッター --- */
+header, [data-testid="stHeader"],
+footer, [data-testid="stToolbar"], [data-testid="stStatusWidget"] {
+  background:transparent !important;
+  border:none !important;
+}
+
+/* --- 入力欄 --- */
+.stTextInput label, .stTextArea label, .stSelectbox label {
+  color:#fff !important;
+}
+.stTextInput input, .stTextArea textarea, .stSelectbox div {
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stTextInput input::placeholder,
+.stTextArea textarea::placeholder,
+.stChatInput textarea::placeholder {
+  color:#ddd !important;
+}
+/* パスワード欄の目アイコン */
+.stTextInput [data-baseweb="button"]{
+  background:#333 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
+
+/* --- ボタン共通 --- */
 .stButton button,
 .stDownloadButton > button {
   background:#222 !important;
@@ -43,27 +80,42 @@ st.markdown("""
   border-color:#777 !important;
 }
 
-/* ===========================
-   ② ファイルアップロード枠をはっきり表示
-   =========================== */
-/* 外枠：黒テーマに合わせたフレーム */
+/* --- チャット --- */
+[data-testid="stChatMessage"] {
+  background:transparent !important;
+  border:none !important;
+  border-radius:14px !important;
+}
+[data-testid="stChatInput"] {
+  background:transparent !important;
+}
+[data-testid="stChatInput"]>div {
+  background:transparent !important;
+}
+.stChatInput textarea {
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stChatInput [data-baseweb="button"] {
+  background:#222 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+
+/* --- ファイルアップロード --- */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {
   background:#111 !important;
   border:1.5px solid #666 !important;
   border-radius:12px !important;
   color:#fff !important;
 }
-/* ドロップ領域内のテキスト */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] * {
   color:#fff !important;
 }
-/* アイコン（雲マーク等）も白に */
 [data-testid="stFileUploader"] svg,
 [data-testid="stFileUploader"] svg * {
   fill:#fff !important;
   color:#fff !important;
 }
-/* 右側の “Browse files” ボタンもダーク化 */
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
   background:#222 !important;
   color:#fff !important;
@@ -76,6 +128,7 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
