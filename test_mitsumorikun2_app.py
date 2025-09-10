@@ -225,11 +225,11 @@ st.markdown("""
   letter-spacing:-1px;
 }
 
-/* 2行目：くん2（さらに上げて行間をギュッと） */
+/* 2行目：くん2（さらにギュッと詰める） */
 .logo-kunrow{
   text-align:center;
   line-height:1.0;
-  margin-top:-20px;       /* ← 強めに上げる（-16〜-20で調整可） */
+  margin-top:-28px;       /* ← 行間を極限まで詰める */
   letter-spacing:-1px;
 }
 .logo-box .kun{
@@ -257,6 +257,7 @@ st.markdown("""
   </div>
 </div>
 """, unsafe_allow_html=True)
+
 
 password = st.text_input("パスワードを入力してください", type="password")
 
