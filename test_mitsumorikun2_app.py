@@ -109,19 +109,33 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-/* ===== Chat Avatar 色変更 ===== */
+/* ===== Chat Avatar 色変更（強制上書き版） ===== */
 
-/* アシスタント（AI）のアイコン色 */
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"] {
-  background-color: #a64dff !important; /* ネオンパープル */
-  color: #fff !important;               /* アイコン中身は白で見やすく */
+/* まずは全てのチャットアバターを拾う（st の実装差分に強いセレクタ） */
+.stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
+.stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
+  background: #a64dff !important;   /* デフォ：AI用ネオンパープル */
+  color: #ffffff !important;
+  border-radius: 12px !important;    /* デフォの角丸を活かす */
 }
 
-/* ユーザーのアイコン色 */
-[data-testid="stChatMessage"][data-testid*="user"] [data-testid="stChatMessageAvatar"] {
-  background-color: #00eaff !important; /* ネオンシアン */
-  color: #000 !important;               /* 中身は黒にしてコントラスト確保 */
+/* ユーザー側だけ色変え（:has が効く環境／または testid に user を含む環境） */
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"],
+.stApp [data-testid="stChatMessage"][data-testid*="user"] [data-testid*="Avatar"],
+.stApp [data-testid="stChatMessage"] [data-testid*="user"] [data-testid*="Avatar"] {
+  background: #00eaff !important;   /* ネオンシアン */
+  color: #000000 !important;
 }
+
+/* 中に入っている svg / img / span にも念のため色を伝搬 */
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] svg,
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] img,
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] span {
+  background: transparent !important;
+  color: inherit !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
