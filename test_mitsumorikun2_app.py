@@ -181,27 +181,26 @@ if st.session_state["chat_history"] is None:
 # =========================
 # 認証
 # =========================
-# ====== タイトルロゴ（中央配置・巨大・pill枠・下マージン広め） ======
 st.markdown("""
 <style>
 /* ページ中央に配置するラッパ */
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
   width:100%;
-  margin: 24px 0 40px 0; /* ← 下の余白を多めにしてパスワード欄と間隔をあける */
+  margin: 24px 0 40px 0;
 }
 
 /* 外側：グラデ楕円フチ */
 .logo-pill{
   display:inline-block;
-  padding: 6px;                                           /* 枠の太さ */
-  border-radius: 9999px !important;                       /* pill型の楕円 */
+  padding: 8px;                                           /* 枠の太さ */
+  border-radius: 9999px !important;
   background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
 }
 
-/* 内側：黒塗り背景 */
+/* 内側：黒背景 */
 .logo-box{
-  padding: 28px 72px;                                     /* 内側の余白（全体サイズUP） */
+  padding: 32px 80px;                                     /* 内側をさらに大きく */
   border-radius: 9999px !important;
   background:#000 !important;
   font-family:'Mochiy Pop One',sans-serif;
@@ -214,35 +213,38 @@ st.markdown("""
   gap: 4px; line-height:1.0; margin:0;
 }
 .logo-box .ai{
-  font-size: 96px;        /* ← デカく */
-  font-weight: 900;
+  font-size: 110px;          /* ← デカく */
+  font-weight: 1000;
   color:#ff4df5 !important;
-  margin-right:0px;
-  letter-spacing:-3px;    /* ← 文字詰め */
+  letter-spacing:-4px;
+  -webkit-text-stroke: 3px #ff4df5;   /* ← 輪郭で極太化 */
 }
 .logo-box .mitsumori{
-  font-size: 64px;        /* ← 見積もりは少し小さく */
-  font-weight: 900;
+  font-size: 72px;
+  font-weight: 1000;
   color:#ffffff !important;
-  letter-spacing:-2px;
+  letter-spacing:-3px;
+  -webkit-text-stroke: 3px #ffffff;
 }
 
 /* 2行目：くん2 */
 .logo-kunrow{
   text-align:center;
   line-height:1.0;
-  margin-top:-14px;       /* ← 行間を詰める */
+  margin-top:-16px;         /* 行間さらに詰める */
   letter-spacing:-2px;
 }
 .logo-box .kun{  
   color:#ffffff !important;
-  font-size: 44px;        /* ↑ 大きく */
-  font-weight:900;
+  font-size: 52px;
+  font-weight:1000;
+  -webkit-text-stroke: 2px #ffffff;
 }
 .logo-box .num2{ 
   color:#ff4df5 !important;
-  font-size: 44px;        /* ↑ 大きく */
-  font-weight:900;
+  font-size: 52px;
+  font-weight:1000;
+  -webkit-text-stroke: 2px #ff4df5;
 }
 </style>
 
@@ -259,7 +261,6 @@ st.markdown("""
   </div>
 </div>
 """, unsafe_allow_html=True)
-
 
 password = st.text_input("パスワードを入力してください", type="password")
 
