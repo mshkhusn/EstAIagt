@@ -268,7 +268,22 @@ if password != APP_PASSWORD:
 # =========================
 # チャットUI
 # =========================
-st.header("AI見積もりくんにチャットで相談して見積もりを生成しよう！")
+st.markdown("""
+<style>
+.custom-header {
+  color: #90fb0f !important;   /* ← ネオンライム */
+  font-size: 28px !important;  /* 見出しサイズ（調整可） */
+  font-weight: 900 !important;
+  margin-top: 20px !important;
+  margin-bottom: 20px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown(
+    '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
+    unsafe_allow_html=True
+)
 
 
 for msg in st.session_state["chat_history"]:
