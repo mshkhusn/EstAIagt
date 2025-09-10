@@ -197,22 +197,25 @@ st.markdown("""
 
 .logo-box .ai{
   font-size: 42px;
-  font-weight: 900;
-  color:#ff4df5 !important;   /* AI → ピンク */
-  margin-right:8px;
+  font-weight: 900;         /* ボールド */
+  color:#ff4df5 !important;
+  margin-right:4px;         /* ← 間隔を小さく */
 }
+
 .logo-box .mitsumori{
   font-size: 32px;
-  font-weight: 700;
-  color:#ffffff !important;   /* 見積もり → 白 */
+  font-weight: 900;         /* ボールド */
+  color:#ffffff !important;
 }
+
 .logo-box .kun2{
   display:block;
   font-size: 22px;
-  font-weight: 700;
-  color:#a64dff !important;   /* くん２ → パープル */
-  margin-top:4px;
+  font-weight: 900;         /* ボールド */
+  color:#a64dff !important;
+  margin-top:2px;           /* ← 行間を詰める */
 }
+
 </style>
 
 <div class="logo-box">
