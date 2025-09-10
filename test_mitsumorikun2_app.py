@@ -178,7 +178,11 @@ html, body { background:#000 !important; }
   font-family: "Helvetica", "Arial", sans-serif !important;  /* 入力欄と同じ細めフォント */
   color: #fff !important;
 }
-
+/* ===== チャット履歴内の太字を細字に戻す ===== */
+[data-testid="stChatMessage"] strong,
+[data-testid="stChatMessage"] b {
+  font-weight: 400 !important;   /* 細字に上書き */
+}
 
 </style>
 """, unsafe_allow_html=True)
