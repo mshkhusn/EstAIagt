@@ -80,28 +80,24 @@ html, body { background:#000 !important; }
   border:1px solid #555 !important; border-radius:10px !important;
 }
 
-/* ===== File Uploader：枠＆雲アイコン（左） ===== */
+/* ===== File Uploader ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{
   position:relative !important;
   background:#111 !important; color:#fff !important;
   border:1.5px solid #666 !important; border-radius:12px !important;
-  padding-left:64px !important; /* 雲用の余白 */
+  padding-left:64px !important;
 }
-/* 既定の白い四角/SVGを非表示 */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg{ display:none !important; }
-/* 互換：SVGラッパがあれば透明化 */
 @supports selector(div:has(> svg)){
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg){
     background:transparent !important; border:none !important;
   }
 }
-/* 擬似要素で白い雲アイコンを左に表示 */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{
   content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
   width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }
-/* 右側の Browse ボタンもダークに */
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
@@ -109,9 +105,8 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-/* ===== Chat Avatar 色変更（ライム＆パープル） ===== */
 
-/* デフォルト（AI側）: ネオンパープル */
+/* ===== Chat Avatar 色変更（ライム＆パープル） ===== */
 .stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
 .stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
@@ -119,16 +114,12 @@ html, body { background:#000 !important; }
   color: #ffffff !important;
   border-radius: 12px !important;
 }
-
-/* ユーザー側だけネオンライムに */
 .stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"],
 .stApp [data-testid="stChatMessage"][data-testid*="user"] [data-testid*="Avatar"],
 .stApp [data-testid="stChatMessage"] [data-testid*="user"] [data-testid*="Avatar"] {
   background: #00e08a !important;   /* User: ネオンライム */
   color: #000000 !important;
 }
-
-/* 中のアイコン(svg/img/span)も色を合わせる */
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] svg,
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] img,
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] span {
@@ -136,25 +127,21 @@ html, body { background:#000 !important; }
   color: inherit !important;
 }
 
-/* 見積もり結果プレビューの見出しをスプラトゥーン風カラーに */
+/* ===== 見積もり結果プレビュー見出し ===== */
 .preview-title{
-  font-size: 28px !important;
+  font-size: 32px !important;
   line-height: 1.4 !important;
-  font-weight: 800 !important;
-  margin: 0.3rem 0 0.8rem !important;
-  text-align: center; /* 見出し感を出すため中央寄せ */
-  
-  /* スプラっぽいネオンカラーグラデーション */
-  background: linear-gradient(90deg, #ff4df5, #00e08a, #a64dff, #00c3ff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-weight: 900 !important;
+  text-align: center;
+  color: #00e08a !important;  /* ネオンライム */
+  text-shadow:
+    0 0 6px rgba(0,224,138,0.7),
+    0 0 14px rgba(0,224,138,0.5),
+    0 0 20px rgba(0,224,138,0.3);
 }
-
-
-
-
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
