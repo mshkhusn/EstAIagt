@@ -133,9 +133,9 @@ html, body { background:#000 !important; }
   line-height: 1.4 !important;
   font-weight: 900 !important;
   text-align: left;
-  color: #00e08a !important;
+  color: #78f416 !important;   /* ← 指定のカラー */
   text-shadow: none !important;
-  margin-bottom: 16px !important;   /* ← 下に余白を追加 */
+  margin-bottom: 16px !important;
 }
 
 </style>
