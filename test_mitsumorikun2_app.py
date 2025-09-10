@@ -109,40 +109,22 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-/* ===== Chat Avatar 枠線追加 ===== */
+</style>
+/* ===== Chat Avatar：白枠をつける ===== */
 [data-testid="stChatMessageAvatar"] {
-  border: 2px solid #ffffff !important;  /* 白枠 */
-  border-radius: 50% !important;         /* 丸く */
-  padding: 2px !important;               /* アイコンと枠の間に少し余白 */
-  background-color: #000 !important;     /* 背景を黒で統一 */
-}
-/* ===== Chat Avatar：白いリング枠を追加 ===== */
-/* ラッパ自体に丸枠（レイアウトを崩さないよう border ではなく box-shadow でリングを描画） */
-.stApp [data-testid="stChatMessageAvatar"]{
-  position: relative !important;
-  display: inline-flex !important;
-  align-items: center; justify-content: center;
-  width: 36px !important; height: 36px !important;
-  min-width: 36px !important; min-height: 36px !important;
   border-radius: 50% !important;
-  background: #000 !important;               /* 黒ベースに統一 */
-  box-shadow: 0 0 0 2px #ffffff !important;  /* ← 白いリング枠 */
+  background-color: #000 !important;   /* 黒ベース */
+  box-shadow: 0 0 0 2px #fff !important; /* 白いリング風の枠 */
+  padding: 2px !important;
 }
 
-/* 中のアイコン（img / svg）も丸に揃えて中央に */
-.stApp [data-testid="stChatMessageAvatar"] img,
-.stApp [data-testid="stChatMessageAvatar"] svg{
-  width: 28px !important; height: 28px !important;
-  border-radius: 50% !important;
-}
-
-/* 念のため：一部テーマで avatar を包む子divがある場合 */
-.stApp [data-testid="stChatMessageAvatar"] > div{
+/* アイコン画像/svgも丸く整形 */
+[data-testid="stChatMessageAvatar"] img,
+[data-testid="stChatMessageAvatar"] svg {
   border-radius: 50% !important;
   background: transparent !important;
 }
 
-</style>
 """, unsafe_allow_html=True)
 
 
