@@ -159,13 +159,14 @@ html, body { background:#000 !important; }
               0 0 24px rgba(0, 195, 255, 0.4) !important;
   outline: none !important;
 }
-/* ===== 入力欄の文字を細くして視認性UP ===== */
+/* ===== 入力欄の文字を細字化（サイズ据え置き） ===== */
 .stTextInput input,
 .stTextArea textarea,
 .stChatInput textarea {
-  font-weight: 400 !important;   /* ← 細めに戻す */
-  font-size: 16px !important;    /* ← お好みで調整 */
-  color: #fff !important;        /* 白文字を維持 */
+  font-family: "Helvetica", "Arial", sans-serif !important;  /* 細めの標準フォント */
+  font-weight: 300 !important;   /* 細字に */
+  font-size: 16px !important;    /* ← 現状のまま維持 */
+  color: #fff !important;
 }
 
 
