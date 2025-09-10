@@ -1,4 +1,4 @@
-# app.py （AI見積もりくん２）
+# app.py （AI見積もりくん２ / スプラ風：画像ベースのインク + 白文字）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
 # 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
@@ -20,7 +20,7 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# カスタムCSS（スプラ3風＋白文字統一＋インク背景）
+# カスタムCSS（SVGインク画像をdataURIで埋め込み）
 # =========================
 st.markdown("""
 <style>
@@ -31,22 +31,19 @@ st.markdown("""
   --green:#39ff14;
   --cyan:#00faff;
   --ink:#000000;
-  --ink-1:#0b0b0b;
   --ink-2:#101010;
   --ink-3:#161616;
-  --text:#ffffff; /* 文字は白で統一 */
 }
 
-/* 全体 */
-.stApp{ background:var(--ink); color:var(--text); }
-.block-container{ padding-top:10px; max-width:880px; position: relative; z-index: 1; }
+.stApp{ background:var(--ink); color:#fff; }
+.block-container{ padding-top:10px; max-width:880px; position:relative; z-index:1; }
 
 /* 見出し（グラデ文字） */
 h1,h2,h3{
   font-family:"Mochiy Pop One","M PLUS Rounded 1c",system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;
   font-weight:900 !important;
   line-height:1.18;
-  margin:4px 0 10px 0;
+  margin:6px 0 10px 0;
   background:linear-gradient(90deg,var(--pink),var(--green),var(--cyan));
   -webkit-background-clip:text; -webkit-text-fill-color:transparent;
   letter-spacing:.02em;
@@ -67,7 +64,7 @@ h1,h2,h3{
 }
 .logo-text{ font:900 1.25rem "Mochiy Pop One","M PLUS Rounded 1c",sans-serif; color:#fff; }
 
-/* セクション枠（グラデ枠＋詰めた余白） */
+/* セクション枠（グラデ枠） */
 .splat-frame{
   border:3px solid transparent; border-radius:16px;
   padding:.55rem .8rem; margin:8px 0 12px 0;
@@ -76,15 +73,10 @@ h1,h2,h3{
 }
 .splat-frame h2{ margin:0; font-size:1.06rem; }
 
-/* ヒント */
-.small-note{ color:#d7fbe3; font-size:.9rem; line-height:1.45; }
-
-/* ボタン：白文字＆発光 */
+/* ボタン（白文字＋発光） */
 .stButton>button{
   background:linear-gradient(90deg,var(--pink),var(--green));
-  color:#fff;
-  font-weight:900;
-  border:none; border-radius:12px;
+  color:#fff; font-weight:900; border:none; border-radius:12px;
   padding:.66rem 1.05rem;
   box-shadow:0 10px 28px rgba(0,255,170,.18), inset 0 0 12px rgba(255,255,255,.18);
   transition:transform .12s ease, box-shadow .2s ease, background .2s ease;
@@ -95,19 +87,18 @@ h1,h2,h3{
   box-shadow:0 14px 36px rgba(0,255,170,.25), inset 0 0 18px rgba(255,255,255,.22);
 }
 
-/* チャット気泡：白文字強制＆コントラスト */
+/* チャット気泡：白文字・コントラスト */
 .stChatMessage[data-testid="stChatMessage"]{
   background:var(--ink-3);
   color:#fff !important;
-  border-radius:14px;
-  border:2px solid transparent;
+  border-radius:14px; border:2px solid transparent;
   padding:.55rem .75rem; margin-bottom:.45rem;
   background:linear-gradient(var(--ink-3),var(--ink-3)) padding-box,
              linear-gradient(90deg,var(--pink),var(--green)) border-box;
 }
 .stChatMessage *{ color:#fff !important; opacity:1 !important; }
 
-/* 入力欄（送信ボタン含む） */
+/* 入力欄 */
 .stChatInput textarea{
   background:var(--ink-2); color:#fff;
   border:2px solid transparent; border-radius:12px;
@@ -116,21 +107,20 @@ h1,h2,h3{
 }
 .stChatInput [data-baseweb="button"]{
   background:linear-gradient(90deg,var(--pink),var(--green));
-  border-radius:12px; border:none; color:#fff;
-  font-weight:900;
+  border-radius:12px; border:none; color:#fff; font-weight:900;
   box-shadow:0 10px 24px rgba(0,255,170,.18);
 }
 
-/* DataFrameの器：暗色＆グラデ枠＋ヘッダー視認性 */
-.stDataFrame, .stDataFrame > div{ background:var(--ink-1) !important; color:#fff !important; }
+/* DataFrame容器 */
+.stDataFrame, .stDataFrame > div{ background:#0b0b0b !important; color:#fff !important; }
 [data-testid="stDataFrameResizable"]{
   border:2px solid transparent; border-radius:12px;
-  background:linear-gradient(var(--ink-1),var(--ink-1)) padding-box,
+  background:linear-gradient(#0b0b0b,#0b0b0b) padding-box,
              linear-gradient(90deg,var(--pink),var(--green)) border-box;
 }
 [data-testid="stDataFrame"] th{ background:#121212 !important; color:#fff !important; }
 
-/* 一般コンポ（入力/アップローダ） */
+/* 一般コンポ */
 .stTextInput>div>div>input, .stFileUploader > div{
   background:var(--ink-2); color:#fff;
   border:2px solid transparent; border-radius:10px;
@@ -138,7 +128,7 @@ h1,h2,h3{
              linear-gradient(90deg,var(--green),var(--cyan)) border-box;
 }
 
-/* アラートのコントラスト */
+/* アラート */
 .stAlert{
   background:#131313; border:2px solid transparent; border-radius:12px;
   background:linear-gradient(#131313,#131313) padding-box,
@@ -146,39 +136,69 @@ h1,h2,h3{
   color:#fff;
 }
 
-/* ======== インク・スプラッシュ（装飾） ======== */
-.ink-stage{
-  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+/* ====== SVGインク（画像）レイヤー ====== */
+.ink-stage{ position:fixed; inset:0; pointer-events:none; z-index:0; }
+.splat{
+  position:absolute; width:360px; height:360px; background-size:contain; background-repeat:no-repeat;
+  filter: drop-shadow(0 10px 28px rgba(0,255,170,.18));
+  opacity:.95; transform: rotate(0.001deg); /* subpixel レンダ対策 */
 }
-/* 各インクは放射グラデにボカし＋発光 */
-.ink{ position:absolute; filter: blur(6px) drop-shadow(0 0 28px rgba(0,255,170,.18)); opacity:.9; }
-.ink--pink{
-  width: 280px; height: 220px; top: 70px; left: -60px;
-  background: radial-gradient(60% 60% at 40% 50%, rgba(255,45,252,.9), rgba(255,45,252,.55) 60%, transparent 65%);
-  transform: rotate(-8deg);
-  clip-path: polygon(60% 0, 85% 15%, 100% 40%, 90% 70%, 65% 85%, 35% 85%, 10% 70%, 0 40%, 15% 15%);
-}
-.ink--green{
-  width: 220px; height: 200px; top: 46%; right: -50px;
-  background: radial-gradient(60% 60% at 45% 50%, rgba(57,255,20,.9), rgba(57,255,20,.55) 60%, transparent 65%);
-  transform: rotate(14deg);
-  clip-path: polygon(55% 0, 85% 20%, 100% 45%, 85% 75%, 55% 95%, 30% 80%, 10% 55%, 15% 25%);
-}
-.ink--cyan{
-  width: 260px; height: 230px; bottom: 30px; left: 15%;
-  background: radial-gradient(60% 60% at 50% 50%, rgba(0,250,255,.9), rgba(0,250,255,.55) 60%, transparent 65%);
-  transform: rotate(-18deg);
-  clip-path: polygon(50% 0, 80% 15%, 100% 40%, 90% 70%, 65% 90%, 35% 90%, 10% 70%, 0 40%, 20% 15%);
-}
+/* 左上：マゼンタ */
+.splat--pink{ top:-40px; left:-60px; transform:rotate(-12deg); }
+.splat--pink{ background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'>\
+  <defs>\
+    <radialGradient id='g' cx='48%' cy='46%' r='55%'>\
+      <stop offset='0%' stop-color='%23ff77fe'/>\
+      <stop offset='65%' stop-color='%23ff2dfc'/>\
+      <stop offset='100%' stop-color='rgba(255,45,252,0)'/>\
+    </radialGradient>\
+  </defs>\
+  <path fill='url(%23g)' d='M280,60 C360,40 470,80 520,170 C560,240 560,330 510,390 C450,460 350,520 260,510 C160,500 90,430 80,350 C70,260 120,190 190,140 C220,120 240,80 280,60 Z'/>\
+  <circle cx='320' cy='160' r='32' fill='white' fill-opacity='.28'/>\
+  <circle cx='350' cy='185' r='12' fill='white' fill-opacity='.22'/>\
+</svg>"); }
+
+/* 右中段：ライム */
+.splat--green{ right:-70px; top:38%; transform:rotate(16deg) scale(0.9); }
+.splat--green{ background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'>\
+  <defs>\
+    <radialGradient id='g2' cx='45%' cy='42%' r='58%'>\
+      <stop offset='0%' stop-color='%239cff7a'/>\
+      <stop offset='62%' stop-color='%2339ff14'/>\
+      <stop offset='100%' stop-color='rgba(57,255,20,0)'/>\
+    </radialGradient>\
+  </defs>\
+  <path fill='url(%23g2)' d='M310,70 C400,80 500,150 525,240 C550,330 495,420 415,470 C330,520 215,520 150,470 C85,420 70,345 100,270 C130,195 210,120 310,70 Z'/>\
+  <circle cx='360' cy='180' r='30' fill='white' fill-opacity='.26'/>\
+  <circle cx='385' cy='205' r='12' fill='white' fill-opacity='.2'/>\
+</svg>"); }
+
+/* 左下：シアン */
+.splat--cyan{ left:10%; bottom:10px; transform:rotate(-18deg) scale(1.0); }
+.splat--cyan{ background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'>\
+  <defs>\
+    <radialGradient id='g3' cx='50%' cy='50%' r='58%'>\
+      <stop offset='0%' stop-color='%230ff7ff'/>\
+      <stop offset='62%' stop-color='%2300faff'/>\
+      <stop offset='100%' stop-color='rgba(0,250,255,0)'/>\
+    </radialGradient>\
+  </defs>\
+  <path fill='url(%23g3)' d='M300,80 C400,80 510,150 520,240 C530,330 450,420 350,470 C245,520 120,520 80,430 C40,340 95,240 170,170 C215,130 255,90 300,80 Z'/>\
+  <circle cx='320' cy='185' r='34' fill='white' fill-opacity='.24'/>\
+  <circle cx='345' cy='210' r='13' fill='white' fill-opacity='.2'/>\
+</svg>"); }
 </style>
 """, unsafe_allow_html=True)
 
-# ===== インクの固定レイヤーを配置（装飾。操作はブロックしない） =====
+# ===== インクの固定レイヤーを配置 =====
 st.markdown("""
 <div class="ink-stage">
-  <div class="ink ink--pink"></div>
-  <div class="ink ink--green"></div>
-  <div class="ink ink--cyan"></div>
+  <div class="splat splat--pink"></div>
+  <div class="splat splat--green"></div>
+  <div class="splat splat--cyan"></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -208,8 +228,8 @@ TAX_RATE = 0.10
 # セッション管理
 # =========================
 for k in ["chat_history", "items_json_raw", "items_json", "df", "meta"]:
-  if k not in st.session_state:
-      st.session_state[k] = None
+    if k not in st.session_state:
+        st.session_state[k] = None
 
 if st.session_state["chat_history"] is None:
     st.session_state["chat_history"] = [
@@ -242,9 +262,8 @@ for msg in st.session_state["chat_history"]:
     elif msg["role"] == "user":
         st.chat_message("user").write(msg["content"])
 
-# --- ヒント文プレースホルダを「チャット入力欄の直前」に配置 ---
+# ヒント文プレースホルダ
 hint_placeholder = st.empty()
-# すでに見積もりがある場合は、初期描画でも表示
 if st.session_state["df"] is not None:
     hint_placeholder.caption(
         "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
@@ -253,7 +272,6 @@ if st.session_state["df"] is not None:
 
 # 入力欄
 if user_input := st.chat_input("要件を入力してください..."):
-    # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
@@ -458,7 +476,6 @@ if has_user_input:
                 st.session_state["df"] = df
                 st.session_state["meta"] = meta
 
-                # ⬇︎ 生成直後の同一実行でもヒント文を即時表示（プレースホルダに挿入）
                 hint_placeholder.caption(
                     "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
                     "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
