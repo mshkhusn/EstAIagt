@@ -185,7 +185,7 @@ st.markdown("""
 <style>
 .logo-box{
   display:inline-block;
-  padding: 12px 28px;
+  padding: 10px 24px;
   border: 3px solid;
   border-image: linear-gradient(90deg, #ff4df5, #a64dff) 1;
   border-radius: 50px;
@@ -196,31 +196,39 @@ st.markdown("""
 }
 
 .logo-box .ai{
-  font-size: 42px;
-  font-weight: 900;         /* ボールド */
+  font-size: 44px;
+  font-weight: 900;
   color:#ff4df5 !important;
-  margin-right:4px;         /* ← 間隔を小さく */
+  margin-right:2px;       /* さらに詰める */
 }
 
 .logo-box .mitsumori{
   font-size: 32px;
-  font-weight: 900;         /* ボールド */
+  font-weight: 900;
   color:#ffffff !important;
 }
 
 .logo-box .kun2{
   display:block;
   font-size: 22px;
-  font-weight: 900;         /* ボールド */
-  color:#a64dff !important;
-  margin-top:2px;           /* ← 行間を詰める */
+  font-weight: 900;
+  margin-top:0px;        /* 行間ほぼゼロに */
+  letter-spacing:-1px;   /* 文字間もさらに詰める */
+}
+
+.logo-box .kun{
+  color:#ffffff !important;  /* くん → 白 */
+}
+
+.logo-box .num2{
+  color:#ff4df5 !important;  /* 2 → ピンク */
 }
 
 </style>
 
 <div class="logo-box">
   <span class="ai">AI</span><span class="mitsumori">見積もり</span>
-  <span class="kun2">くん２</span>
+  <span class="kun2"><span class="kun">くん</span><span class="num2">2</span></span>
 </div>
 """, unsafe_allow_html=True)
 
