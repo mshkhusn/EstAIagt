@@ -185,21 +185,29 @@ st.markdown("""
 <style>
 .logo-box{
   display:inline-block;
-  padding: 10px 24px;
+  padding: 8px 24px;
   border: 3px solid;
   border-image: linear-gradient(90deg, #ff4df5, #a64dff) 1;
-  border-radius: 50px;
-  text-align: center;
+  border-radius: 999px;  /* ← 完全な楕円形（pill型） */
   font-family:'Mochiy Pop One',sans-serif;
   background:transparent !important;
   color:inherit !important;
 }
 
+/* === 1行目（AI + 見積もり）をflexで上揃え === */
+.logo-row1{
+  display:flex;
+  align-items:flex-start;  /* ← 上に寄せる */
+  justify-content:center;
+  line-height:1.0;
+  margin-bottom:0px;
+}
+
 .logo-box .ai{
-  font-size: 44px;
+  font-size: 46px;
   font-weight: 900;
   color:#ff4df5 !important;
-  margin-right:2px;       /* さらに詰める */
+  margin-right:4px;
 }
 
 .logo-box .mitsumori{
@@ -208,12 +216,14 @@ st.markdown("""
   color:#ffffff !important;
 }
 
+/* === 2行目（くん2） === */
 .logo-box .kun2{
   display:block;
   font-size: 22px;
   font-weight: 900;
-  margin-top:0px;        /* 行間ほぼゼロに */
-  letter-spacing:-1px;   /* 文字間もさらに詰める */
+  margin-top:-4px;      /* ← 行間をぎゅっと詰める */
+  letter-spacing:-1px;
+  line-height:1.0;
 }
 
 .logo-box .kun{
@@ -223,11 +233,12 @@ st.markdown("""
 .logo-box .num2{
   color:#ff4df5 !important;  /* 2 → ピンク */
 }
-
 </style>
 
 <div class="logo-box">
-  <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+  <div class="logo-row1">
+    <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+  </div>
   <span class="kun2"><span class="kun">くん</span><span class="num2">2</span></span>
 </div>
 """, unsafe_allow_html=True)
