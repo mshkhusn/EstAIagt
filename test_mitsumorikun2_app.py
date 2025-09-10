@@ -178,15 +178,35 @@ html, body { background:#000 !important; }
   font-family: "Helvetica", "Arial", sans-serif !important;  /* 入力欄と同じ細めフォント */
   color: #fff !important;
 }
-/* ===== チャット履歴内のすべての太字を細字に強制 ===== */
-[data-testid="stChatMessage"] strong,
-[data-testid="stChatMessage"] b,
-[data-testid="stChatMessage"] li strong,
-[data-testid="stChatMessage"] li b,
-[data-testid="stChatMessage"] ol li p strong,
-[data-testid="stChatMessage"] ul li p strong {
-  font-weight: 400 !important;   /* 細字に上書き */
+/* ===== チャット履歴（本文）を細字フォントで統一 ===== */
+/* Markdownが入る箱を狙い撃ちして、太字化をすべて打ち消す */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] * {
+  font-family: "Helvetica", "Arial", sans-serif !important;
+  font-weight: 400 !important;      /* 細字 */
+  line-height: 1.55 !important;     /* 読みやすく */
 }
+
+/* strong/b を強制的に通常太さへ（リスト内も含む） */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li b,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ol li p strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ul li p strong {
+  font-weight: 400 !important;      /* ← normal化 */
+  font-family: "Helvetica", "Arial", sans-serif !important;
+}
+これで「番号付きリストの見出し部分」も含め、AI見積もりくんの質問文が均一に細字になります。
+（アバターやボタン等には影響しません）
+
+
+
+
+
+
+
+ChatGPT に質問する
+
 
 
 
