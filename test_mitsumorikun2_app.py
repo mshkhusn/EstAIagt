@@ -24,22 +24,23 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+1p:wght@400;500;700&display=swap');
 
-/* 見出しだけDela Gothic One */
-h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-    font-family: 'Dela Gothic One', sans-serif !important;
-    font-weight: 400 !important;
-}
-
-/* 本文・UIはM PLUS Rounded 1c */
-html, body, .stApp, .stApp * ,
-[data-testid="stMarkdownContainer"] * ,
-[data-testid="stSidebar"] * ,
+/* 本文・UI：M PLUS 1p（読みやすさ重視） */
+html, body, .stApp, .stApp *,
+[data-testid="stMarkdownContainer"] *, [data-testid="stSidebar"] *,
 .stTextInput input, .stTextArea textarea, .stSelectbox div, .stButton button,
 .stChatInput textarea, [data-baseweb] * {
-    font-family: 'M PLUS Rounded 1c', sans-serif !important;
-    font-weight: 400 !important;
+  font-family: 'M PLUS 1p', system-ui, -apple-system, sans-serif !important;
+  font-weight: 400;
+}
+
+/* 見出し：Dela Gothic One（擬似ボールドで太めに見せる） */
+h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+  font-family: 'Dela Gothic One', sans-serif !important;
+  font-weight: 600;            /* Delaは400のみ → 擬似ボールドで太さを出す */
+  font-synthesis: weight;      /* ブラウザの疑似ウェイトを許可 */
+  letter-spacing: .01em;       /* 潰れ防止にやや広げる */
 }
 </style>
 """, unsafe_allow_html=True)
