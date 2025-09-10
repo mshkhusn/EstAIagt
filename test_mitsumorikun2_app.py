@@ -109,32 +109,33 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-/* ===== Chat Avatar 色変更（強制上書き版） ===== */
+/* ===== Chat Avatar 色変更（ライム＆パープル） ===== */
 
-/* まずは全てのチャットアバターを拾う（st の実装差分に強いセレクタ） */
+/* デフォルト（AI側）: ネオンパープル */
 .stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
 .stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
-  background: #a64dff !important;   /* デフォ：AI用ネオンパープル */
+  background: #a64dff !important;   /* AI: ネオンパープル */
   color: #ffffff !important;
-  border-radius: 12px !important;    /* デフォの角丸を活かす */
+  border-radius: 12px !important;
 }
 
-/* ユーザー側だけ色変え（:has が効く環境／または testid に user を含む環境） */
+/* ユーザー側だけネオンライムに */
 .stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"],
 .stApp [data-testid="stChatMessage"][data-testid*="user"] [data-testid*="Avatar"],
 .stApp [data-testid="stChatMessage"] [data-testid*="user"] [data-testid*="Avatar"] {
-  background: #00eaff !important;   /* ネオンシアン */
+  background: #00e08a !important;   /* User: ネオンライム */
   color: #000000 !important;
 }
 
-/* 中に入っている svg / img / span にも念のため色を伝搬 */
+/* 中のアイコン(svg/img/span)も色を合わせる */
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] svg,
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] img,
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] span {
   background: transparent !important;
   color: inherit !important;
 }
+
 
 </style>
 """, unsafe_allow_html=True)
