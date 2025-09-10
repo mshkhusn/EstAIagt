@@ -24,22 +24,45 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-/* 背景を黒に */
-.stApp {
+@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
+
+/* 全体の背景とフォント */
+html, body, .stApp {
+    background-color: #000000 !important;
+    color: #FFFFFF !important;
+    font-family: 'Mochiy Pop One', sans-serif !important;
+}
+
+/* 全要素にフォントと文字色を統一 */
+.stApp * {
+    font-family: 'Mochiy Pop One', sans-serif !important;
+    color: #FFFFFF !important;
+}
+
+/* ヘッダー部分も黒に */
+header, [data-testid="stHeader"] {
     background-color: #000000 !important;
     color: #FFFFFF !important;
 }
 
-/* 本文文字色を白に統一 */
-.stApp, .stApp * {
+/* 下部背景（メイン領域全体） */
+[data-testid="stAppViewContainer"] {
+    background-color: #000000 !important;
     color: #FFFFFF !important;
 }
 
-/* 入力欄やボタンの背景を黒基調に */
-.stTextInput input, .stTextArea textarea, .stSelectbox div, .stChatInput textarea {
+/* 入力欄 */
+.stTextInput input, .stTextArea textarea, .stChatInput textarea {
     background-color: #111111 !important;
     color: #FFFFFF !important;
-    border: 1px solid #555555 !important;
+    border: 1px solid #888888 !important;
+}
+
+/* 入力欄のプレースホルダー（要件を入力してください... も白に） */
+.stTextInput input::placeholder,
+.stTextArea textarea::placeholder,
+.stChatInput textarea::placeholder {
+    color: #DDDDDD !important;
 }
 
 /* ボタン */
@@ -49,12 +72,13 @@ st.markdown("""
     border: 1px solid #888888 !important;
 }
 
-/* 見出しは白で強調 */
+/* 見出し */
 h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
     color: #FFFFFF !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
 # =========================
 # Secrets
 # =========================
