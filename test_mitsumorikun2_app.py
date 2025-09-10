@@ -1,4 +1,4 @@
-# app.py （AI見積もりくん２ / スプラ３風テーマ・縦1カラム）
+# app.py （AI見積もりくん２）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
 # 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
@@ -15,100 +15,141 @@ from openai import OpenAI
 import httpx
 
 # =========================
-# ページ設定（※縦1カラム / Centered）
+# ページ設定
 # =========================
-st.set_page_config(page_title="AI見積もりくん２", layout="centered", page_icon="🎨")
+st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# スプラ３風 CSS（外部フォントなし）
+# カスタムCSS（スプラ3風トンマナ）
 # =========================
-CSS = """
+st.markdown("""
+<style>
+/* Webフォント（太め＆丸め）—雰囲気を近づける */
+@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=M+PLUS+Rounded+1c:wght@700;900&display=swap');
+
+/* カラーパレット（ネオン） */
 :root{
-  --bg:#0c0a13; --panel:#15122a; --panel-2:#1b1542; --border:#3b2a68;
-  --ink:#b6ff17; --pink:#ff2ebf; --cyan:#00f0ff; --vio:#7a00ff; --text:#f6f7ff; --muted:#aab2d9;
+  --pink:#ff2dfc;
+  --green:#39ff14;
+  --cyan:#00faff;
+  --ink:#000000;
+  --ink-1:#0b0b0b;
+  --ink-2:#111111;
+  --ink-3:#1a1a1a;
+  --text:#ffffff;
 }
 
-/* システムフォント優先（外部読み込みなしで安定） */
-*{
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",
-  Arial,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Meiryo","MS PGothic",sans-serif !important;
+/* 全体 */
+.stApp{ background: var(--ink); color: var(--text); }
+.block-container{ padding-top: 1.2rem; max-width: 860px; }
+
+/* 見出しの文字をグラデ化・極太 */
+h1,h2,h3{
+  font-family: "Mochiy Pop One","M PLUS Rounded 1c", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+  font-weight: 900 !important;
+  line-height: 1.2;
+  margin: 0.25rem 0 0.6rem 0;
+  background: linear-gradient(90deg, var(--pink), var(--green), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-/* ===== 背景の抜け防止（全層へ強制適用） ===== */
-html, body,
-.stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stSidebar"],
-[data-testid="stHeader"]{
-  background: var(--bg) !important;
+/* ロゴ風ピル */
+.logo-pill{
+  display:inline-flex; align-items:center; gap:.6rem;
+  border:3px solid transparent;
+  border-radius: 22px;
+  padding: .3rem .9rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(var(--ink),var(--ink)) padding-box,
+              linear-gradient(90deg, var(--pink), var(--cyan)) border-box;
 }
-[data-testid="stHeader"]{ background: transparent !important; }
-
-/* コンテナの上余白（見切れ対策） */
-.block-container{ padding-top: 2.6rem !important; }
-
-/* ネオン背景 */
-body::before{
-  content:""; position:fixed; inset:-6% -10% auto auto; width:1100px; height:820px;
-  background:
-    radial-gradient(520px 300px at 18% 12%, rgba(255,46,191,.22) 0%, transparent 60%),
-    radial-gradient(600px 360px at 80% 10%, rgba(0,240,255,.18) 0%, transparent 60%),
-    radial-gradient(700px 380px at 70% 85%, rgba(183,255,0,.12) 0%, transparent 60%);
-  filter: blur(14px); pointer-events:none; z-index:-1;
+.logo-ai{
+  font: 900 1.6rem "Mochiy Pop One","M PLUS Rounded 1c", sans-serif;
+  background: linear-gradient(90deg, var(--pink), var(--green));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.logo-text{
+  font: 900 1.2rem "Mochiy Pop One","M PLUS Rounded 1c", sans-serif;
+  letter-spacing: .02em;
+  color: #fff;
 }
 
-/* タイトルをスプラ風に強調 */
-h1, .stMarkdown h1{
-  color: var(--text);
-  text-shadow: 0 0 6px rgba(183,255,0,.7), 0 0 14px rgba(0,240,255,.45), 0 2px 0 rgba(0,0,0,.6);
-}
-
-/* エクスパンダ（サインイン）をダークに */
-[data-testid="stExpander"] > details{
-  background: linear-gradient(180deg, #14122a, #1b1542);
-  border: 1px solid var(--border);
+/* グラデ枠のフレーム */
+.splat-frame{
+  border: 3px solid transparent;
   border-radius: 18px;
-  color: var(--text);
+  padding: .8rem 1rem;
+  margin: .6rem 0 1rem 0;
+  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
+              linear-gradient(90deg, var(--green), var(--cyan)) border-box;
 }
-[data-testid="stExpander"] summary{ color: var(--text); }
-
-/* 入力欄（チャット/テキスト） */
-.stTextInput input, .stChatInput input, textarea{
-  background:#101329; border:2px solid #2b2f46; color:var(--text); border-radius:14px;
-}
-.stTextInput input:focus, .stChatInput input:focus, textarea:focus{
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 3px rgba(0,240,255,.25);
+.splat-frame h2{
+  margin: 0;
+  font-size: 1.2rem;
 }
 
-/* ボタン：ネオン */
-.stButton > button{
-  background: radial-gradient(120% 150% at 28% 15%, var(--ink), var(--cyan) 60%, var(--vio) 100%);
-  color:#071218; font-weight:900; letter-spacing:.3px;
-  border:none; border-radius:18px; padding:.9rem 1.2rem;
-  box-shadow: 0 14px 26px rgba(0,240,255,.22), inset 0 -6px 14px rgba(0,0,0,.35);
-  transform: translateY(0); transition:.14s ease-in-out;
-}
-.stButton > button:hover{ transform: translateY(-2px) scale(1.03); filter:saturate(1.15) drop-shadow(0 0 10px rgba(0,240,255,.55)); }
-.stButton > button:active{ transform: translateY(0); }
-
-/* DataFrameの外枠だけ軽く装飾 */
-div[data-testid="stDataFrame"]{
-  background: transparent; border-radius: 14px; border: 1px solid var(--border);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+/* ヒントの小さめテキスト */
+.small-note{
+  color: #cfead0; font-size: .9rem; line-height: 1.4;
 }
 
-/* 情報/警告の色味微調整（暗色上で読みやすく） */
-.stAlert{ border-radius: 14px; }
-"""
+/* ボタンをネオングラデに */
+.stButton>button{
+  background: linear-gradient(90deg, var(--pink), var(--green));
+  color:#fff; font-weight:800; border:none; border-radius:12px;
+  padding:.65rem 1.1rem; box-shadow:0 0 0 rgba(0,0,0,0);
+  transition: transform .12s ease, background .2s ease, box-shadow .2s ease;
+}
+.stButton>button:hover{
+  transform: translateY(-1px) scale(1.02);
+  background: linear-gradient(90deg, var(--green), var(--cyan));
+  box-shadow: 0 10px 28px rgba(0,255,170,.18);
+}
 
-def _inject_css(css: str):
-    try:
-        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
-    except Exception:
-        pass
+/* チャット気泡の地色を暗めに */
+.stChatMessage[data-testid="stChatMessage"]{
+  background: var(--ink-2);
+  border-radius: 16px;
+  border: 2px solid transparent;
+  padding: .6rem .8rem;
+  margin-bottom:.4rem;
+  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
+              linear-gradient(90deg, var(--pink), var(--green)) border-box;
+}
 
-_inject_css(CSS)
+/* 入力欄（チャット） */
+.stChatInput textarea{
+  background: var(--ink-2); color:#fff;
+  border:2px solid transparent; border-radius:12px;
+  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
+              linear-gradient(90deg, var(--green), var(--cyan)) border-box;
+}
+.stChatInput [data-baseweb="button"]{
+  background: linear-gradient(90deg, var(--pink), var(--green));
+  border-radius:12px; border:none; color:#fff; font-weight:800;
+}
+
+/* DataFrameの入れ物を暗色＋枠グラデ */
+.stDataFrame, .stDataFrame > div{
+  background: var(--ink-1) !important;
+}
+[data-testid="stDataFrameResizable"]{
+  border: 2px solid transparent; border-radius:12px;
+  background: linear-gradient(var(--ink-1),var(--ink-1)) padding-box,
+              linear-gradient(90deg, var(--pink), var(--green)) border-box;
+}
+
+/* テキスト入力・ファイルアップローダなどの一般コンポ */
+.stTextInput>div>div>input,
+.stFileUploader > div{
+  background: var(--ink-2); color:#fff;
+  border:2px solid transparent; border-radius:10px;
+  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
+              linear-gradient(90deg, var(--green), var(--cyan)) border-box;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
 # Secrets
@@ -146,19 +187,23 @@ if st.session_state["chat_history"] is None:
     ]
 
 # =========================
-# 認証
+# ヘッダー（ロゴ風）
 # =========================
-st.title("AI見積もりくん２")
-with st.expander("🔒 サインイン", expanded=True):
-    password = st.text_input("パスワードを入力してください", type="password")
-    if password != APP_PASSWORD:
-        st.warning("認証が必要です")
-        st.stop()
+st.markdown('<div class="logo-pill"><span class="logo-ai">AI</span><span class="logo-text">見積もりくん２</span></div>', unsafe_allow_html=True)
 
 # =========================
-# チャットUI（縦1カラム）
+# 認証
 # =========================
-st.header("チャットでヒアリング")
+st.markdown('<div class="splat-frame"><h2>ログイン</h2></div>', unsafe_allow_html=True)
+password = st.text_input("パスワードを入力してください", type="password")
+if password != APP_PASSWORD:
+    st.warning("🔒 認証が必要です")
+    st.stop()
+
+# =========================
+# チャットUI
+# =========================
+st.markdown('<div class="splat-frame"><h2>チャットでヒアリング</h2></div>', unsafe_allow_html=True)
 
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
@@ -176,7 +221,7 @@ if st.session_state["df"] is not None:
     )
 
 # 入力欄
-if (user_input := st.chat_input("要件を入力してください...")):
+if user_input := st.chat_input("要件を入力してください..."):
     # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
     st.session_state["df"] = None
     st.session_state["meta"] = None
@@ -352,20 +397,19 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     return out
 
 # =========================
-# 実行（見積もり生成）
+# 実行
 # =========================
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
+    st.markdown('<div class="splat-frame"><h2>AI見積もりを生成</h2></div>', unsafe_allow_html=True)
     if st.button("📝 AI見積もりくんで見積もりを生成する"):
         with st.spinner("AIが見積もりを生成中…"):
             prompt = build_prompt_for_estimation(st.session_state["chat_history"])
             resp = openai_client.chat.completions.create(
                 model="gpt-4.1",
-                messages=[
-                    {"role":"system","content":"You MUST return only valid JSON."},
-                    {"role":"user","content":prompt}
-                ],
+                messages=[{"role":"system","content":"You MUST return only valid JSON."},
+                          {"role":"user","content":prompt}],
                 response_format={"type":"json_object"},
                 temperature=0.2,
                 max_tokens=4000
@@ -393,6 +437,7 @@ if has_user_input:
 # 表示 & ダウンロード
 # =========================
 if st.session_state["df"] is not None:
+    st.markdown('<div class="splat-frame"><h2>見積もり結果プレビュー</h2></div>', unsafe_allow_html=True)
     st.success("✅ 見積もり結果プレビュー")
     st.dataframe(st.session_state["df"])
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
@@ -406,6 +451,7 @@ if st.session_state["df"] is not None:
     st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
+    st.markdown('<div class="splat-frame"><h2>DD見積書テンプレート出力</h2></div>', unsafe_allow_html=True)
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
     if tmpl is not None:
         out = export_with_template(tmpl.read(), st.session_state["df"])
