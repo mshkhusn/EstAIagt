@@ -1,9 +1,10 @@
-# app.py（AI見積もりくん２ / Neon Splash Theme・安定版）
+# app.py（AI見積もりくん２ / Neon Splash Theme・完全版・安定注入）
 # - OpenAI GPT系（gpt-4.1）で見積り生成
 # - チャット継続 → 再生成で「履歴＋新要件」を反映
 # - 追加入力時はプレビューを一旦クリア
+# - 見積生成後は入力欄の上にヒント文を表示
 # - Excelダウンロード／DD見積テンプレ出力対応
-# - CSSは markdown(unsafe_allow_html=True) のみで注入（st.html/iframe不使用）
+# - CSSは markdown(unsafe_allow_html=True) のみで注入（<link> / iframe 不使用）
 
 import os
 import json
@@ -50,9 +51,11 @@ openai_client = OpenAI(http_client=httpx.Client(timeout=60.0))
 TAX_RATE = 0.10
 
 # =========================
-# CSS をグローバル注入（markdownのみ）
+# CSS をグローバル注入（@import でフォント読み込み）
 # =========================
 CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Bungee:wght@400;700&family=Zen+Maru+Gothic:wght@400;700&family=Noto+Sans+JP:wght@400;600&display=swap');
+
 :root{
   --bg:#0D0F16; --panel:#151827; --panel-2:#171b2e; --border:#2a2f4a;
   --ink:#B7FF00; --pink:#FF2EBF; --cyan:#00F0FF; --vio:#7A00FF; --text:#F3F6FF; --muted:#A7B1D6;
@@ -118,14 +121,8 @@ div[data-testid="stDataFrame"]{
 """
 
 def inject_global_css(css_text: str):
-    """グローバルCSS注入（markdownのみ。st.html/iframeは使わない）"""
     st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
 
-# フォント読み込み + CSS 注入（ページ冒頭で必ず実行）
-st.markdown(
-    '<link href="https://fonts.googleapis.com/css2?family=Bungee:wght@400;700&family=Zen+Maru+Gothic:wght@400;700&family=Noto+Sans+JP:wght@400;600&display=swap" rel="stylesheet">',
-    unsafe_allow_html=True
-)
 inject_global_css(CSS)
 
 # =========================
@@ -168,13 +165,14 @@ with col_chat:
     st.subheader("💬 チャットでヒアリング", anchor=False)
     st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 
+    # 過去ログを表示
     for msg in st.session_state["chat_history"]:
         if msg["role"] == "assistant":
             st.chat_message("assistant").write(msg["content"])
         elif msg["role"] == "user":
             st.chat_message("user").write(msg["content"])
 
-    # 生成後ヒント
+    # 生成後ヒントを差し込むプレースホルダ
     hint_placeholder = st.empty()
     if st.session_state["df"] is not None:
         hint_placeholder.caption(
@@ -182,9 +180,9 @@ with col_chat:
             "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
         )
 
+    # ユーザー入力（追加入力で一旦プレビューをクリア）
     user_input = st.chat_input("要件を入力してください…")
     if user_input:
-        # 追加入力 → プレビューを一旦クリア
         st.session_state["df"] = None
         st.session_state["meta"] = None
         st.session_state["items_json"] = None
