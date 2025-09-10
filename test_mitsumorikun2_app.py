@@ -1,4 +1,4 @@
-# app.py （AI見積もりくん２ / スプラ風：画像ベースのインク + 白文字）
+# app.py （AI見積もりくん２ - Dela Gothic One & スプラ風テーマ版）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
 # 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
@@ -20,187 +20,114 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# カスタムCSS（SVGインク画像をdataURIで埋め込み）
+# スプラ風テーマCSS + Dela Gothic One 全体適用
 # =========================
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=M+PLUS+Rounded+1c:wght@700;900&display=swap');
+def splat_theme():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
 
-:root{
-  --pink:#ff2dfc;
-  --green:#39ff14;
-  --cyan:#00faff;
-  --ink:#000000;
-  --ink-2:#101010;
-  --ink-3:#161616;
-}
+    /* 全体をDela Gothic Oneで統一 */
+    html, body, [class*="css"], .stApp, .stMarkdown, .stTextInput, .stButton, .stChatMessage {
+        font-family: 'Dela Gothic One', sans-serif !important;
+        letter-spacing: .02em;
+        color: #fff !important;
+    }
 
-.stApp{ background:var(--ink); color:#fff; }
-.block-container{ padding-top:10px; max-width:880px; position:relative; z-index:1; }
+    :root{
+      --pink:#FF2DFC; --green:#39FF14; --cyan:#00FAFF;
+      --bg:#000; --panel:#101010; --panel2:#161616; --text:#fff;
+    }
 
-/* 見出し（グラデ文字） */
-h1,h2,h3{
-  font-family:"Mochiy Pop One","M PLUS Rounded 1c",system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;
-  font-weight:900 !important;
-  line-height:1.18;
-  margin:6px 0 10px 0;
-  background:linear-gradient(90deg,var(--pink),var(--green),var(--cyan));
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  letter-spacing:.02em;
-}
+    .stApp{background:var(--bg);}
+    .block-container{max-width: 920px; position:relative; z-index:1; padding-top:12px;}
 
-/* ロゴ風ピル */
-.logo-pill{
-  display:inline-flex; align-items:center; gap:.55rem;
-  border:4px solid transparent; border-radius:24px;
-  padding:.25rem .8rem; margin:0 0 8px 0;
-  background:linear-gradient(var(--ink),var(--ink)) padding-box,
-             linear-gradient(90deg,var(--pink),var(--cyan)) border-box;
-  box-shadow:0 6px 24px rgba(0,255,170,.06);
-}
-.logo-ai{ font:900 1.6rem "Mochiy Pop One","M PLUS Rounded 1c",sans-serif;
-  background:linear-gradient(90deg,var(--pink),var(--green));
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-}
-.logo-text{ font:900 1.25rem "Mochiy Pop One","M PLUS Rounded 1c",sans-serif; color:#fff; }
+    /* 見出しは文字そのものをグラデ塗り */
+    h1,h2,h3{
+      font-weight:900; line-height:1.15; margin:8px 0 12px;
+      background:linear-gradient(90deg,var(--pink),var(--green),var(--cyan));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    }
 
-/* セクション枠（グラデ枠） */
-.splat-frame{
-  border:3px solid transparent; border-radius:16px;
-  padding:.55rem .8rem; margin:8px 0 12px 0;
-  background:linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
-             linear-gradient(90deg,var(--green),var(--cyan)) border-box;
-}
-.splat-frame h2{ margin:0; font-size:1.06rem; }
+    /* セクション見出しパネル（グラデ枠） */
+    .splat-frame{
+      border:3px solid transparent; border-radius:18px;
+      padding:.7rem .95rem; margin:10px 0 14px;
+      background:linear-gradient(var(--panel),var(--panel)) padding-box,
+                 linear-gradient(90deg,var(--green),var(--cyan)) border-box;
+    }
 
-/* ボタン（白文字＋発光） */
-.stButton>button{
-  background:linear-gradient(90deg,var(--pink),var(--green));
-  color:#fff; font-weight:900; border:none; border-radius:12px;
-  padding:.66rem 1.05rem;
-  box-shadow:0 10px 28px rgba(0,255,170,.18), inset 0 0 12px rgba(255,255,255,.18);
-  transition:transform .12s ease, box-shadow .2s ease, background .2s ease;
-}
-.stButton>button:hover{
-  transform:translateY(-1px) scale(1.02);
-  background:linear-gradient(90deg,var(--green),var(--cyan));
-  box-shadow:0 14px 36px rgba(0,255,170,.25), inset 0 0 18px rgba(255,255,255,.22);
-}
+    /* ボタン（発光グラデ） */
+    .stButton>button{
+      background:linear-gradient(90deg,var(--pink),var(--green));
+      border:none; border-radius:14px; color:#fff; font-weight:900;
+      padding:.72rem 1.1rem;
+      box-shadow:0 12px 28px rgba(0,255,170,.22), inset 0 0 14px rgba(255,255,255,.18);
+      transition:transform .12s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .stButton>button:hover{
+      transform:translateY(-1px) scale(1.02);
+      background:linear-gradient(90deg,var(--green),var(--cyan));
+      box-shadow:0 16px 40px rgba(0,255,170,.3), inset 0 0 20px rgba(255,255,255,.22);
+    }
 
-/* チャット気泡：白文字・コントラスト */
-.stChatMessage[data-testid="stChatMessage"]{
-  background:var(--ink-3);
-  color:#fff !important;
-  border-radius:14px; border:2px solid transparent;
-  padding:.55rem .75rem; margin-bottom:.45rem;
-  background:linear-gradient(var(--ink-3),var(--ink-3)) padding-box,
-             linear-gradient(90deg,var(--pink),var(--green)) border-box;
-}
-.stChatMessage *{ color:#fff !important; opacity:1 !important; }
+    /* テキスト入力・アップローダ・チャット入力欄 */
+    .stTextInput>div>div>input, .stFileUploader>div, .stChatInput textarea{
+      background:var(--panel2);
+      border:2px solid transparent; border-radius:12px;
+      background:linear-gradient(var(--panel2),var(--panel2)) padding-box,
+                 linear-gradient(90deg,var(--green),var(--cyan)) border-box;
+      color:#fff;
+    }
+    .stChatInput [data-baseweb="button"]{
+      background:linear-gradient(90deg,var(--pink),var(--green)); color:#fff; border:none; border-radius:12px;
+    }
 
-/* 入力欄 */
-.stChatInput textarea{
-  background:var(--ink-2); color:#fff;
-  border:2px solid transparent; border-radius:12px;
-  background:linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
-             linear-gradient(90deg,var(--green),var(--cyan)) border-box;
-}
-.stChatInput [data-baseweb="button"]{
-  background:linear-gradient(90deg,var(--pink),var(--green));
-  border-radius:12px; border:none; color:#fff; font-weight:900;
-  box-shadow:0 10px 24px rgba(0,255,170,.18);
-}
+    /* チャット気泡 */
+    [data-testid="stChatMessage"]{
+      background:var(--panel2);
+      border:2px solid transparent; border-radius:16px; padding:.6rem .8rem;
+      background:linear-gradient(var(--panel2),var(--panel2)) padding-box,
+                 linear-gradient(90deg,var(--pink),var(--green)) border-box;
+      color:#fff !important;
+    }
 
-/* DataFrame容器 */
-.stDataFrame, .stDataFrame > div{ background:#0b0b0b !important; color:#fff !important; }
-[data-testid="stDataFrameResizable"]{
-  border:2px solid transparent; border-radius:12px;
-  background:linear-gradient(#0b0b0b,#0b0b0b) padding-box,
-             linear-gradient(90deg,var(--pink),var(--green)) border-box;
-}
-[data-testid="stDataFrame"] th{ background:#121212 !important; color:#fff !important; }
+    /* DataFrame容器（グラデ枠） */
+    [data-testid="stDataFrameResizable"]{
+      border:2px solid transparent; border-radius:12px;
+      background:linear-gradient(#0b0b0b,#0b0b0b) padding-box,
+                 linear-gradient(90deg,var(--pink),var(--green)) border-box;
+    }
 
-/* 一般コンポ */
-.stTextInput>div>div>input, .stFileUploader > div{
-  background:var(--ink-2); color:#fff;
-  border:2px solid transparent; border-radius:10px;
-  background:linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
-             linear-gradient(90deg,var(--green),var(--cyan)) border-box;
-}
+    /* ロゴ風ヒーロー */
+    .logo-pill{
+      display:inline-flex; align-items:center; gap:.6rem;
+      border:4px solid transparent; border-radius:26px; padding:.3rem .9rem; margin:4px 0 10px;
+      background:linear-gradient(var(--bg),var(--bg)) padding-box,
+                 linear-gradient(90deg,var(--pink),var(--cyan)) border-box;
+    }
+    .logo-ai{ font:900 1.7rem 'Dela Gothic One'; background:linear-gradient(90deg,var(--pink),var(--green));
+              -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .logo-text{ font:900 1.25rem 'Dela Gothic One'; color:#fff; }
 
-/* アラート */
-.stAlert{
-  background:#131313; border:2px solid transparent; border-radius:12px;
-  background:linear-gradient(#131313,#131313) padding-box,
-             linear-gradient(90deg,var(--pink),var(--cyan)) border-box;
-  color:#fff;
-}
+    /* ===== インク画像（/static/ink/*.png を使用） ===== */
+    .ink-stage{ position:fixed; inset:0; pointer-events:none; z-index:0; }
+    .ink{ position:absolute; width:360px; height:auto; opacity:.95; filter: drop-shadow(0 10px 28px rgba(0,255,170,.18)); }
+    .ink-pink{  top:-60px; left:-80px; transform:rotate(-12deg); }
+    .ink-green{ right:-80px; top:38%; transform:rotate(16deg) scale(.9); }
+    .ink-cyan{  left:12%; bottom:-10px; transform:rotate(-18deg); }
 
-/* ====== SVGインク（画像）レイヤー ====== */
-.ink-stage{ position:fixed; inset:0; pointer-events:none; z-index:0; }
-.splat{
-  position:absolute; width:360px; height:360px; background-size:contain; background-repeat:no-repeat;
-  filter: drop-shadow(0 10px 28px rgba(0,255,170,.18));
-  opacity:.95; transform: rotate(0.001deg); /* subpixel レンダ対策 */
-}
-/* 左上：マゼンタ */
-.splat--pink{ top:-40px; left:-60px; transform:rotate(-12deg); }
-.splat--pink{ background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'>\
-  <defs>\
-    <radialGradient id='g' cx='48%' cy='46%' r='55%'>\
-      <stop offset='0%' stop-color='%23ff77fe'/>\
-      <stop offset='65%' stop-color='%23ff2dfc'/>\
-      <stop offset='100%' stop-color='rgba(255,45,252,0)'/>\
-    </radialGradient>\
-  </defs>\
-  <path fill='url(%23g)' d='M280,60 C360,40 470,80 520,170 C560,240 560,330 510,390 C450,460 350,520 260,510 C160,500 90,430 80,350 C70,260 120,190 190,140 C220,120 240,80 280,60 Z'/>\
-  <circle cx='320' cy='160' r='32' fill='white' fill-opacity='.28'/>\
-  <circle cx='350' cy='185' r='12' fill='white' fill-opacity='.22'/>\
-</svg>"); }
+    @media (max-width: 840px){ .ink{width:240px} .ink-green{top:46%} .ink-cyan{left:6%; bottom:-40px}}
+    @media (max-width: 520px){ .ink{width:200px} .ink-pink{left:-110px} .ink-green{right:-70px; top:56%} .ink-cyan{left:2%;bottom:-60px}}
+    </style>
+    <div class="ink-stage">
+      <img src="/static/ink/ink_pink.png"  class="ink ink-pink"/>
+      <img src="/static/ink/ink_green.png" class="ink ink-green"/>
+      <img src="/static/ink/ink_cyan.png"  class="ink ink-cyan"/>
+    </div>
+    """, unsafe_allow_html=True)
 
-/* 右中段：ライム */
-.splat--green{ right:-70px; top:38%; transform:rotate(16deg) scale(0.9); }
-.splat--green{ background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'>\
-  <defs>\
-    <radialGradient id='g2' cx='45%' cy='42%' r='58%'>\
-      <stop offset='0%' stop-color='%239cff7a'/>\
-      <stop offset='62%' stop-color='%2339ff14'/>\
-      <stop offset='100%' stop-color='rgba(57,255,20,0)'/>\
-    </radialGradient>\
-  </defs>\
-  <path fill='url(%23g2)' d='M310,70 C400,80 500,150 525,240 C550,330 495,420 415,470 C330,520 215,520 150,470 C85,420 70,345 100,270 C130,195 210,120 310,70 Z'/>\
-  <circle cx='360' cy='180' r='30' fill='white' fill-opacity='.26'/>\
-  <circle cx='385' cy='205' r='12' fill='white' fill-opacity='.2'/>\
-</svg>"); }
-
-/* 左下：シアン */
-.splat--cyan{ left:10%; bottom:10px; transform:rotate(-18deg) scale(1.0); }
-.splat--cyan{ background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'>\
-  <defs>\
-    <radialGradient id='g3' cx='50%' cy='50%' r='58%'>\
-      <stop offset='0%' stop-color='%230ff7ff'/>\
-      <stop offset='62%' stop-color='%2300faff'/>\
-      <stop offset='100%' stop-color='rgba(0,250,255,0)'/>\
-    </radialGradient>\
-  </defs>\
-  <path fill='url(%23g3)' d='M300,80 C400,80 510,150 520,240 C530,330 450,420 350,470 C245,520 120,520 80,430 C40,340 95,240 170,170 C215,130 255,90 300,80 Z'/>\
-  <circle cx='320' cy='185' r='34' fill='white' fill-opacity='.24'/>\
-  <circle cx='345' cy='210' r='13' fill='white' fill-opacity='.2'/>\
-</svg>"); }
-</style>
-""", unsafe_allow_html=True)
-
-# ===== インクの固定レイヤーを配置 =====
-st.markdown("""
-<div class="ink-stage">
-  <div class="splat splat--pink"></div>
-  <div class="splat splat--green"></div>
-  <div class="splat splat--cyan"></div>
-</div>
-""", unsafe_allow_html=True)
+splat_theme()
 
 # =========================
 # Secrets
@@ -238,7 +165,7 @@ if st.session_state["chat_history"] is None:
     ]
 
 # =========================
-# ヘッダー（ロゴ風）
+# ヘッダー
 # =========================
 st.markdown('<div class="logo-pill"><span class="logo-ai">AI</span><span class="logo-text">見積もりくん２</span></div>', unsafe_allow_html=True)
 
@@ -262,16 +189,16 @@ for msg in st.session_state["chat_history"]:
     elif msg["role"] == "user":
         st.chat_message("user").write(msg["content"])
 
-# ヒント文プレースホルダ
+# --- ヒント文プレースホルダ（チャット入力直前） ---
 hint_placeholder = st.empty()
 if st.session_state["df"] is not None:
     hint_placeholder.caption(
-        "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
-        "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
+        "💡 チャットを続けると見積もり精度が上がります。追加要件を入力後に再生成してください。"
     )
 
 # 入力欄
 if user_input := st.chat_input("要件を入力してください..."):
+    # 新しい入力があればプレビューを一度消す
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
@@ -373,9 +300,10 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
     for col in ["category", "task", "qty", "unit", "unit_price", "note"]:
         if col not in df.columns:
             df[col] = "" if col in ["category","task","unit","note"] else 0
-    df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0).astype(float)
-    df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
-    df["小計"] = (df["qty"] * df["unit_price"]).astype(int)
+    if not df.empty:
+        df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0).astype(float)
+        df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
+        df["小計"] = (df["qty"] * df["unit_price"]).astype(int)
     return df
 
 # =========================
@@ -476,9 +404,9 @@ if has_user_input:
                 st.session_state["df"] = df
                 st.session_state["meta"] = meta
 
+                # 生成直後にヒント文を表示
                 hint_placeholder.caption(
-                    "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
-                    "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
+                    "💡 チャットを続けて見積もり精度を上げられます。追加要件を入力後に再生成してください。"
                 )
 
 # =========================
