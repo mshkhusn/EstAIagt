@@ -271,14 +271,19 @@ if password != APP_PASSWORD:
 st.markdown("""
 <style>
 .custom-header {
-  color: #90fb0f !important;   /* ← ネオンライム */
-  font-size: 28px !important;  /* 見出しサイズ（調整可） */
+  color: #90fb0f !important;   /* ネオンライム */
+  font-size: 40px !important;  /* ← 大きくしました */
   font-weight: 900 !important;
   margin-top: 20px !important;
-  margin-bottom: 20px !important;
+  margin-bottom: 30px !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown(
+    '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
+    unsafe_allow_html=True
+)
 
 st.markdown(
     '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
