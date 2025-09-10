@@ -109,6 +109,14 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
+/* ===== Chat Avatar 枠線追加 ===== */
+[data-testid="stChatMessageAvatar"] {
+  border: 2px solid #ffffff !important;  /* 白枠 */
+  border-radius: 50% !important;         /* 丸く */
+  padding: 2px !important;               /* アイコンと枠の間に少し余白 */
+  background-color: #000 !important;     /* 背景を黒で統一 */
+}
+
 </style>
 """, unsafe_allow_html=True)
 
