@@ -283,6 +283,7 @@ st.markdown("""
 st.markdown(
     '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
     unsafe_allow_html=True
+)
 
 
 for msg in st.session_state["chat_history"]:
