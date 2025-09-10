@@ -136,13 +136,20 @@ html, body { background:#000 !important; }
   color: inherit !important;
 }
 
-/* 見積もり結果プレビューの見出しだけ拡大 */
+/* 見積もり結果プレビューの見出しをスプラトゥーン風カラーに */
 .preview-title{
-  font-size: 28px !important;   /* ← ここを大きく調整 */
+  font-size: 28px !important;
   line-height: 1.4 !important;
   font-weight: 800 !important;
   margin: 0.3rem 0 0.8rem !important;
+  text-align: center; /* 見出し感を出すため中央寄せ */
+  
+  /* スプラっぽいネオンカラーグラデーション */
+  background: linear-gradient(90deg, #ff4df5, #00e08a, #a64dff, #00c3ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
+
 
 
 
