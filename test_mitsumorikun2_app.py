@@ -181,8 +181,48 @@ if st.session_state["chat_history"] is None:
 # =========================
 # 認証
 # =========================
-st.title("AI見積もりくん２")
+st.markdown("""
+<style>
+.logo-box{
+  display:inline-block;
+  padding: 12px 28px;
+  border: 3px solid;
+  border-image: linear-gradient(90deg, #ff4df5, #a64dff) 1;
+  border-radius: 50px;
+  text-align: center;
+  font-family:'Mochiy Pop One',sans-serif;
+  background:transparent !important;
+  color:inherit !important;
+}
+
+.logo-box .ai{
+  font-size: 42px;
+  font-weight: 900;
+  color:#ff4df5 !important;   /* AI → ピンク */
+  margin-right:8px;
+}
+.logo-box .mitsumori{
+  font-size: 32px;
+  font-weight: 700;
+  color:#ffffff !important;   /* 見積もり → 白 */
+}
+.logo-box .kun2{
+  display:block;
+  font-size: 22px;
+  font-weight: 700;
+  color:#a64dff !important;   /* くん２ → パープル */
+  margin-top:4px;
+}
+</style>
+
+<div class="logo-box">
+  <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+  <span class="kun2">くん２</span>
+</div>
+""", unsafe_allow_html=True)
+
 password = st.text_input("パスワードを入力してください", type="password")
+
 if password != APP_PASSWORD:
     st.warning("認証が必要です")
     st.stop()
