@@ -116,6 +116,31 @@ html, body { background:#000 !important; }
   padding: 2px !important;               /* アイコンと枠の間に少し余白 */
   background-color: #000 !important;     /* 背景を黒で統一 */
 }
+/* ===== Chat Avatar：白いリング枠を追加 ===== */
+/* ラッパ自体に丸枠（レイアウトを崩さないよう border ではなく box-shadow でリングを描画） */
+.stApp [data-testid="stChatMessageAvatar"]{
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center; justify-content: center;
+  width: 36px !important; height: 36px !important;
+  min-width: 36px !important; min-height: 36px !important;
+  border-radius: 50% !important;
+  background: #000 !important;               /* 黒ベースに統一 */
+  box-shadow: 0 0 0 2px #ffffff !important;  /* ← 白いリング枠 */
+}
+
+/* 中のアイコン（img / svg）も丸に揃えて中央に */
+.stApp [data-testid="stChatMessageAvatar"] img,
+.stApp [data-testid="stChatMessageAvatar"] svg{
+  width: 28px !important; height: 28px !important;
+  border-radius: 50% !important;
+}
+
+/* 念のため：一部テーマで avatar を包む子divがある場合 */
+.stApp [data-testid="stChatMessageAvatar"] > div{
+  border-radius: 50% !important;
+  background: transparent !important;
+}
 
 </style>
 """, unsafe_allow_html=True)
