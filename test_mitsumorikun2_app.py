@@ -26,64 +26,70 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* --- 基本：フォント＆色 --- */
-html, body, .stApp, .stApp * {
-  font-family: 'Mochiy Pop One', sans-serif !important;
-  font-weight: 400 !important;
-  font-synthesis-weight: none !important;
-  letter-spacing: .01em;
-  color: #fff !important;
+/* フォント常時適用（擬似ボールド禁止） */
+html, body, .stApp, .stApp *{
+  font-family:'Mochiy Pop One',sans-serif !important;
+  font-weight:400 !important;
+  font-synthesis-weight:none !important;
+  letter-spacing:.01em; color:#fff !important;
 }
 
-/* --- 背景を「全域」黒に（最下部の固定レイヤも含める） --- */
-html, body, .stApp { background:#000 !important; }
+/* === 背景を全域黒に === */
+html, body, .stApp{ background:#000 !important; }
 [data-testid="stAppViewContainer"],
-[data-testid="stAppViewContainer"] > .main,
-main, .main, .block-container,
+[data-testid="stAppViewContainer"]>.main,
+main,.main,.block-container,
 [data-testid="stVerticalBlock"],
 [data-testid="stBottomBlock"],
-footer, [data-testid="stToolbar"], [data-testid="stStatusWidget"] {
+[data-testid="stDecoration"],
+footer,[data-testid="stToolbar"],[data-testid="stStatusWidget"]{
   background:#000 !important;
 }
+header,[data-testid="stHeader"]{ background:#000 !important; }
 
-/* ヘッダーも黒 */
-header, [data-testid="stHeader"] { background:#000 !important; }
-
-/* --- 入力系（テキスト・パスワード・テキストエリア・セレクト） --- */
-.stTextInput label, .stTextArea label, .stSelectbox label { color:#fff !important; }  /* ← パスワードのラベルも白に */
-.stTextInput input, .stTextArea textarea, .stSelectbox div {
+/* === 入力系 === */
+.stTextInput label,.stTextArea label,.stSelectbox label{ color:#fff !important; }
+.stTextInput input,.stTextArea textarea,.stSelectbox div{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
 }
+/* パスワードの目アイコン（BaseWebボタン） */
+.stTextInput [data-baseweb="button"]{
+  background:#333 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
 
-/* --- チャットメッセージ気泡を黒基調で統一（ユーザー側も灰色を禁止） --- */
+/* === ボタン（見積もり生成など）=== */
+.stButton button{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
+.stButton button:hover{ background:#2c2c2c !important; }
+
+/* === チャット === */
+/* 気泡：黒基調・枠線なし */
 [data-testid="stChatMessage"]{
   background:#0f0f0f !important;
-  border:1px solid #333 !important;
+  border:none !important;            /* ← 枠線を消す */
   border-radius:14px !important;
 }
-
-/* --- 画面下のチャット入力バー：白背景・角の崩れを修正 --- */
-/* バーの土台レイヤを透明化（白帯を消す） */
-[data-testid="stChatInput"]{
-  background:transparent !important;
-}
-[data-testid="stChatInput"] > div{
-  background:transparent !important;
-}
-/* 入力ボックス自体 */
+/* 入力バーの土台を黒に（白帯対策） */
+[data-testid="stChatInput"]{ background:#000 !important; }
+[data-testid="stChatInput"]>div{ background:#000 !important; }
+/* 入力ボックス本体 */
 .stChatInput textarea{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
 }
+.stChatInput textarea::placeholder{ color:#ddd !important; }
 /* 送信ボタン */
 .stChatInput [data-baseweb="button"]{
   background:#222 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
 }
 
-/* --- その他、白に戻りがちな装飾を黒で潰す（保険） --- */
-[data-testid="stDecoration"], [data-testid="stMainBlockContainer"] { background:#000 !important; }
+/* 予期せぬ白背景を念のため黒で潰す */
+[data-testid="stMainBlockContainer"]{ background:#000 !important; }
 </style>
 """, unsafe_allow_html=True)
 
