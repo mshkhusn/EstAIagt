@@ -183,65 +183,67 @@ if st.session_state["chat_history"] is None:
 # =========================
 st.markdown("""
 <style>
-.logo-box{
+/* ====== 楕円フチ：外側（グラデ）＋内側（黒） の二重ラッパで確実にpill化 ====== */
+.logo-pill{
   display:inline-block;
-  padding: 8px 24px;
-  border: 3px solid;
-  border-image: linear-gradient(90deg, #ff4df5, #a64dff) 1;
-  border-radius: 999px;  /* ← 完全な楕円形（pill型） */
+  padding: 3px;                                   /* ← フチの太さ */
+  border-radius: 999px;                            /* ← 強制pill */
+  background: linear-gradient(90deg,#ff4df5,#a64dff);
+}
+.logo-box{
+  padding: 18px 40px;                              /* ← 全体サイズUP */
+  border-radius: 999px;                            /* ← 内側もpill */
+  background:#000;                                 /* ← 中は黒で抜き */
   font-family:'Mochiy Pop One',sans-serif;
-  background:transparent !important;
   color:inherit !important;
 }
 
-/* === 1行目（AI + 見積もり）をflexで上揃え === */
+/* 1行目：AI + 見積もり（上寄せ＆中央配置） */
 .logo-row1{
   display:flex;
-  align-items:flex-start;  /* ← 上に寄せる */
-  justify-content:center;
+  align-items:flex-start;                          /* ← 上に寄せる */
+  justify-content:center;                          /* ← 横中央に揃える */
+  gap: 6px;                                        /* ← 文字間を軽く */
   line-height:1.0;
-  margin-bottom:0px;
+  margin: 0;
 }
 
 .logo-box .ai{
-  font-size: 46px;
+  font-size: 64px;                                 /* ← 大きく */
   font-weight: 900;
-  color:#ff4df5 !important;
-  margin-right:4px;
+  color:#ff4df5 !important;                        /* ピンク */
+  margin-right: 2px;                               /* さらに詰める */
 }
 
 .logo-box .mitsumori{
-  font-size: 32px;
+  font-size: 44px;                                 /* ← 少し小さく */
   font-weight: 900;
-  color:#ffffff !important;
+  color:#ffffff !important;                        /* 白 */
 }
 
-/* === 2行目（くん2） === */
-.logo-box .kun2{
-  display:block;
-  font-size: 22px;
-  font-weight: 900;
-  margin-top:-4px;      /* ← 行間をぎゅっと詰める */
-  letter-spacing:-1px;
+/* 2行目：くん2（中央に配置／行間きっちり詰め） */
+.logo-kunrow{
+  text-align:center;                               /* ← 真ん中に */
+  margin-top: -6px;                                /* ← 行間を詰める（調整可） */
   line-height:1.0;
+  letter-spacing:-0.5px;
 }
-
-.logo-box .kun{
-  color:#ffffff !important;  /* くん → 白 */
-}
-
-.logo-box .num2{
-  color:#ff4df5 !important;  /* 2 → ピンク */
-}
+.logo-box .kun{  color:#ffffff !important;  font-size: 28px; font-weight:900; }
+.logo-box .num2{ color:#ff4df5 !important;  font-size: 28px; font-weight:900; }
 </style>
 
-<div class="logo-box">
-  <div class="logo-row1">
-    <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+<div class="logo-pill">
+  <div class="logo-box">
+    <div class="logo-row1">
+      <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+    </div>
+    <div class="logo-kunrow">
+      <span class="kun">くん</span><span class="num2">2</span>
+    </div>
   </div>
-  <span class="kun2"><span class="kun">くん</span><span class="num2">2</span></span>
 </div>
 """, unsafe_allow_html=True)
+
 
 password = st.text_input("パスワードを入力してください", type="password")
 
