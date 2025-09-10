@@ -268,7 +268,8 @@ if password != APP_PASSWORD:
 # =========================
 # チャットUI
 # =========================
-st.header("チャットでヒアリング")
+st.header("AI見積もりくんにチャットで相談して見積もりを生成しよう！")
+
 
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
