@@ -1,4 +1,4 @@
-# app.py （AI見積もりくん２ - Dela Gothic One & スプラ風テーマ版）
+# app.py （AI見積もりくん２）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
 # 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
@@ -20,114 +20,16 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# スプラ風テーマCSS + Dela Gothic One 全体適用
+# フォント（Dela Gothic One）適用
 # =========================
-def splat_theme():
-    st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
-
-    /* 全体をDela Gothic Oneで統一 */
-    html, body, [class*="css"], .stApp, .stMarkdown, .stTextInput, .stButton, .stChatMessage {
-        font-family: 'Dela Gothic One', sans-serif !important;
-        letter-spacing: .02em;
-        color: #fff !important;
-    }
-
-    :root{
-      --pink:#FF2DFC; --green:#39FF14; --cyan:#00FAFF;
-      --bg:#000; --panel:#101010; --panel2:#161616; --text:#fff;
-    }
-
-    .stApp{background:var(--bg);}
-    .block-container{max-width: 920px; position:relative; z-index:1; padding-top:12px;}
-
-    /* 見出しは文字そのものをグラデ塗り */
-    h1,h2,h3{
-      font-weight:900; line-height:1.15; margin:8px 0 12px;
-      background:linear-gradient(90deg,var(--pink),var(--green),var(--cyan));
-      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-    }
-
-    /* セクション見出しパネル（グラデ枠） */
-    .splat-frame{
-      border:3px solid transparent; border-radius:18px;
-      padding:.7rem .95rem; margin:10px 0 14px;
-      background:linear-gradient(var(--panel),var(--panel)) padding-box,
-                 linear-gradient(90deg,var(--green),var(--cyan)) border-box;
-    }
-
-    /* ボタン（発光グラデ） */
-    .stButton>button{
-      background:linear-gradient(90deg,var(--pink),var(--green));
-      border:none; border-radius:14px; color:#fff; font-weight:900;
-      padding:.72rem 1.1rem;
-      box-shadow:0 12px 28px rgba(0,255,170,.22), inset 0 0 14px rgba(255,255,255,.18);
-      transition:transform .12s ease, box-shadow .2s ease, background .2s ease;
-    }
-    .stButton>button:hover{
-      transform:translateY(-1px) scale(1.02);
-      background:linear-gradient(90deg,var(--green),var(--cyan));
-      box-shadow:0 16px 40px rgba(0,255,170,.3), inset 0 0 20px rgba(255,255,255,.22);
-    }
-
-    /* テキスト入力・アップローダ・チャット入力欄 */
-    .stTextInput>div>div>input, .stFileUploader>div, .stChatInput textarea{
-      background:var(--panel2);
-      border:2px solid transparent; border-radius:12px;
-      background:linear-gradient(var(--panel2),var(--panel2)) padding-box,
-                 linear-gradient(90deg,var(--green),var(--cyan)) border-box;
-      color:#fff;
-    }
-    .stChatInput [data-baseweb="button"]{
-      background:linear-gradient(90deg,var(--pink),var(--green)); color:#fff; border:none; border-radius:12px;
-    }
-
-    /* チャット気泡 */
-    [data-testid="stChatMessage"]{
-      background:var(--panel2);
-      border:2px solid transparent; border-radius:16px; padding:.6rem .8rem;
-      background:linear-gradient(var(--panel2),var(--panel2)) padding-box,
-                 linear-gradient(90deg,var(--pink),var(--green)) border-box;
-      color:#fff !important;
-    }
-
-    /* DataFrame容器（グラデ枠） */
-    [data-testid="stDataFrameResizable"]{
-      border:2px solid transparent; border-radius:12px;
-      background:linear-gradient(#0b0b0b,#0b0b0b) padding-box,
-                 linear-gradient(90deg,var(--pink),var(--green)) border-box;
-    }
-
-    /* ロゴ風ヒーロー */
-    .logo-pill{
-      display:inline-flex; align-items:center; gap:.6rem;
-      border:4px solid transparent; border-radius:26px; padding:.3rem .9rem; margin:4px 0 10px;
-      background:linear-gradient(var(--bg),var(--bg)) padding-box,
-                 linear-gradient(90deg,var(--pink),var(--cyan)) border-box;
-    }
-    .logo-ai{ font:900 1.7rem 'Dela Gothic One'; background:linear-gradient(90deg,var(--pink),var(--green));
-              -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-    .logo-text{ font:900 1.25rem 'Dela Gothic One'; color:#fff; }
-
-    /* ===== インク画像（/static/ink/*.png を使用） ===== */
-    .ink-stage{ position:fixed; inset:0; pointer-events:none; z-index:0; }
-    .ink{ position:absolute; width:360px; height:auto; opacity:.95; filter: drop-shadow(0 10px 28px rgba(0,255,170,.18)); }
-    .ink-pink{  top:-60px; left:-80px; transform:rotate(-12deg); }
-    .ink-green{ right:-80px; top:38%; transform:rotate(16deg) scale(.9); }
-    .ink-cyan{  left:12%; bottom:-10px; transform:rotate(-18deg); }
-
-    @media (max-width: 840px){ .ink{width:240px} .ink-green{top:46%} .ink-cyan{left:6%; bottom:-40px}}
-    @media (max-width: 520px){ .ink{width:200px} .ink-pink{left:-110px} .ink-green{right:-70px; top:56%} .ink-cyan{left:2%;bottom:-60px}}
-    </style>
-    <div class="ink-stage">
-      <img src="/static/ink/ink_pink.png"  class="ink ink-pink"/>
-      <img src="/static/ink/ink_green.png" class="ink ink-green"/>
-      <img src="/static/ink/ink_cyan.png"  class="ink ink-cyan"/>
-    </div>
-    """, unsafe_allow_html=True)
-
-splat_theme()
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
+html, body, [class*="css"], .stApp {
+    font-family: 'Dela Gothic One', sans-serif !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
 # Secrets
@@ -165,23 +67,18 @@ if st.session_state["chat_history"] is None:
     ]
 
 # =========================
-# ヘッダー
-# =========================
-st.markdown('<div class="logo-pill"><span class="logo-ai">AI</span><span class="logo-text">見積もりくん２</span></div>', unsafe_allow_html=True)
-
-# =========================
 # 認証
 # =========================
-st.markdown('<div class="splat-frame"><h2>ログイン</h2></div>', unsafe_allow_html=True)
+st.title("AI見積もりくん２")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
-    st.warning("🔒 認証が必要です")
+    st.warning("認証が必要です")
     st.stop()
 
 # =========================
 # チャットUI
 # =========================
-st.markdown('<div class="splat-frame"><h2>チャットでヒアリング</h2></div>', unsafe_allow_html=True)
+st.header("チャットでヒアリング")
 
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
@@ -189,16 +86,18 @@ for msg in st.session_state["chat_history"]:
     elif msg["role"] == "user":
         st.chat_message("user").write(msg["content"])
 
-# --- ヒント文プレースホルダ（チャット入力直前） ---
+# --- ヒント文プレースホルダを「チャット入力欄の直前」に配置 ---
 hint_placeholder = st.empty()
+# すでに見積もりがある場合は、初期描画でも表示
 if st.session_state["df"] is not None:
     hint_placeholder.caption(
-        "💡 チャットを続けると見積もり精度が上がります。追加要件を入力後に再生成してください。"
+        "チャットをさらに続けて見積もり精度を上げることができます。\n"
+        "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
     )
 
 # 入力欄
 if user_input := st.chat_input("要件を入力してください..."):
-    # 新しい入力があればプレビューを一度消す
+    # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
@@ -300,10 +199,9 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
     for col in ["category", "task", "qty", "unit", "unit_price", "note"]:
         if col not in df.columns:
             df[col] = "" if col in ["category","task","unit","note"] else 0
-    if not df.empty:
-        df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0).astype(float)
-        df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
-        df["小計"] = (df["qty"] * df["unit_price"]).astype(int)
+    df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0).astype(float)
+    df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0).astype(int)
+    df["小計"] = (df["qty"] * df["unit_price"]).astype(int)
     return df
 
 # =========================
@@ -379,8 +277,7 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
-    st.markdown('<div class="splat-frame"><h2>AI見積もりを生成</h2></div>', unsafe_allow_html=True)
-    if st.button("📝 AI見積もりくんで見積もりを生成する"):
+    if st.button("AI見積もりくんで見積もりを生成する"):
         with st.spinner("AIが見積もりを生成中…"):
             prompt = build_prompt_for_estimation(st.session_state["chat_history"])
             resp = openai_client.chat.completions.create(
@@ -404,17 +301,17 @@ if has_user_input:
                 st.session_state["df"] = df
                 st.session_state["meta"] = meta
 
-                # 生成直後にヒント文を表示
+                # ⬇︎ 生成直後の同一実行でもヒント文を即時表示（プレースホルダに挿入）
                 hint_placeholder.caption(
-                    "💡 チャットを続けて見積もり精度を上げられます。追加要件を入力後に再生成してください。"
+                    "チャットをさらに続けて見積もり精度を上げることができます。\n"
+                    "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
                 )
 
 # =========================
 # 表示 & ダウンロード
 # =========================
 if st.session_state["df"] is not None:
-    st.markdown('<div class="splat-frame"><h2>見積もり結果プレビュー</h2></div>', unsafe_allow_html=True)
-    st.success("✅ 見積もり結果プレビュー")
+    st.success("見積もり結果プレビュー")
     st.dataframe(st.session_state["df"])
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
@@ -424,11 +321,10 @@ if st.session_state["df"] is not None:
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
     buf.seek(0)
-    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
+    st.download_button("Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    st.markdown('<div class="splat-frame"><h2>DD見積書テンプレート出力</h2></div>', unsafe_allow_html=True)
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
     if tmpl is not None:
         out = export_with_template(tmpl.read(), st.session_state["df"])
-        st.download_button("📥 DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx")
+        st.download_button("DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx")
