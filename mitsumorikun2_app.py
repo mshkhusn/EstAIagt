@@ -20,6 +20,153 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
+# デザイン
+# =========================
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
+
+/* ===== Base: 黒背景は body のみ、他は透明／白文字／Mochiy ===== */
+html, body { background:#000 !important; }
+.stApp, .stApp *{
+  background:transparent !important;
+  color:#fff !important;
+  font-family:'Mochiy Pop One',sans-serif !important;
+  font-weight:400 !important;
+  font-synthesis-weight:none !important;
+  letter-spacing:.01em;
+}
+
+/* ヘッダー/フッター/サイドバーも透明 */
+[data-testid="stHeader"],
+[data-testid="stToolbar"], [data-testid="stStatusWidget"],
+[data-testid="stSidebar"], [data-testid="stSidebarContent"]{
+  background:transparent !important; border:none !important;
+}
+
+/* ===== Inputs ===== */
+.stTextInput label, .stTextArea label, .stSelectbox label { color:#fff !important; }
+.stTextInput input, .stTextArea textarea, .stSelectbox div{
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stTextInput input::placeholder, .stTextArea textarea::placeholder,
+.stChatInput textarea::placeholder{ color:#ddd !important; }
+/* 目アイコン */
+.stTextInput [data-baseweb="button"]{
+  background:#333 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
+
+/* ===== Buttons（生成ボタン／ダウンロード統一） ===== */
+.stButton button, .stDownloadButton > button{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+  padding:.55rem 1rem !important; box-shadow:none !important;
+}
+.stButton button:hover, .stDownloadButton > button:hover{
+  background:#2c2c2c !important; border-color:#777 !important;
+}
+
+/* ===== Chat ===== */
+[data-testid="stChatMessage"]{ background:transparent !important; border:none !important; border-radius:14px !important; }
+[data-testid="stChatInput"], [data-testid="stChatInput"]>div{ background:transparent !important; }
+.stChatInput textarea{
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stChatInput [data-baseweb="button"]{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+
+/* ===== File Uploader ===== */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{
+  position:relative !important;
+  background:#111 !important; color:#fff !important;
+  border:1.5px solid #666 !important; border-radius:12px !important;
+  padding-left:64px !important;
+}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg{ display:none !important; }
+@supports selector(div:has(> svg)){
+  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg){
+    background:transparent !important; border:none !important;
+  }
+}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{
+  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
+  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+}
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
+  background:#2c2c2c !important; border-color:#777 !important;
+}
+
+/* ===== Chat Avatar 色変更（ライム＆パープル） ===== */
+.stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
+.stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
+  background: #a64dff !important;   /* AI: ネオンパープル */
+  color: #ffffff !important;
+  border-radius: 12px !important;
+}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"],
+.stApp [data-testid="stChatMessage"][data-testid*="user"] [data-testid*="Avatar"],
+.stApp [data-testid="stChatMessage"] [data-testid*="user"] [data-testid*="Avatar"] {
+  background: #00e08a !important;   /* User: ネオンライム */
+  color: #000000 !important;
+}
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] svg,
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] img,
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] span {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+/* ===== 見積もり結果プレビュー見出し ===== */
+.preview-title{
+  font-size: 32px !important;
+  line-height: 1.4 !important;
+  font-weight: 900 !important;
+  text-align: left;
+  color: #78f416 !important;   /* ← 指定のカラー */
+  text-shadow: none !important;
+  margin-bottom: 16px !important;
+}
+/* チャット入力フォームのフォーカス時スタイル */
+.stChatInput:focus-within textarea {
+  border: 3px solid transparent !important;
+  border-radius: 12px !important;
+  background:#111 !important;
+  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
+  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
+              0 0 18px rgba(144, 251, 15, 0.5),
+              0 0 24px rgba(0, 195, 255, 0.4) !important;
+  outline: none !important;
+}
+/* ===== パスワード入力欄のフォーカス時スタイル ===== */
+.stTextInput input:focus {
+  border: 3px solid transparent !important;
+  border-radius: 12px !important;
+  background:#111 !important;
+  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
+  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
+              0 0 18px rgba(144, 251, 15, 0.5),
+              0 0 24px rgba(0, 195, 255, 0.4) !important;
+  outline: none !important;
+}
+
+
+</style>
+""", unsafe_allow_html=True)
+
+
+
+# =========================
 # Secrets
 # =========================
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -57,16 +204,110 @@ if st.session_state["chat_history"] is None:
 # =========================
 # 認証
 # =========================
-st.title("AI見積もりくん２")
+st.markdown("""
+<style>
+/* ページ中央に配置 */
+.logo-wrap{
+  display:flex; justify-content:center; align-items:center;
+  width:100%;
+  margin: 24px 0 40px 0;  /* 下の余白（パスワード欄との間隔） */
+}
+
+/* 外側：グラデ楕円フチ */
+.logo-pill{
+  display:inline-block;
+  padding: 6px;                                   /* フチの太さ */
+  border-radius: 9999px !important;
+  background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
+}
+
+/* 内側：黒背景（pill） */
+.logo-box{
+  padding: 30px 76px;                              /* 全体サイズ */
+  border-radius: 9999px !important;
+  background:#000 !important;
+  font-family:'Mochiy Pop One',sans-serif;
+  color:inherit !important;
+}
+
+/* 1行目：AI + 見積もり */
+.logo-row1{
+  display:flex; align-items:flex-start; justify-content:center;
+  gap: 6px; line-height:1.02; margin:0;
+}
+.logo-box .ai{
+  font-size: 104px;
+  font-weight: 900;
+  color:#ff4df5 !important;
+  letter-spacing:-1.5px;
+}
+.logo-box .mitsumori{
+  font-size: 68px;
+  font-weight: 900;
+  color:#ffffff !important;
+  letter-spacing:-1px;
+}
+
+/* 2行目：くん2（さらにギュッと詰める） */
+.logo-kunrow{
+  text-align:center;
+  line-height:1.0;
+  margin-top:-28px;       /* ← 行間を極限まで詰める */
+  letter-spacing:-1px;
+}
+.logo-box .kun{
+  color:#ffffff !important;
+  font-size: 48px;
+  font-weight: 900;
+}
+.logo-box .num2{
+  color:#ff4df5 !important;
+  font-size: 48px;
+  font-weight: 900;
+}
+</style>
+
+<div class="logo-wrap">
+  <div class="logo-pill">
+    <div class="logo-box">
+      <div class="logo-row1">
+        <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+      </div>
+      <div class="logo-kunrow">
+        <span class="kun">くん</span><span class="num2">2</span>
+      </div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
 password = st.text_input("パスワードを入力してください", type="password")
+
 if password != APP_PASSWORD:
-    st.warning("🔒 認証が必要です")
+    st.warning("認証が必要です")
     st.stop()
 
 # =========================
 # チャットUI
 # =========================
-st.header("チャットでヒアリング")
+st.markdown("""
+<style>
+.custom-header {
+  color: #90fb0f !important;   /* ネオンライム */
+  font-size: 40px !important;  /* ← 大きくしました */
+  font-weight: 900 !important;
+  margin-top: 20px !important;
+  margin-bottom: 30px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown(
+    '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
+    unsafe_allow_html=True
+)
+
 
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
@@ -79,7 +320,7 @@ hint_placeholder = st.empty()
 # すでに見積もりがある場合は、初期描画でも表示
 if st.session_state["df"] is not None:
     hint_placeholder.caption(
-        "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
+        "チャットをさらに続けて見積もり精度を上げることができます。\n"
         "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
     )
 
@@ -265,7 +506,7 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
-    if st.button("📝 AI見積もりくんで見積もりを生成する"):
+    if st.button("AI見積もりくんで見積もりを生成する"):
         with st.spinner("AIが見積もりを生成中…"):
             prompt = build_prompt_for_estimation(st.session_state["chat_history"])
             resp = openai_client.chat.completions.create(
@@ -291,7 +532,7 @@ if has_user_input:
 
                 # ⬇︎ 生成直後の同一実行でもヒント文を即時表示（プレースホルダに挿入）
                 hint_placeholder.caption(
-                    "💡 チャットをさらに続けて見積もり精度を上げることができます。\n"
+                    "チャットをさらに続けて見積もり精度を上げることができます。\n"
                     "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
                 )
 
@@ -299,7 +540,7 @@ if has_user_input:
 # 表示 & ダウンロード
 # =========================
 if st.session_state["df"] is not None:
-    st.success("✅ 見積もり結果プレビュー")
+    st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
     st.dataframe(st.session_state["df"])
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
@@ -309,10 +550,10 @@ if st.session_state["df"] is not None:
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
     buf.seek(0)
-    st.download_button("📥 Excelでダウンロード", buf, "見積もり.xlsx",
+    st.download_button("Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
     if tmpl is not None:
         out = export_with_template(tmpl.read(), st.session_state["df"])
-        st.download_button("📥 DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx")
+        st.download_button("DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx")
