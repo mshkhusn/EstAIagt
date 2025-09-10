@@ -138,7 +138,8 @@ html, body { background:#000 !important; }
   margin-bottom: 16px !important;   /* ← 下に余白を追加 */
 }
 
-
+</style>
+""", unsafe_allow_html=True)
 
 
 
