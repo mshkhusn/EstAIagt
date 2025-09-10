@@ -27,20 +27,19 @@ st.markdown("""
 /* ========= Fonts ========= */
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One:wght@400;700;900&display=swap');
 
-/* ========= Base (デバイス標準フォントへ) ========= */
-html, body {
+/* ========= Base（本文はデバイス標準フォント） ========= */
+html, body, .stApp {
   background:#000 !important;
   color:#fff !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }
-.stApp { color:#fff !important; }
 
-/* ========= ロゴ／見出し／強調だけ Mochiy ========= */
+/* ========= ロゴ／見出し／ボタンだけ Mochiy ========= */
 .logo-wrap, .logo-box, .custom-header, .preview-title,
 .stButton > button, .stDownloadButton > button,
 .stChatInput [data-baseweb="button"],
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
-  font-family: 'Mochiy Pop One', sans-serif !important;
+  font-family:'Mochiy Pop One', sans-serif !important;
 }
 
 /* ========= ロゴ（中央 pill） ========= */
@@ -55,25 +54,24 @@ html, body {
 .logo-box .kun{  color:#fff !important;    font-size:48px; font-weight:900; }
 .logo-box .num2{ color:#ff4df5 !important; font-size:48px; font-weight:900; }
 
-/* ========= セクション見出し ========= */
+/* ========= 見出し ========= */
 .custom-header{
   color:#90fb0f !important; font-size:40px !important; font-weight:900 !important;
   margin:20px 0 30px !important;
 }
 
-/* ========= 「見積もり結果プレビュー」だけ色・サイズ指定 ========= */
+/* ========= 「見積もり結果プレビュー」 ========= */
 .preview-title{
   font-size:32px !important; line-height:1.4 !important; font-weight:900 !important;
   text-align:left; color:#78f416 !important; text-shadow:none !important; margin-bottom:16px !important;
 }
 
-/* ========= 入力欄（本文は細字＆デバイスフォント） ========= */
+/* ========= 入力欄（読みやすい細字） ========= */
 .stTextInput input, .stTextArea textarea, .stChatInput textarea{
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   font-weight:300 !important; font-size:16px !important; color:#fff !important;
   background:#111 !important; border:1px solid #555 !important; border-radius:12px !important;
 }
-
 /* フォーカス時：ネオングラデ枠 */
 .stTextInput input:focus, .stTextArea textarea:focus, .stChatInput:focus-within textarea{
   border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
@@ -82,14 +80,14 @@ html, body {
   outline:none !important;
 }
 
-/* ========= チャット履歴（本文：細字／AIの太字は生かす） ========= */
+/* ========= チャット履歴（本文は細字、AIの太字は尊重） ========= */
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   font-weight:400 !important; font-size:16px !important; line-height:1.55 !important; color:#fff !important;
 }
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b{
-  font-weight:700 !important;   /* ← AIが付ける強調は尊重 */
+  font-weight:700 !important;
 }
 
 /* ========= Buttons（生成／DL／送信／Browse files） ========= */
@@ -139,7 +137,6 @@ html, body {
 }
 </style>
 """, unsafe_allow_html=True)
-
 
 
 
