@@ -1,10 +1,10 @@
-# app.py（AI見積もりくん２ / Neon Splash Theme・完全版・安定注入）
+# app.py（AI見積もりくん２ / Neon Splash Theme・完全版・外部フォント読み込みなし）
 # - OpenAI GPT系（gpt-4.1）で見積り生成
 # - チャット継続 → 再生成で「履歴＋新要件」を反映
 # - 追加入力時はプレビューを一旦クリア
 # - 見積生成後は入力欄の上にヒント文を表示
 # - Excelダウンロード／DD見積テンプレ出力対応
-# - CSSは markdown(unsafe_allow_html=True) のみで注入（<link> / iframe 不使用）
+# - CSSは markdown(unsafe_allow_html=True) のみで注入（<link> / @import / iframe 不使用）
 
 import os
 import json
@@ -51,17 +51,22 @@ openai_client = OpenAI(http_client=httpx.Client(timeout=60.0))
 TAX_RATE = 0.10
 
 # =========================
-# CSS をグローバル注入（@import でフォント読み込み）
+# CSS をグローバル注入（外部フォントなし）
 # =========================
 CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Bungee:wght@400;700&family=Zen+Maru+Gothic:wght@400;700&family=Noto+Sans+JP:wght@400;600&display=swap');
-
 :root{
   --bg:#0D0F16; --panel:#151827; --panel-2:#171b2e; --border:#2a2f4a;
   --ink:#B7FF00; --pink:#FF2EBF; --cyan:#00F0FF; --vio:#7A00FF; --text:#F3F6FF; --muted:#A7B1D6;
 }
+/* システムフォント優先（外部読み込みなしで安全） */
+* {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI",
+    "Yu Gothic", "Meiryo", "MS PGothic", sans-serif !important;
+}
+
 html, body { background: var(--bg); color: var(--text); }
-* { font-family: "Noto Sans JP","Zen Maru Gothic","Bungee", system-ui, -apple-system, Segoe UI, Roboto, sans-serif !important; }
 .block-container { padding-top: 0.8rem; }
 
 /* 背景ネオン */
@@ -77,7 +82,7 @@ body::before{
 /* タイトル */
 .header-wrap{ display:flex; align-items:center; gap:.75rem; margin:.4rem 0 1rem 0; }
 .logo-dot{ width:14px; height:14px; border-radius:50%; background: conic-gradient(var(--ink), var(--cyan), var(--vio), var(--pink), var(--ink)); box-shadow:0 0 14px rgba(0,240,255,.6); }
-.app-title{ font-family:"Bungee","Zen Maru Gothic",sans-serif !important; font-weight:700; letter-spacing:.2px; font-size:1.6rem; }
+.app-title{ font-weight:800; letter-spacing:.2px; font-size:1.6rem; }
 .badge{
   display:inline-flex; gap:.5rem; align-items:center; padding:.35rem .7rem; border-radius:999px;
   background:linear-gradient(135deg, var(--pink), var(--vio)); color:white; font-weight:700; border:2px solid rgba(255,255,255,.15);
@@ -121,7 +126,11 @@ div[data-testid="stDataFrame"]{
 """
 
 def inject_global_css(css_text: str):
-    st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+    try:
+        st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+    except Exception:
+        # CSS注入で例外が出てもアプリは止めない
+        pass
 
 inject_global_css(CSS)
 
