@@ -26,16 +26,14 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
 
-/* Streamlit本体のルートと、その配下すべてに強制適用 */
-html, body { font-family: 'Dela Gothic One', sans-serif !important; }
-
-/* アプリ領域全体（中央カラム・サイドバー・ウィジェット内部まで） */
-.stApp, .stApp * ,
+/* Dela Gothic One を通常ウェイトで適用 */
+html, body, .stApp, .stApp * ,
 [data-testid="stMarkdownContainer"] * ,
 [data-testid="stSidebar"] * ,
 .stTextInput input, .stTextArea textarea, .stSelectbox div, .stButton button,
 .stChatInput textarea, [data-baseweb] * {
   font-family: 'Dela Gothic One', sans-serif !important;
+  font-weight: 400 !important;   /* ボールド指定を解除 */
 }
 </style>
 """, unsafe_allow_html=True)
