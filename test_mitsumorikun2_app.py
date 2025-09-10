@@ -20,135 +20,166 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# カスタムCSS（スプラ3風トンマナ）
+# カスタムCSS（スプラ3風＋白文字統一＋インク背景）
 # =========================
 st.markdown("""
 <style>
-/* Webフォント（太め＆丸め）—雰囲気を近づける */
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=M+PLUS+Rounded+1c:wght@700;900&display=swap');
 
-/* カラーパレット（ネオン） */
 :root{
   --pink:#ff2dfc;
   --green:#39ff14;
   --cyan:#00faff;
   --ink:#000000;
   --ink-1:#0b0b0b;
-  --ink-2:#111111;
-  --ink-3:#1a1a1a;
-  --text:#ffffff;
+  --ink-2:#101010;
+  --ink-3:#161616;
+  --text:#ffffff; /* 文字は白で統一 */
 }
 
 /* 全体 */
-.stApp{ background: var(--ink); color: var(--text); }
-.block-container{ padding-top: 1.2rem; max-width: 860px; }
+.stApp{ background:var(--ink); color:var(--text); }
+.block-container{ padding-top:10px; max-width:880px; position: relative; z-index: 1; }
 
-/* 見出しの文字をグラデ化・極太 */
+/* 見出し（グラデ文字） */
 h1,h2,h3{
-  font-family: "Mochiy Pop One","M PLUS Rounded 1c", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
-  font-weight: 900 !important;
-  line-height: 1.2;
-  margin: 0.25rem 0 0.6rem 0;
-  background: linear-gradient(90deg, var(--pink), var(--green), var(--cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-family:"Mochiy Pop One","M PLUS Rounded 1c",system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;
+  font-weight:900 !important;
+  line-height:1.18;
+  margin:4px 0 10px 0;
+  background:linear-gradient(90deg,var(--pink),var(--green),var(--cyan));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  letter-spacing:.02em;
 }
 
 /* ロゴ風ピル */
 .logo-pill{
-  display:inline-flex; align-items:center; gap:.6rem;
-  border:3px solid transparent;
-  border-radius: 22px;
-  padding: .3rem .9rem;
-  margin-bottom: 1rem;
-  background: linear-gradient(var(--ink),var(--ink)) padding-box,
-              linear-gradient(90deg, var(--pink), var(--cyan)) border-box;
+  display:inline-flex; align-items:center; gap:.55rem;
+  border:4px solid transparent; border-radius:24px;
+  padding:.25rem .8rem; margin:0 0 8px 0;
+  background:linear-gradient(var(--ink),var(--ink)) padding-box,
+             linear-gradient(90deg,var(--pink),var(--cyan)) border-box;
+  box-shadow:0 6px 24px rgba(0,255,170,.06);
 }
-.logo-ai{
-  font: 900 1.6rem "Mochiy Pop One","M PLUS Rounded 1c", sans-serif;
-  background: linear-gradient(90deg, var(--pink), var(--green));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+.logo-ai{ font:900 1.6rem "Mochiy Pop One","M PLUS Rounded 1c",sans-serif;
+  background:linear-gradient(90deg,var(--pink),var(--green));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
 }
-.logo-text{
-  font: 900 1.2rem "Mochiy Pop One","M PLUS Rounded 1c", sans-serif;
-  letter-spacing: .02em;
-  color: #fff;
-}
+.logo-text{ font:900 1.25rem "Mochiy Pop One","M PLUS Rounded 1c",sans-serif; color:#fff; }
 
-/* グラデ枠のフレーム */
+/* セクション枠（グラデ枠＋詰めた余白） */
 .splat-frame{
-  border: 3px solid transparent;
-  border-radius: 18px;
-  padding: .8rem 1rem;
-  margin: .6rem 0 1rem 0;
-  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
-              linear-gradient(90deg, var(--green), var(--cyan)) border-box;
+  border:3px solid transparent; border-radius:16px;
+  padding:.55rem .8rem; margin:8px 0 12px 0;
+  background:linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
+             linear-gradient(90deg,var(--green),var(--cyan)) border-box;
 }
-.splat-frame h2{
-  margin: 0;
-  font-size: 1.2rem;
-}
+.splat-frame h2{ margin:0; font-size:1.06rem; }
 
-/* ヒントの小さめテキスト */
-.small-note{
-  color: #cfead0; font-size: .9rem; line-height: 1.4;
-}
+/* ヒント */
+.small-note{ color:#d7fbe3; font-size:.9rem; line-height:1.45; }
 
-/* ボタンをネオングラデに */
+/* ボタン：白文字＆発光 */
 .stButton>button{
-  background: linear-gradient(90deg, var(--pink), var(--green));
-  color:#fff; font-weight:800; border:none; border-radius:12px;
-  padding:.65rem 1.1rem; box-shadow:0 0 0 rgba(0,0,0,0);
-  transition: transform .12s ease, background .2s ease, box-shadow .2s ease;
+  background:linear-gradient(90deg,var(--pink),var(--green));
+  color:#fff;
+  font-weight:900;
+  border:none; border-radius:12px;
+  padding:.66rem 1.05rem;
+  box-shadow:0 10px 28px rgba(0,255,170,.18), inset 0 0 12px rgba(255,255,255,.18);
+  transition:transform .12s ease, box-shadow .2s ease, background .2s ease;
 }
 .stButton>button:hover{
-  transform: translateY(-1px) scale(1.02);
-  background: linear-gradient(90deg, var(--green), var(--cyan));
-  box-shadow: 0 10px 28px rgba(0,255,170,.18);
+  transform:translateY(-1px) scale(1.02);
+  background:linear-gradient(90deg,var(--green),var(--cyan));
+  box-shadow:0 14px 36px rgba(0,255,170,.25), inset 0 0 18px rgba(255,255,255,.22);
 }
 
-/* チャット気泡の地色を暗めに */
+/* チャット気泡：白文字強制＆コントラスト */
 .stChatMessage[data-testid="stChatMessage"]{
-  background: var(--ink-2);
-  border-radius: 16px;
-  border: 2px solid transparent;
-  padding: .6rem .8rem;
-  margin-bottom:.4rem;
-  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
-              linear-gradient(90deg, var(--pink), var(--green)) border-box;
+  background:var(--ink-3);
+  color:#fff !important;
+  border-radius:14px;
+  border:2px solid transparent;
+  padding:.55rem .75rem; margin-bottom:.45rem;
+  background:linear-gradient(var(--ink-3),var(--ink-3)) padding-box,
+             linear-gradient(90deg,var(--pink),var(--green)) border-box;
 }
+.stChatMessage *{ color:#fff !important; opacity:1 !important; }
 
-/* 入力欄（チャット） */
+/* 入力欄（送信ボタン含む） */
 .stChatInput textarea{
-  background: var(--ink-2); color:#fff;
+  background:var(--ink-2); color:#fff;
   border:2px solid transparent; border-radius:12px;
-  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
-              linear-gradient(90deg, var(--green), var(--cyan)) border-box;
+  background:linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
+             linear-gradient(90deg,var(--green),var(--cyan)) border-box;
 }
 .stChatInput [data-baseweb="button"]{
-  background: linear-gradient(90deg, var(--pink), var(--green));
-  border-radius:12px; border:none; color:#fff; font-weight:800;
+  background:linear-gradient(90deg,var(--pink),var(--green));
+  border-radius:12px; border:none; color:#fff;
+  font-weight:900;
+  box-shadow:0 10px 24px rgba(0,255,170,.18);
 }
 
-/* DataFrameの入れ物を暗色＋枠グラデ */
-.stDataFrame, .stDataFrame > div{
-  background: var(--ink-1) !important;
-}
+/* DataFrameの器：暗色＆グラデ枠＋ヘッダー視認性 */
+.stDataFrame, .stDataFrame > div{ background:var(--ink-1) !important; color:#fff !important; }
 [data-testid="stDataFrameResizable"]{
-  border: 2px solid transparent; border-radius:12px;
-  background: linear-gradient(var(--ink-1),var(--ink-1)) padding-box,
-              linear-gradient(90deg, var(--pink), var(--green)) border-box;
+  border:2px solid transparent; border-radius:12px;
+  background:linear-gradient(var(--ink-1),var(--ink-1)) padding-box,
+             linear-gradient(90deg,var(--pink),var(--green)) border-box;
+}
+[data-testid="stDataFrame"] th{ background:#121212 !important; color:#fff !important; }
+
+/* 一般コンポ（入力/アップローダ） */
+.stTextInput>div>div>input, .stFileUploader > div{
+  background:var(--ink-2); color:#fff;
+  border:2px solid transparent; border-radius:10px;
+  background:linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
+             linear-gradient(90deg,var(--green),var(--cyan)) border-box;
 }
 
-/* テキスト入力・ファイルアップローダなどの一般コンポ */
-.stTextInput>div>div>input,
-.stFileUploader > div{
-  background: var(--ink-2); color:#fff;
-  border:2px solid transparent; border-radius:10px;
-  background: linear-gradient(var(--ink-2),var(--ink-2)) padding-box,
-              linear-gradient(90deg, var(--green), var(--cyan)) border-box;
+/* アラートのコントラスト */
+.stAlert{
+  background:#131313; border:2px solid transparent; border-radius:12px;
+  background:linear-gradient(#131313,#131313) padding-box,
+             linear-gradient(90deg,var(--pink),var(--cyan)) border-box;
+  color:#fff;
+}
+
+/* ======== インク・スプラッシュ（装飾） ======== */
+.ink-stage{
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+}
+/* 各インクは放射グラデにボカし＋発光 */
+.ink{ position:absolute; filter: blur(6px) drop-shadow(0 0 28px rgba(0,255,170,.18)); opacity:.9; }
+.ink--pink{
+  width: 280px; height: 220px; top: 70px; left: -60px;
+  background: radial-gradient(60% 60% at 40% 50%, rgba(255,45,252,.9), rgba(255,45,252,.55) 60%, transparent 65%);
+  transform: rotate(-8deg);
+  clip-path: polygon(60% 0, 85% 15%, 100% 40%, 90% 70%, 65% 85%, 35% 85%, 10% 70%, 0 40%, 15% 15%);
+}
+.ink--green{
+  width: 220px; height: 200px; top: 46%; right: -50px;
+  background: radial-gradient(60% 60% at 45% 50%, rgba(57,255,20,.9), rgba(57,255,20,.55) 60%, transparent 65%);
+  transform: rotate(14deg);
+  clip-path: polygon(55% 0, 85% 20%, 100% 45%, 85% 75%, 55% 95%, 30% 80%, 10% 55%, 15% 25%);
+}
+.ink--cyan{
+  width: 260px; height: 230px; bottom: 30px; left: 15%;
+  background: radial-gradient(60% 60% at 50% 50%, rgba(0,250,255,.9), rgba(0,250,255,.55) 60%, transparent 65%);
+  transform: rotate(-18deg);
+  clip-path: polygon(50% 0, 80% 15%, 100% 40%, 90% 70%, 65% 90%, 35% 90%, 10% 70%, 0 40%, 20% 15%);
 }
 </style>
+""", unsafe_allow_html=True)
+
+# ===== インクの固定レイヤーを配置（装飾。操作はブロックしない） =====
+st.markdown("""
+<div class="ink-stage">
+  <div class="ink ink--pink"></div>
+  <div class="ink ink--green"></div>
+  <div class="ink ink--cyan"></div>
+</div>
 """, unsafe_allow_html=True)
 
 # =========================
@@ -177,8 +208,8 @@ TAX_RATE = 0.10
 # セッション管理
 # =========================
 for k in ["chat_history", "items_json_raw", "items_json", "df", "meta"]:
-    if k not in st.session_state:
-        st.session_state[k] = None
+  if k not in st.session_state:
+      st.session_state[k] = None
 
 if st.session_state["chat_history"] is None:
     st.session_state["chat_history"] = [
