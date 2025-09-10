@@ -188,45 +188,62 @@ st.markdown("""
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
   width:100%;
-  margin: 24px 0 32px 0; /* ← 下を広め（パスワードとの行間） */
+  margin: 24px 0 40px 0; /* ← 下の余白を多めにしてパスワード欄と間隔をあける */
 }
 
-/* 外側：グラデ楕円フチ（確実に見せるため !important） */
+/* 外側：グラデ楕円フチ */
 .logo-pill{
   display:inline-block;
-  padding: 4px;                                            /* 枠の太さ */
-  border-radius: 9999px !important;                        /* 楕円（pill） */
+  padding: 6px;                                           /* 枠の太さ */
+  border-radius: 9999px !important;                       /* pill型の楕円 */
   background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
 }
 
-/* 内側：黒の塗りつぶし（!important で全体CSSを上書き） */
+/* 内側：黒塗り背景 */
 .logo-box{
-  padding: 26px 64px;                                      /* 全体サイズ */
+  padding: 28px 72px;                                     /* 内側の余白（全体サイズUP） */
   border-radius: 9999px !important;
   background:#000 !important;
   font-family:'Mochiy Pop One',sans-serif;
   color:inherit !important;
 }
 
-/* 1行目：AI + 見積もり（上揃え＋中央寄せ） */
+/* 1行目：AI + 見積もり */
 .logo-row1{
   display:flex; align-items:flex-start; justify-content:center;
-  gap: 8px; line-height:1.0; margin:0;
+  gap: 4px; line-height:1.0; margin:0;
 }
 .logo-box .ai{
-  font-size: 88px;  font-weight: 900; color:#ff4df5 !important; margin-right:2px;
+  font-size: 96px;        /* ← デカく */
+  font-weight: 900;
+  color:#ff4df5 !important;
+  margin-right:0px;
+  letter-spacing:-3px;    /* ← 文字詰め */
 }
 .logo-box .mitsumori{
-  font-size: 58px;  font-weight: 900; color:#ffffff !important;
+  font-size: 64px;        /* ← 見積もりは少し小さく */
+  font-weight: 900;
+  color:#ffffff !important;
+  letter-spacing:-2px;
 }
 
-/* 2行目：くん2（中央寄せ・行間ギュッと） */
+/* 2行目：くん2 */
 .logo-kunrow{
-  text-align:center; line-height:1.0; letter-spacing:-0.5px;
-  margin-top: -8px;   /* 行間の詰め具合（-10〜-4 で微調整可） */
+  text-align:center;
+  line-height:1.0;
+  margin-top:-14px;       /* ← 行間を詰める */
+  letter-spacing:-2px;
 }
-.logo-box .kun{  color:#ffffff !important; font-size: 36px; font-weight:900; }
-.logo-box .num2{ color:#ff4df5 !important; font-size: 36px; font-weight:900; }
+.logo-box .kun{  
+  color:#ffffff !important;
+  font-size: 44px;        /* ↑ 大きく */
+  font-weight:900;
+}
+.logo-box .num2{ 
+  color:#ff4df5 !important;
+  font-size: 44px;        /* ↑ 大きく */
+  font-weight:900;
+}
 </style>
 
 <div class="logo-wrap">
