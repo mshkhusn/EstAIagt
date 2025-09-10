@@ -24,138 +24,122 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
+/* ========= Fonts ========= */
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One:wght@400;700;900&display=swap');
 
-/* ===== Base：背景は黒、要素は透明。フォントはここで“決めない” ===== */
-html, body { background:#000 !important; }
-.stApp, .stApp *{
-  background:transparent !important;
+/* ========= Base (デバイス標準フォントへ) ========= */
+html, body {
+  background:#000 !important;
   color:#fff !important;
-  letter-spacing:.01em;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+.stApp { color:#fff !important; }
+
+/* ========= ロゴ／見出し／強調だけ Mochiy ========= */
+.logo-wrap, .logo-box, .custom-header, .preview-title,
+.stButton > button, .stDownloadButton > button,
+.stChatInput [data-baseweb="button"],
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
+  font-family: 'Mochiy Pop One', sans-serif !important;
 }
 
-/* 本文の既定フォント（デバイス標準） */
-.stApp{
-  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-  font-weight:400 !important;
+/* ========= ロゴ（中央 pill） ========= */
+.logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px; }
+.logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important;
+  background:linear-gradient(90deg,#ff4df5,#a64dff) !important; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; color:inherit !important; }
+.logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:6px; line-height:1.02; margin:0; }
+.logo-box .ai{ font-size:104px; font-weight:900; color:#ff4df5 !important; letter-spacing:-1.5px; }
+.logo-box .mitsumori{ font-size:68px; font-weight:900; color:#fff !important; letter-spacing:-1px; }
+.logo-kunrow{ text-align:center; line-height:1.0; margin-top:-20px; letter-spacing:-1px; }
+.logo-box .kun{  color:#fff !important;    font-size:48px; font-weight:900; }
+.logo-box .num2{ color:#ff4df5 !important; font-size:48px; font-weight:900; }
+
+/* ========= セクション見出し ========= */
+.custom-header{
+  color:#90fb0f !important; font-size:40px !important; font-weight:900 !important;
+  margin:20px 0 30px !important;
 }
 
-/* ===== Mochiy を“要所だけ”適用 ===== */
-.logo-box, .preview-title, .custom-header,
-.stButton button, .stDownloadButton > button,
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"],
+/* ========= 「見積もり結果プレビュー」だけ色・サイズ指定 ========= */
+.preview-title{
+  font-size:32px !important; line-height:1.4 !important; font-weight:900 !important;
+  text-align:left; color:#78f416 !important; text-shadow:none !important; margin-bottom:16px !important;
+}
+
+/* ========= 入力欄（本文は細字＆デバイスフォント） ========= */
+.stTextInput input, .stTextArea textarea, .stChatInput textarea{
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-weight:300 !important; font-size:16px !important; color:#fff !important;
+  background:#111 !important; border:1px solid #555 !important; border-radius:12px !important;
+}
+
+/* フォーカス時：ネオングラデ枠 */
+.stTextInput input:focus, .stTextArea textarea:focus, .stChatInput:focus-within textarea{
+  border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
+  border-image:linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
+  box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
+  outline:none !important;
+}
+
+/* ========= チャット履歴（本文：細字／AIの太字は生かす） ========= */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-weight:400 !important; font-size:16px !important; line-height:1.55 !important; color:#fff !important;
+}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b{
+  font-weight:700 !important;   /* ← AIが付ける強調は尊重 */
+}
+
+/* ========= Buttons（生成／DL／送信／Browse files） ========= */
+.stButton > button, .stDownloadButton > button{
+  position:relative; padding:.65rem 1.25rem !important; border:2px solid transparent !important;
+  border-radius:14px !important; font-weight:700 !important; letter-spacing:.02em; color:#fff !important; cursor:pointer;
+  background:linear-gradient(#111,#111) padding-box,
+             linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+  box-shadow:0 4px 10px rgba(0,0,0,.35), 0 0 10px rgba(255,77,245,.25) inset;
+  transition:transform .08s ease, box-shadow .2s ease, filter .2s ease;
+}
+.stButton > button:hover, .stDownloadButton > button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 6px 16px rgba(0,0,0,.45), 0 0 12px rgba(255,77,245,.35) inset,
+             0 0 14px rgba(144,251,15,.25), 0 0 18px rgba(0,195,255,.2);
+  filter:brightness(1.05);
+}
+.stButton > button:active, .stDownloadButton > button:active{
+  transform:translateY(0); box-shadow:0 3px 8px rgba(0,0,0,.35), 0 0 10px rgba(255,77,245,.25) inset;
+}
+.stButton > button:disabled, .stDownloadButton > button:disabled{
+  opacity:.6; cursor:not-allowed; filter:grayscale(.1) brightness(.9);
+}
+/* Browse files */
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
+  border:2px solid transparent !important; border-radius:12px !important; color:#fff !important;
+  background:linear-gradient(#111,#111) padding-box,
+             linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+  box-shadow:0 4px 10px rgba(0,0,0,.35);
+}
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{ filter:brightness(1.05); }
+/* チャット送信アイコン */
 .stChatInput [data-baseweb="button"]{
-  font-family:'Mochiy Pop One',sans-serif !important;
-  font-weight:900 !important;
+  border:2px solid transparent !important; border-radius:12px !important; color:#fff !important;
+  background:linear-gradient(#111,#111) padding-box,
+             linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
 }
 
-/* ===== Inputs ===== */
-.stTextInput label, .stTextArea label, .stSelectbox label { color:#fff !important; }
-.stTextInput input, .stTextArea textarea, .stSelectbox div{
-  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-  font-weight:300 !important; font-size:16px !important;
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-.stTextInput input::placeholder, .stTextArea textarea::placeholder,
-.stChatInput textarea::placeholder{ color:#ddd !important; }
-/* 目アイコン */
-.stTextInput [data-baseweb="button"]{
-  background:#333 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-}
-
-/* ===== Buttons（生成ボタン／ダウンロード） ===== */
-.stButton button, .stDownloadButton > button{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-  padding:.55rem 1rem !important; box-shadow:none !important;
-}
-.stButton button:hover, .stDownloadButton > button:hover{
-  background:#2c2c2c !important; border-color:#777 !important;
-}
-
-/* ===== Chat ===== */
-[data-testid="stChatMessage"]{ background:transparent !important; border:none !important; border-radius:14px !important; }
-[data-testid="stChatInput"], [data-testid="stChatInput"]>div{ background:transparent !important; }
-.stChatInput textarea{
-  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-  font-weight:300 !important; font-size:16px !important;
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-/* 送信ボタンは Mochiy（上のまとめ指定で適用済み） */
-.stChatInput [data-baseweb="button"]{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-
-/* ===== File Uploader ===== */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{
-  position:relative !important;
-  background:#111 !important; color:#fff !important;
-  border:1.5px solid #666 !important; border-radius:12px !important;
-  padding-left:64px !important;
-}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg{ display:none !important; }
-@supports selector(div:has(> svg)){
-  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg){
-    background:transparent !important; border:none !important;
-  }
-}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{
-  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
-  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
-}
-
-/* ===== フォーカス時：ネオンのグラデ枠（チャット＆パス） ===== */
-.stChatInput:focus-within textarea,
-.stTextInput input:focus {
-  border: 3px solid transparent !important;
-  border-radius: 12px !important;
-  background:#111 !important;
-  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow: 0 0 12px rgba(255,77,245,.6),
-              0 0 18px rgba(144,251,15,.5),
-              0 0 24px rgba(0,195,255,.4) !important;
-  outline: none !important;
-}
-
-/* ===== Chat Avatar（AI=パープル／User=ライム） ===== */
+/* ========= アバター色（AI=パープル／User=ライム） ========= */
 .stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
 .stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"]{
   background:#a64dff !important; color:#fff !important; border-radius:12px !important;
 }
 .stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{
   background:#00e08a !important; color:#000 !important;
 }
-
-/* ===== 見出し・見積もりタイトル（Mochiyで強調） ===== */
-.preview-title{
-  font-family:'Mochiy Pop One',sans-serif !important;
-  font-size: 32px !important; line-height: 1.4 !important; font-weight: 900 !important;
-  text-align:left; color:#78f416 !important; text-shadow:none !important; margin-bottom:16px !important;
-}
-.custom-header{
-  font-family:'Mochiy Pop One',sans-serif !important;
-  color:#90fb0f !important; font-size:40px !important; font-weight:900 !important;
-  margin-top:20px !important; margin-bottom:30px !important;
-}
-
-/* ===== チャット履歴本文：デバイス標準。AIの太字は尊重 ===== */
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{
-  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-  font-weight:400 !important; font-size:16px !important; line-height:1.55 !important; color:#fff !important;
-}
-/* strong/b は太字のまま（AIの表現優先） */
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b{
-  font-weight:700 !important;
-}
 </style>
 """, unsafe_allow_html=True)
+
 
 
 # =========================
