@@ -24,20 +24,25 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@400;500&display=swap');
 
-/* Dela Gothic One を通常ウェイトで適用 */
+/* 見出しだけDela Gothic One */
+h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    font-family: 'Dela Gothic One', sans-serif !important;
+    font-weight: 400 !important;
+}
+
+/* 本文・UIはM PLUS Rounded 1c */
 html, body, .stApp, .stApp * ,
 [data-testid="stMarkdownContainer"] * ,
 [data-testid="stSidebar"] * ,
 .stTextInput input, .stTextArea textarea, .stSelectbox div, .stButton button,
 .stChatInput textarea, [data-baseweb] * {
-  font-family: 'Dela Gothic One', sans-serif !important;
-  font-weight: 400 !important;   /* ボールド指定を解除 */
+    font-family: 'M PLUS Rounded 1c', sans-serif !important;
+    font-weight: 400 !important;
 }
 </style>
 """, unsafe_allow_html=True)
-
 # =========================
 # Secrets
 # =========================
