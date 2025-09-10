@@ -1,7 +1,7 @@
-# app.py （AI見積もりくん２）
+# app.py （AI見積もりくん２ / Mochiy限定適用・完全版）
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
-# 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
+# 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示
 
 import os
 import json
@@ -20,36 +20,31 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# デザイン
+# デザイン（ベース＝デバイスフォント / 指定要素だけ Mochiy）
 # =========================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* ===== Base: 黒背景は body のみ ===== */
+:root{
+  --system-ui: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+               "Hiragino Sans", "Yu Gothic UI", "YuGothic", "Meiryo",
+               "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mochiy: 'Mochiy Pop One', sans-serif;
+}
+
+/* ===== Base ===== */
 html, body { background:#000 !important; }
-.stApp, .stApp *{
+.stApp{
   background:transparent !important;
   color:#fff !important;
-  font-family:"Helvetica","Arial",sans-serif !important; /* 基本文字は標準フォント */
-  font-weight:400 !important;
-  font-synthesis-weight:none !important;
+  font-family: var(--system-ui) !important; /* ベースはデバイス */
+  font-weight: 400 !important;
   letter-spacing:.01em;
 }
+.stApp *{ color:inherit }
 
-/* ===== Mochiy を“要所だけ”適用（太さは上書きしない） ===== */
-.logo-box, .preview-title, .custom-header,
-.stButton button, .stDownloadButton > button,
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"],
-.stChatInput [data-baseweb="button"]{
-  font-family:'Mochiy Pop One', sans-serif !important;
-  font-synthesis-weight: none !important;
-  font-synthesis: none !important;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-/* ===== ヘッダー/フッター/サイドバー ===== */
+/* ヘッダー/サイドバー */
 [data-testid="stHeader"],
 [data-testid="stToolbar"], [data-testid="stStatusWidget"],
 [data-testid="stSidebar"], [data-testid="stSidebarContent"]{
@@ -61,21 +56,27 @@ html, body { background:#000 !important; }
 .stTextInput input, .stTextArea textarea, .stSelectbox div{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
+  font-family: var(--system-ui) !important;
 }
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
 .stChatInput textarea::placeholder{ color:#ddd !important; }
+
+/* 目アイコン */
 .stTextInput [data-baseweb="button"]{
   background:#333 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
 }
 
 /* ===== Buttons ===== */
-.stButton button, .stDownloadButton > button{
+.stButton button, .stDownloadButton > button,
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
   padding:.55rem 1rem !important; box-shadow:none !important;
+  font-family: var(--mochiy) !important;  /* ← Mochiy 適用 */
 }
-.stButton button:hover, .stDownloadButton > button:hover{
+.stButton button:hover, .stDownloadButton > button:hover,
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
 
@@ -85,10 +86,17 @@ html, body { background:#000 !important; }
 .stChatInput textarea{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
+  font-family: var(--system-ui) !important;
 }
 .stChatInput [data-baseweb="button"]{
   background:#222 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
+}
+
+/* チャット本文（細めで読みやすく / 太字は壊さない） */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] *{
+  font-family: var(--system-ui) !important;
+  line-height: 1.55 !important;
 }
 
 /* ===== File Uploader ===== */
@@ -109,105 +117,65 @@ html, body { background:#000 !important; }
   width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-}
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
-  background:#2c2c2c !important; border-color:#777 !important;
+/* ラベル部分（「DD見積書テンプレートをアップロード（.xlsx）」など） */
+[data-testid="stFileUploader"] label,
+[data-testid="stFileUploader"] > div:first-child{
+  font-family: var(--mochiy) !important; /* ← Mochiy 適用 */
 }
 
-/* ===== Chat Avatar 色変更（ライム＆パープル） ===== */
+/* ===== Chat Avatar（色） ===== */
 .stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
 .stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
-  background: #a64dff !important;
-  color: #ffffff !important;
-  border-radius: 12px !important;
+  background:#a64dff !important; color:#fff !important; border-radius:12px !important;
 }
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"],
-.stApp [data-testid="stChatMessage"][data-testid*="user"] [data-testid*="Avatar"],
-.stApp [data-testid="stChatMessage"] [data-testid*="user"] [data-testid*="Avatar"] {
-  background: #00e08a !important;
-  color: #000000 !important;
-}
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] svg,
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] img,
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] span {
-  background: transparent !important;
-  color: inherit !important;
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{
+  background:#00e08a !important; color:#000 !important;
 }
 
-/* ===== 見積もり結果プレビュー見出し ===== */
+/* ===== プレビュー見出し ===== */
 .preview-title{
-  font-size: 32px !important;
-  line-height: 1.4 !important;
-  font-weight: 900 !important;
-  text-align: left;
-  color: #78f416 !important;
-  text-shadow: none !important;
-  margin-bottom: 16px !important;
+  font-size:32px !important; font-weight:900 !important;
+  color:#78f416 !important; margin-bottom:16px !important;
+  font-family: var(--mochiy) !important;  /* ← Mochiy 適用 */
 }
 
-/* ===== チャット入力フォームのフォーカス時 ===== */
-.stChatInput:focus-within textarea {
-  border: 3px solid transparent !important;
-  border-radius: 12px !important;
+/* ===== 入力欄/パスワードのフォーカス時 ===== */
+.stChatInput:focus-within textarea,
+.stTextInput input:focus{
+  border:3px solid transparent !important; border-radius:12px !important;
   background:#111 !important;
-  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
-              0 0 18px rgba(144, 251, 15, 0.5),
-              0 0 24px rgba(0, 195, 255, 0.4) !important;
-  outline: none !important;
+  border-image:linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
+  box-shadow:0 0 12px rgba(255,77,245,.6),
+             0 0 18px rgba(144,251,15,.5),
+             0 0 24px rgba(0,195,255,.4) !important;
+  outline:none !important;
 }
 
-/* ===== パスワード入力欄のフォーカス時 ===== */
-.stTextInput input:focus {
-  border: 3px solid transparent !important;
-  border-radius: 12px !important;
-  background:#111 !important;
-  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
-              0 0 18px rgba(144, 251, 15, 0.5),
-              0 0 24px rgba(0, 195, 255, 0.4) !important;
-  outline: none !important;
+/* ===== ロゴ（ここは Mochiy） ===== */
+.logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px 0; }
+.logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important;
+  background: linear-gradient(90deg,#ff4df5,#a64dff) !important; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important;
+  font-family: var(--mochiy) !important; color:inherit !important; }
+.logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:6px; line-height:1.02; margin:0; }
+.logo-box .ai{ font-size:104px; font-weight:900; color:#ff4df5 !important; letter-spacing:-1.5px; }
+.logo-box .mitsumori{ font-size:68px; font-weight:900; color:#fff !important; letter-spacing:-1px; }
+.logo-kunrow{ text-align:center; line-height:1.0; margin-top:-28px; letter-spacing:-1px; }
+.logo-box .kun{ color:#fff !important; font-size:48px; font-weight:900; }
+.logo-box .num2{ color:#ff4df5 !important; font-size:48px; font-weight:900; }
+
+/* ===== 見出し（h2） ===== */
+.custom-header{
+  color:#90fb0f !important;
+  font-family: var(--mochiy) !important;  /* ← Mochiy 適用 */
+  font-size:40px !important; font-weight:900 !important;
+  margin:20px 0 30px !important;
 }
 
-/* ===== 入力欄の文字を細字化 ===== */
-.stTextInput input,
-.stTextArea textarea,
-.stChatInput textarea {
-  font-family: "Helvetica", "Arial", sans-serif !important;
-  font-weight: 300 !important;
-  font-size: 16px !important;
-  color: #fff !important;
-}
-
-/* ===== チャット履歴（細字） ===== */
-[data-testid="stChatMessage"] p,
-[data-testid="stChatMessage"] span,
-[data-testid="stChatMessage"] div {
-  font-weight: 400 !important;
-  font-size: 16px !important;
-  line-height: 1.5 !important;
-  font-family: "Helvetica", "Arial", sans-serif !important;
-  color: #fff !important;
-}
-
-/* ===== チャット履歴のMarkdown内テキスト ===== */
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] * {
-  font-family: "Helvetica", "Arial", sans-serif !important;
-  font-weight: 400 !important;
-  line-height: 1.55 !important;
-}
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li b,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ol li p strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ul li p strong {
-  font-weight: 400 !important;
-  font-family: "Helvetica", "Arial", sans-serif !important;
+/* ===== 「パスワードを入力してください」ラベル ===== */
+.stTextInput label{
+  font-family: var(--mochiy) !important;  /* ← Mochiy 適用 */
 }
 </style>
 """, unsafe_allow_html=True)
@@ -225,7 +193,7 @@ if not OPENAI_API_KEY:
 
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 if OPENAI_ORG_ID:
-    os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
+  os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
 
 openai_client = OpenAI(http_client=httpx.Client(timeout=60.0))
 
@@ -248,71 +216,9 @@ if st.session_state["chat_history"] is None:
     ]
 
 # =========================
-# 認証
+# 認証（ロゴ表示）
 # =========================
 st.markdown("""
-<style>
-/* ページ中央に配置 */
-.logo-wrap{
-  display:flex; justify-content:center; align-items:center;
-  width:100%;
-  margin: 24px 0 40px 0;  /* 下の余白（パスワード欄との間隔） */
-}
-
-/* 外側：グラデ楕円フチ */
-.logo-pill{
-  display:inline-block;
-  padding: 6px;                                   /* フチの太さ */
-  border-radius: 9999px !important;
-  background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
-}
-
-/* 内側：黒背景（pill） */
-.logo-box{
-  padding: 30px 76px;                              /* 全体サイズ */
-  border-radius: 9999px !important;
-  background:#000 !important;
-  font-family:'Mochiy Pop One',sans-serif;
-  color:inherit !important;
-}
-
-/* 1行目：AI + 見積もり */
-.logo-row1{
-  display:flex; align-items:flex-start; justify-content:center;
-  gap: 6px; line-height:1.02; margin:0;
-}
-.logo-box .ai{
-  font-size: 104px;
-  font-weight: 900;
-  color:#ff4df5 !important;
-  letter-spacing:-1.5px;
-}
-.logo-box .mitsumori{
-  font-size: 68px;
-  font-weight: 900;
-  color:#ffffff !important;
-  letter-spacing:-1px;
-}
-
-/* 2行目：くん2（さらにギュッと詰める） */
-.logo-kunrow{
-  text-align:center;
-  line-height:1.0;
-  margin-top:-28px;       /* ← 行間を極限まで詰める */
-  letter-spacing:-1px;
-}
-.logo-box .kun{
-  color:#ffffff !important;
-  font-size: 48px;
-  font-weight: 900;
-}
-.logo-box .num2{
-  color:#ff4df5 !important;
-  font-size: 48px;
-  font-weight: 900;
-}
-</style>
-
 <div class="logo-wrap">
   <div class="logo-pill">
     <div class="logo-box">
@@ -327,9 +233,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
 password = st.text_input("パスワードを入力してください", type="password")
-
 if password != APP_PASSWORD:
     st.warning("認証が必要です")
     st.stop()
@@ -337,33 +241,16 @@ if password != APP_PASSWORD:
 # =========================
 # チャットUI
 # =========================
-st.markdown("""
-<style>
-.custom-header {
-  color: #90fb0f !important;   /* ネオンライム */
-  font-size: 40px !important;  /* ← 大きくしました */
-  font-weight: 900 !important;
-  margin-top: 20px !important;
-  margin-bottom: 30px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown(
-    '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
-    unsafe_allow_html=True
-)
-
+st.markdown('<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>', unsafe_allow_html=True)
 
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
         st.chat_message("assistant").write(msg["content"])
-    elif msg["role"] == "user":
+    else:
         st.chat_message("user").write(msg["content"])
 
-# --- ヒント文プレースホルダを「チャット入力欄の直前」に配置 ---
+# ヒント文（入力欄直前）
 hint_placeholder = st.empty()
-# すでに見積もりがある場合は、初期描画でも表示
 if st.session_state["df"] is not None:
     hint_placeholder.caption(
         "チャットをさらに続けて見積もり精度を上げることができます。\n"
@@ -372,7 +259,7 @@ if st.session_state["df"] is not None:
 
 # 入力欄
 if user_input := st.chat_input("要件を入力してください..."):
-    # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
+    # 新しい入力 → 既存プレビューをクリア
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
@@ -489,7 +376,7 @@ def compute_totals(df: pd.DataFrame):
     return {"taxable": taxable, "tax": tax, "total": total}
 
 # =========================
-# DDテンプレ出力
+# DDテンプレ出力（トークン {{ITEMS_START}} 起点）
 # =========================
 TOKEN_ITEMS = "{{ITEMS_START}}"
 COLMAP = {"task": "B", "qty": "O", "unit": "Q", "unit_price": "S", "amount": "W"}
@@ -576,7 +463,6 @@ if has_user_input:
                 st.session_state["df"] = df
                 st.session_state["meta"] = meta
 
-                # ⬇︎ 生成直後の同一実行でもヒント文を即時表示（プレースホルダに挿入）
                 hint_placeholder.caption(
                     "チャットをさらに続けて見積もり精度を上げることができます。\n"
                     "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
@@ -592,6 +478,7 @@ if st.session_state["df"] is not None:
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
 
+    # シンプルExcel
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
@@ -599,6 +486,7 @@ if st.session_state["df"] is not None:
     st.download_button("Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
+    # DDテンプレ適用
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
     if tmpl is not None:
         out = export_with_template(tmpl.read(), st.session_state["df"])
