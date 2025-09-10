@@ -109,7 +109,6 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-</style>
 /* ===== Chat Avatar：白枠をつける ===== */
 [data-testid="stChatMessageAvatar"] {
   border-radius: 50% !important;
@@ -124,7 +123,7 @@ html, body { background:#000 !important; }
   border-radius: 50% !important;
   background: transparent !important;
 }
-
+</style>
 """, unsafe_allow_html=True)
 
 
