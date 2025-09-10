@@ -24,90 +24,94 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-/* ===== 全体設定 ===== */
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-html, body, .stApp {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  font-family: 'Mochiy Pop One', sans-serif !important;
+/* ===== Base: 黒背景は body のみ、他は透明／白文字／Mochiy ===== */
+html, body { background:#000 !important; }
+.stApp, .stApp *{
+  background:transparent !important;
+  color:#fff !important;
+  font-family:'Mochiy Pop One',sans-serif !important;
+  font-weight:400 !important;
+  font-synthesis-weight:none !important;
+  letter-spacing:.01em;
 }
 
-/* ヘッダー、サイドバーも黒背景 */
-[data-testid="stHeader"], [data-testid="stSidebar"] {
-  background-color: #000000 !important;
+/* ヘッダー/フッター/サイドバーも透明 */
+[data-testid="stHeader"],
+[data-testid="stToolbar"], [data-testid="stStatusWidget"],
+[data-testid="stSidebar"], [data-testid="stSidebarContent"]{
+  background:transparent !important; border:none !important;
 }
 
-/* ===== テキスト ===== */
-.stTextInput label, .stTextArea label, .stSelectbox label,
-.stFileUploader label, .stMarkdown, .stRadio label, .stCheckbox label {
-  color: #ffffff !important;
+/* ===== Inputs ===== */
+.stTextInput label, .stTextArea label, .stSelectbox label { color:#fff !important; }
+.stTextInput input, .stTextArea textarea, .stSelectbox div{
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stTextInput input::placeholder, .stTextArea textarea::placeholder,
+.stChatInput textarea::placeholder{ color:#ddd !important; }
+/* 目アイコン */
+.stTextInput [data-baseweb="button"]{
+  background:#333 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
 }
 
-/* ===== 入力フォーム ===== */
-.stTextInput input, .stChatInput textarea {
-  background-color: #111111 !important;
-  color: #ffffff !important;
-  border: 1px solid #444444 !important;
+/* ===== Buttons（生成ボタン／ダウンロード統一） ===== */
+.stButton button, .stDownloadButton > button{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+  padding:.55rem 1rem !important; box-shadow:none !important;
 }
-.stTextInput input::placeholder, .stChatInput textarea::placeholder {
-  color: #bbbbbb !important;
-}
-
-/* ===== ボタン ===== */
-.stButton>button {
-  background-color: #222222 !important;
-  color: #ffffff !important;
-  border: 1px solid #ffffff !important;
-  border-radius: 8px !important;
-  padding: 0.5em 1.2em !important;
-  font-weight: normal !important;
-}
-.stButton>button:hover {
-  background-color: #444444 !important;
-  border-color: #00ffcc !important;
-  color: #00ffcc !important;
+.stButton button:hover, .stDownloadButton > button:hover{
+  background:#2c2c2c !important; border-color:#777 !important;
 }
 
-/* ===== ChatMessage 背景透明化 ===== */
-[data-testid="stChatMessage"] {
-  background-color: transparent !important;
-  border: none !important;
+/* ===== Chat ===== */
+[data-testid="stChatMessage"]{ background:transparent !important; border:none !important; border-radius:14px !important; }
+[data-testid="stChatInput"], [data-testid="stChatInput"]>div{ background:transparent !important; }
+.stChatInput textarea{
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}
+.stChatInput [data-baseweb="button"]{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
 }
 
-/* ===== FileUploader ===== */
-
-/* ドロップゾーン黒背景＋白文字 */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {
-  background-color: #111111 !important;
-  border: 1px solid #ffffff !important;
-  border-radius: 8px !important;
-  color: #ffffff !important;
-  position: relative !important;
-  padding-left: 64px !important;  /* 左に雲アイコンの余白 */
+/* ===== File Uploader：枠＆雲アイコン（左） ===== */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{
+  position:relative !important;
+  background:#111 !important; color:#fff !important;
+  border:1.5px solid #666 !important; border-radius:12px !important;
+  padding-left:64px !important; /* 雲用の余白 */
 }
-
-/* デフォルトアイコン非表示 */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {
-  display: none !important;
+/* 既定の白い四角/SVGを非表示 */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg{ display:none !important; }
+/* 互換：SVGラッパがあれば透明化 */
+@supports selector(div:has(> svg)){
+  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg){
+    background:transparent !important; border:none !important;
+  }
 }
-
-/* 擬似要素で白い雲アイコン追加 */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {
-  content: "";
-  position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+/* 擬似要素で白い雲アイコンを左に表示 */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{
+  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
+  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+}
+/* 右側の Browse ボタンもダークに */
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
+  background:#2c2c2c !important; border-color:#777 !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
