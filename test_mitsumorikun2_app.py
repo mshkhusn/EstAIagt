@@ -109,20 +109,18 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-/* ===== Chat Avatar：背景色カスタム ===== */
+/* ===== Chat Avatar 色変更 ===== */
 
-/* Assistant（AI側）のアイコンをネオンピンク */
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) 
-  [data-testid="stChatMessageAvatar"] {
-  background-color: #ff2ecc !important;
-  border-radius: 50% !important;
+/* アシスタント（AI）のアイコン色 */
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"] {
+  background-color: #a64dff !important; /* ネオンパープル */
+  color: #fff !important;               /* アイコン中身は白で見やすく */
 }
 
-/* User（自分側）のアイコンをネオングリーン */
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) 
-  [data-testid="stChatMessageAvatar"] {
-  background-color: #00ff99 !important;
-  border-radius: 50% !important;
+/* ユーザーのアイコン色 */
+[data-testid="stChatMessage"][data-testid*="user"] [data-testid="stChatMessageAvatar"] {
+  background-color: #00eaff !important; /* ネオンシアン */
+  color: #000 !important;               /* 中身は黒にしてコントラスト確保 */
 }
 </style>
 """, unsafe_allow_html=True)
