@@ -25,7 +25,7 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 st.markdown("""
 <style>
 /* ========= Fonts ========= */
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
 
 /* ========= Base (デバイス標準フォントへ) ========= */
 html, body {
@@ -35,12 +35,12 @@ html, body {
 }
 .stApp { color:#fff !important; }
 
-/* ========= ロゴ／見出し／強調だけ Mochiy ========= */
+/* ========= ロゴ／見出し／強調だけ Dela Gothic One ========= */
 .logo-wrap, .logo-box, .custom-header, .preview-title,
 .stButton > button, .stDownloadButton > button,
 .stChatInput [data-baseweb="button"],
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
-  font-family: 'Mochiy Pop One', sans-serif !important;
+  font-family: 'Dela Gothic One', sans-serif !important;
 }
 
 /* ========= ロゴ（中央 pill） ========= */
@@ -89,7 +89,7 @@ html, body {
 }
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b{
-  font-weight:700 !important;   /* ← AIが付ける強調は尊重 */
+  font-weight:700 !important;
 }
 
 /* ========= Buttons（生成／DL／送信／Browse files） ========= */
@@ -139,6 +139,7 @@ html, body {
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
