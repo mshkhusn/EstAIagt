@@ -24,194 +24,147 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
-
-/* ===== Base: 黒背景は body のみ、他は透明／白文字／Mochiy ===== */
-html, body { background:#000 !important; }
+/* =========================
+   全体ベース
+========================= */
+html, body {
+  background:#000 !important;
+}
 .stApp, .stApp *{
   background:transparent !important;
   color:#fff !important;
-  font-family:'Mochiy Pop One',sans-serif !important;
-  font-weight:400 !important;
+  font-family:'Mochiy Pop One',sans-serif;
   font-synthesis-weight:none !important;
   letter-spacing:.01em;
 }
 
-/* ヘッダー/フッター/サイドバーも透明 */
-[data-testid="stHeader"],
-[data-testid="stToolbar"], [data-testid="stStatusWidget"],
-[data-testid="stSidebar"], [data-testid="stSidebarContent"]{
-  background:transparent !important; border:none !important;
+/* =========================
+   ロゴ（中央配置）
+========================= */
+.logo-wrap{
+  display:flex; justify-content:center; align-items:center;
+  width:100%;
+  margin: 24px 0 40px 0;
+}
+.logo-pill{
+  display:inline-block;
+  padding: 6px;
+  border-radius: 9999px !important;
+  background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
+}
+.logo-box{
+  padding: 30px 76px;
+  border-radius: 9999px !important;
+  background:#000 !important;
+  font-family:'Mochiy Pop One',sans-serif;
+  color:inherit !important;
+}
+.logo-row1{
+  display:flex; align-items:flex-start; justify-content:center;
+  gap: 6px; line-height:1.02; margin:0;
+}
+.logo-box .ai{
+  font-size: 104px; font-weight: 900;
+  color:#ff4df5 !important; letter-spacing:-1.5px;
+}
+.logo-box .mitsumori{
+  font-size: 68px; font-weight: 900;
+  color:#ffffff !important; letter-spacing:-1px;
+}
+.logo-kunrow{
+  text-align:center; line-height:1.0;
+  margin-top:-20px; letter-spacing:-1px;
+}
+.logo-box .kun{
+  color:#ffffff !important; font-size: 48px; font-weight: 900;
+}
+.logo-box .num2{
+  color:#ff4df5 !important; font-size: 48px; font-weight: 900;
 }
 
-/* ===== Inputs ===== */
-.stTextInput label, .stTextArea label, .stSelectbox label { color:#fff !important; }
-.stTextInput input, .stTextArea textarea, .stSelectbox div{
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-.stTextInput input::placeholder, .stTextArea textarea::placeholder,
-.stChatInput textarea::placeholder{ color:#ddd !important; }
-/* 目アイコン */
-.stTextInput [data-baseweb="button"]{
-  background:#333 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-}
-
-/* ===== Buttons（生成ボタン／ダウンロード統一） ===== */
-.stButton button, .stDownloadButton > button{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-  padding:.55rem 1rem !important; box-shadow:none !important;
-}
-.stButton button:hover, .stDownloadButton > button:hover{
-  background:#2c2c2c !important; border-color:#777 !important;
-}
-
-/* ===== Chat ===== */
-[data-testid="stChatMessage"]{ background:transparent !important; border:none !important; border-radius:14px !important; }
-[data-testid="stChatInput"], [data-testid="stChatInput"]>div{ background:transparent !important; }
-.stChatInput textarea{
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-.stChatInput [data-baseweb="button"]{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-
-/* ===== File Uploader ===== */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{
-  position:relative !important;
-  background:#111 !important; color:#fff !important;
-  border:1.5px solid #666 !important; border-radius:12px !important;
-  padding-left:64px !important;
-}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg{ display:none !important; }
-@supports selector(div:has(> svg)){
-  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg){
-    background:transparent !important; border:none !important;
-  }
-}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{
-  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
-  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
-}
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-}
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
-  background:#2c2c2c !important; border-color:#777 !important;
-}
-
-/* ===== Chat Avatar 色変更（ライム＆パープル） ===== */
-.stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
-.stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
-  background: #a64dff !important;   /* AI: ネオンパープル */
-  color: #ffffff !important;
-  border-radius: 12px !important;
-}
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"],
-.stApp [data-testid="stChatMessage"][data-testid*="user"] [data-testid*="Avatar"],
-.stApp [data-testid="stChatMessage"] [data-testid*="user"] [data-testid*="Avatar"] {
-  background: #00e08a !important;   /* User: ネオンライム */
-  color: #000000 !important;
-}
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] svg,
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] img,
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] span {
-  background: transparent !important;
-  color: inherit !important;
-}
-
-/* ===== 見積もり結果プレビュー見出し ===== */
+/* =========================
+   見積もり結果タイトル
+========================= */
 .preview-title{
   font-size: 32px !important;
   line-height: 1.4 !important;
   font-weight: 900 !important;
   text-align: left;
-  color: #78f416 !important;   /* ← 指定のカラー */
+  color: #78f416 !important;
   text-shadow: none !important;
   margin-bottom: 16px !important;
 }
-/* チャット入力フォームのフォーカス時スタイル */
+
+/* =========================
+   見出し（チャットUI上）
+========================= */
+.custom-header {
+  color: #90fb0f !important;
+  font-size: 40px !important;
+  font-weight: 900 !important;
+  margin-top: 20px !important;
+  margin-bottom: 30px !important;
+}
+
+/* =========================
+   入力フォーム系
+========================= */
+.stTextInput input,
+.stTextArea textarea,
+.stChatInput textarea {
+  font-family: "Helvetica","Arial",sans-serif !important;
+  font-weight: 300 !important;
+  font-size: 16px !important;
+  color: #fff !important;
+}
+
+/* フォーカス時のネオングラデーション */
+.stTextInput input:focus,
+.stTextArea textarea:focus,
 .stChatInput:focus-within textarea {
   border: 3px solid transparent !important;
   border-radius: 12px !important;
   background:#111 !important;
   border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
-              0 0 18px rgba(144, 251, 15, 0.5),
-              0 0 24px rgba(0, 195, 255, 0.4) !important;
+  box-shadow: 0 0 12px rgba(255,77,245,0.6),
+              0 0 18px rgba(144,251,15,0.5),
+              0 0 24px rgba(0,195,255,0.4) !important;
   outline: none !important;
-}
-/* ===== パスワード入力欄のフォーカス時スタイル ===== */
-.stTextInput input:focus {
-  border: 3px solid transparent !important;
-  border-radius: 12px !important;
-  background:#111 !important;
-  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
-              0 0 18px rgba(144, 251, 15, 0.5),
-              0 0 24px rgba(0, 195, 255, 0.4) !important;
-  outline: none !important;
-}
-/* ===== 入力欄の文字を細字化（サイズ据え置き） ===== */
-.stTextInput input,
-.stTextArea textarea,
-.stChatInput textarea {
-  font-family: "Helvetica", "Arial", sans-serif !important;  /* 細めの標準フォント */
-  font-weight: 300 !important;   /* 細字に */
-  font-size: 16px !important;    /* ← 現状のまま維持 */
-  color: #fff !important;
-}
-/* ===== チャット履歴（AI/ユーザーの吹き出し）の文字を細字に ===== */
-[data-testid="stChatMessage"] p,
-[data-testid="stChatMessage"] span,
-[data-testid="stChatMessage"] div {
-  font-weight: 400 !important;   /* 通常の太さ */
-  font-size: 16px !important;    /* 現状維持 */
-  line-height: 1.5 !important;   /* 読みやすく */
-  font-family: "Helvetica", "Arial", sans-serif !important;  /* 入力欄と同じ細めフォント */
-  color: #fff !important;
-}
-/* ===== チャット履歴（本文）を細字フォントで統一 ===== */
-/* Markdownが入る箱を狙い撃ちして、太字化をすべて打ち消す */
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] * {
-  font-family: "Helvetica", "Arial", sans-serif !important;
-  font-weight: 400 !important;      /* 細字 */
-  line-height: 1.55 !important;     /* 読みやすく */
 }
 
-/* strong/b を強制的に通常太さへ（リスト内も含む） */
+/* =========================
+   チャット履歴（AI/ユーザー）
+========================= */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+  font-family: "Helvetica","Arial",sans-serif !important;
+  font-weight: 400 !important;     /* 基本は細字 */
+  font-size: 16px !important;
+  line-height: 1.55 !important;
+  color: #fff !important;
+}
+/* strong/b → AIの表現を優先して太字残す */
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li b,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ol li p strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ul li p strong {
-  font-weight: 400 !important;      /* ← normal化 */
-  font-family: "Helvetica", "Arial", sans-serif !important;
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b {
+  font-weight: 700 !important;
 }
-これで「番号付きリストの見出し部分」も含め、AI見積もりくんの質問文が均一に細字になります。
-（アバターやボタン等には影響しません）
 
-
-
-
-
-
-
-ChatGPT に質問する
-
-
-
-
+/* =========================
+   チャットアバター
+========================= */
+.stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
+.stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
+  background: #a64dff !important;
+  color: #ffffff !important;
+  border-radius: 12px !important;
+}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {
+  background: #00e08a !important;
+  color: #000000 !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
