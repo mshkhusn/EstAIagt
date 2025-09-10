@@ -183,11 +183,11 @@ if st.session_state["chat_history"] is None:
 # =========================
 st.markdown("""
 <style>
-/* 中央配置＋下に広めの余白 */
+/* ページ中央に配置 */
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
   width:100%;
-  margin: 24px 0 40px 0;
+  margin: 24px 0 40px 0;  /* 下の余白（パスワード欄との間隔） */
 }
 
 /* 外側：グラデ楕円フチ */
@@ -207,17 +207,16 @@ st.markdown("""
   color:inherit !important;
 }
 
-/* 1行目：AI + 見積もり（上揃え・中央） */
+/* 1行目：AI + 見積もり */
 .logo-row1{
   display:flex; align-items:flex-start; justify-content:center;
   gap: 6px; line-height:1.02; margin:0;
 }
-/* ★ ストローク無し・詰めは控えめにして潰れ防止 */
 .logo-box .ai{
   font-size: 104px;
   font-weight: 900;
   color:#ff4df5 !important;
-  letter-spacing:-1.5px;   /* ← 以前より緩め */
+  letter-spacing:-1.5px;
 }
 .logo-box .mitsumori{
   font-size: 68px;
@@ -226,11 +225,11 @@ st.markdown("""
   letter-spacing:-1px;
 }
 
-/* 2行目：くん2（中央） */
+/* 2行目：くん2（さらに上げて行間をギュッと） */
 .logo-kunrow{
   text-align:center;
-  line-height:1.02;
-  margin-top:-10px;        /* 行間は詰めるが潰れない範囲に */
+  line-height:1.0;
+  margin-top:-20px;       /* ← 強めに上げる（-16〜-20で調整可） */
   letter-spacing:-1px;
 }
 .logo-box .kun{
@@ -258,7 +257,6 @@ st.markdown("""
   </div>
 </div>
 """, unsafe_allow_html=True)
-
 
 password = st.text_input("パスワードを入力してください", type="password")
 
