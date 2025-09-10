@@ -22,6 +22,7 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 # デザイン
 # =========================
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
@@ -209,9 +210,7 @@ html, body { background:#000 !important; }
   font-family: "Helvetica", "Arial", sans-serif !important;
 }
 </style>
-
-
-
+""", unsafe_allow_html=True)
 
 # =========================
 # Secrets
