@@ -162,6 +162,97 @@ html, body {
   background: #00e08a !important;
   color: #000000 !important;
 }
+
+/* ===== Buttons: st.button / st.download_button 共通 ===== */
+.stButton > button,
+.stDownloadButton > button{
+  position: relative;
+  padding: .65rem 1.25rem !important;
+  border: 2px solid transparent !important;
+  border-radius: 14px !important;
+  font-family:'Mochiy Pop One',sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing:.02em;
+  color:#fff !important;
+  cursor:pointer;
+
+  /* 内側は黒、外側はネオングラデの枠 */
+  background:
+    linear-gradient(#111,#111) padding-box,
+    linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+
+  box-shadow:
+    0 4px 10px rgba(0,0,0,.35),
+    0 0 10px rgba(255,77,245,.25) inset;
+  transition: transform .08s ease, box-shadow .2s ease, filter .2s ease;
+}
+
+.stButton > button:hover,
+.stDownloadButton > button:hover{
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 16px rgba(0,0,0,.45),
+    0 0 12px rgba(255,77,245,.35) inset,
+    0 0 14px rgba(144,251,15,.25),
+    0 0 18px rgba(0,195,255,.2);
+  filter: brightness(1.05);
+}
+
+.stButton > button:active,
+.stDownloadButton > button:active{
+  transform: translateY(0);
+  box-shadow:
+    0 3px 8px rgba(0,0,0,.35),
+    0 0 10px rgba(255,77,245,.25) inset;
+}
+
+.stButton > button:disabled,
+.stDownloadButton > button:disabled{
+  opacity:.6; cursor:not-allowed;
+  filter: grayscale(.1) brightness(.9);
+}
+
+/* ===== File Uploader の Browse ボタン ===== */
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
+  border: 2px solid transparent !important;
+  border-radius: 12px !important;
+  font-family:'Mochiy Pop One',sans-serif !important;
+  color:#fff !important;
+  background:
+    linear-gradient(#111,#111) padding-box,
+    linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+  box-shadow: 0 4px 10px rgba(0,0,0,.35);
+}
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
+  box-shadow: 0 6px 16px rgba(0,0,0,.45);
+  filter: brightness(1.05);
+}
+
+/* ===== チャット送信（右側の送信アイコン） ===== */
+.stChatInput [data-baseweb="button"]{
+  border: 2px solid transparent !important;
+  border-radius: 12px !important;
+  font-family:'Mochiy Pop One',sans-serif !important;
+  color:#fff !important;
+  background:
+    linear-gradient(#111,#111) padding-box,
+    linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+}
+.stChatInput [data-baseweb="button"]:hover{
+  filter: brightness(1.05);
+}
+
+/* ===== 情報/成功/警告などのボタン風要素（念のため） ===== */
+button[kind="secondary"]{
+  border: 2px solid transparent !important;
+  border-radius: 12px !important;
+  background:
+    linear-gradient(#111,#111) padding-box,
+    linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+  color:#fff !important;
+}
+
+
 </style>
 """, unsafe_allow_html=True)
 
