@@ -132,12 +132,11 @@ html, body { background:#000 !important; }
   font-size: 32px !important;
   line-height: 1.4 !important;
   font-weight: 900 !important;
-  text-align: left;        /* ← 中央寄せから左寄せに戻す */
-  color: #00e08a !important;  /* ネオンライム */
-  text-shadow: none !important;  /* ← 光（シャドウ）を消す */
+  text-align: left;
+  color: #00e08a !important;
+  text-shadow: none !important;
+  margin-bottom: 16px !important;   /* ← 下に余白を追加 */
 }
-</style>
-""", unsafe_allow_html=True)
 
 
 
