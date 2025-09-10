@@ -168,6 +168,16 @@ html, body { background:#000 !important; }
   font-size: 16px !important;    /* ← 現状のまま維持 */
   color: #fff !important;
 }
+/* ===== チャット履歴（AI/ユーザーの吹き出し）の文字を細字に ===== */
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] span,
+[data-testid="stChatMessage"] div {
+  font-weight: 400 !important;   /* 通常の太さ */
+  font-size: 16px !important;    /* 現状維持 */
+  line-height: 1.5 !important;   /* 読みやすく */
+  font-family: "Helvetica", "Arial", sans-serif !important;  /* 入力欄と同じ細めフォント */
+  color: #fff !important;
+}
 
 
 </style>
