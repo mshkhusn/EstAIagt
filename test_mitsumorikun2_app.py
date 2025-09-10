@@ -137,7 +137,17 @@ html, body { background:#000 !important; }
   text-shadow: none !important;
   margin-bottom: 16px !important;
 }
-
+/* チャット入力フォームのフォーカス時スタイル */
+.stChatInput:focus-within textarea {
+  border: 3px solid transparent !important;
+  border-radius: 12px !important;
+  background:#111 !important;
+  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
+  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
+              0 0 18px rgba(144, 251, 15, 0.5),
+              0 0 24px rgba(0, 195, 255, 0.4) !important;
+  outline: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
