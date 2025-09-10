@@ -24,72 +24,55 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
-
-/* --- ベース背景：bodyだけ黒に、他は透明 --- */
-html, body {
-  background:#000 !important;
-}
-.stApp, .stApp * {
-  background:transparent !important;
+/* ===========================
+   ① ダウンロードボタンも同じ見た目に
+   =========================== */
+/* 生成ボタンと同じトーンを .stDownloadButton にも適用 */
+.stButton button,
+.stDownloadButton > button {
+  background:#222 !important;
   color:#fff !important;
-  font-family:'Mochiy Pop One',sans-serif !important;
-  font-weight:400 !important;
-  font-synthesis-weight:none !important;
+  border:1px solid #666 !important;
+  border-radius:10px !important;
+  padding:.55rem 1.0rem !important;
+  box-shadow:none !important;
+}
+.stButton button:hover,
+.stDownloadButton > button:hover {
+  background:#2c2c2c !important;
+  border-color:#777 !important;
 }
 
-/* --- ヘッダー／フッターも透明 --- */
-header, [data-testid="stHeader"],
-footer, [data-testid="stToolbar"], [data-testid="stStatusWidget"] {
-  background:transparent !important;
-  border:none !important;
-}
-
-/* --- 入力系 --- */
-.stTextInput label, .stTextArea label, .stSelectbox label {
+/* ===========================
+   ② ファイルアップロード枠をはっきり表示
+   =========================== */
+/* 外枠：黒テーマに合わせたフレーム */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {
+  background:#111 !important;
+  border:1.5px solid #666 !important;
+  border-radius:12px !important;
   color:#fff !important;
 }
-.stTextInput input, .stTextArea textarea, .stSelectbox div {
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
+/* ドロップ領域内のテキスト */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] * {
+  color:#fff !important;
 }
-.stTextInput input::placeholder,
-.stTextArea textarea::placeholder,
-.stChatInput textarea::placeholder {
-  color:#ddd !important;
+/* アイコン（雲マーク等）も白に */
+[data-testid="stFileUploader"] svg,
+[data-testid="stFileUploader"] svg * {
+  fill:#fff !important;
+  color:#fff !important;
 }
-/* パスワード目アイコン */
-.stTextInput [data-baseweb="button"]{
-  background:#333 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
+/* 右側の “Browse files” ボタンもダーク化 */
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
+  background:#222 !important;
+  color:#fff !important;
+  border:1px solid #666 !important;
+  border-radius:10px !important;
 }
-
-/* --- ボタン --- */
-.stButton button {
-  background:#222 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-}
-.stButton button:hover { background:#2c2c2c !important; }
-
-/* --- チャット --- */
-[data-testid="stChatMessage"] {
-  background:transparent !important;   /* ← 黒やグレーをやめて透明 */
-  border:none !important;
-  border-radius:14px !important;
-}
-[data-testid="stChatInput"] {
-  background:transparent !important;
-}
-[data-testid="stChatInput"]>div {
-  background:transparent !important;
-}
-.stChatInput textarea {
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-.stChatInput [data-baseweb="button"] {
-  background:#222 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover {
+  background:#2c2c2c !important;
+  border-color:#777 !important;
 }
 </style>
 """, unsafe_allow_html=True)
