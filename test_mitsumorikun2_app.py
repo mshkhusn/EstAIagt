@@ -20,7 +20,7 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# フォント（ Mochiy Pop One ）をアプリ全体へ強制適用
+# デザイン
 # =========================
 st.markdown("""
 <style>
