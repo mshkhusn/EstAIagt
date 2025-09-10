@@ -26,72 +26,29 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* フォント常時適用（擬似ボールド禁止） */
-html, body, .stApp, .stApp *{
+/* --- ベース背景：bodyだけ黒に、他は透明 --- */
+html, body {
+  background:#000 !important;
+}
+.stApp, .stApp * {
+  background:transparent !important;
+  color:#fff !important;
   font-family:'Mochiy Pop One',sans-serif !important;
   font-weight:400 !important;
   font-synthesis-weight:none !important;
-  letter-spacing:.01em; color:#fff !important;
 }
 
-/* === 背景を全域黒に === */
-html, body, .stApp{ background:#000 !important; }
-[data-testid="stAppViewContainer"],
-[data-testid="stAppViewContainer"]>.main,
-main,.main,.block-container,
-[data-testid="stVerticalBlock"],
-[data-testid="stBottomBlock"],
-[data-testid="stDecoration"],
-footer,[data-testid="stToolbar"],[data-testid="stStatusWidget"]{
-  background:#000 !important;
-}
-header,[data-testid="stHeader"]{ background:#000 !important; }
-
-/* === 入力系 === */
-.stTextInput label,.stTextArea label,.stSelectbox label{ color:#fff !important; }
-.stTextInput input,.stTextArea textarea,.stSelectbox div{
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-/* パスワードの目アイコン（BaseWebボタン） */
-.stTextInput [data-baseweb="button"]{
-  background:#333 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
+/* --- ヘッダー／フッターも透明 --- */
+header, [data-testid="stHeader"],
+footer, [data-testid="stToolbar"], [data-testid="stStatusWidget"] {
+  background:transparent !important;
+  border:none !important;
 }
 
-/* === ボタン（見積もり生成など）=== */
-.stButton button{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
-}
-.stButton button:hover{ background:#2c2c2c !important; }
+/* --- 入力系 --- */
+.stTextInput label, .stTextArea label, .stSelectbox label {
+  color:#fff !
 
-/* === チャット === */
-/* 気泡：黒基調・枠線なし */
-[data-testid="stChatMessage"]{
-  background:#0f0f0f !important;
-  border:none !important;            /* ← 枠線を消す */
-  border-radius:14px !important;
-}
-/* 入力バーの土台を黒に（白帯対策） */
-[data-testid="stChatInput"]{ background:#000 !important; }
-[data-testid="stChatInput"]>div{ background:#000 !important; }
-/* 入力ボックス本体 */
-.stChatInput textarea{
-  background:#111 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-.stChatInput textarea::placeholder{ color:#ddd !important; }
-/* 送信ボタン */
-.stChatInput [data-baseweb="button"]{
-  background:#222 !important; color:#fff !important;
-  border:1px solid #555 !important; border-radius:10px !important;
-}
-
-/* 予期せぬ白背景を念のため黒で潰す */
-[data-testid="stMainBlockContainer"]{ background:#000 !important; }
-</style>
-""", unsafe_allow_html=True)
 
 
 # =========================
