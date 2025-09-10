@@ -22,6 +22,122 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 # デザイン
 # =========================
+st.markdown("""
+<style>
+/* ========= Fonts ========= */
+@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One:wght@400;700;900&display=swap');
+
+/* ========= Base（本文はデバイス標準フォント） ========= */
+html, body {
+  background:#000 !important;
+  color:#fff !important;
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+.stApp { color:#fff !important; }
+
+/* ========= ロゴ／見出し／ボタンだけ Mochiy ========= */
+.logo-wrap, .logo-box, .custom-header, .preview-title,
+.stButton > button, .stDownloadButton > button,
+.stChatInput [data-baseweb="button"],
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
+  font-family:'Mochiy Pop One', sans-serif !important;
+}
+
+/* ========= ロゴ（中央 pill） ========= */
+.logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px; }
+.logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important;
+  background:linear-gradient(90deg,#ff4df5,#a64dff) !important; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; color:inherit !important; }
+.logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:6px; line-height:1.02; margin:0; }
+.logo-box .ai{ font-size:104px; font-weight:900; color:#ff4df5 !important; letter-spacing:-1.5px; }
+.logo-box .mitsumori{ font-size:68px; font-weight:900; color:#fff !important; letter-spacing:-1px; }
+.logo-kunrow{ text-align:center; line-height:1.0; margin-top:-20px; letter-spacing:-1px; }
+.logo-box .kun{  color:#fff !important;    font-size:48px; font-weight:900; }
+.logo-box .num2{ color:#ff4df5 !important; font-size:48px; font-weight:900; }
+
+/* ========= 見出し ========= */
+.custom-header{
+  color:#90fb0f !important; font-size:40px !important; font-weight:900 !important;
+  margin:20px 0 30px !important;
+}
+
+/* ========= 「見積もり結果プレビュー」 ========= */
+.preview-title{
+  font-size:32px !important; line-height:1.4 !important; font-weight:900 !important;
+  text-align:left; color:#78f416 !important; text-shadow:none !important; margin-bottom:16px !important;
+}
+
+/* ========= 入力欄（読みやすい細字） ========= */
+.stTextInput input, .stTextArea textarea, .stChatInput textarea{
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-weight:300 !important; font-size:16px !important; color:#fff !important;
+  background:#111 !important; border:1px solid #555 !important; border-radius:12px !important;
+}
+/* フォーカス時：ネオングラデ枠 */
+.stTextInput input:focus, .stTextArea textarea:focus, .stChatInput:focus-within textarea{
+  border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
+  border-image:linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
+  box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
+  outline:none !important;
+}
+
+/* ========= チャット履歴（本文は細字、AIの太字は尊重） ========= */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-weight:400 !important; font-size:16px !important; line-height:1.55 !important; color:#fff !important;
+}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b{
+  font-weight:700 !important;
+}
+
+/* ========= Buttons（生成／DL／送信／Browse files） ========= */
+.stButton > button, .stDownloadButton > button{
+  position:relative; padding:.65rem 1.25rem !important; border:2px solid transparent !important;
+  border-radius:14px !important; font-weight:700 !important; letter-spacing:.02em; color:#fff !important; cursor:pointer;
+  background:linear-gradient(#111,#111) padding-box,
+             linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+  box-shadow:0 4px 10px rgba(0,0,0,.35), 0 0 10px rgba(255,77,245,.25) inset;
+  transition:transform .08s ease, box-shadow .2s ease, filter .2s ease;
+}
+.stButton > button:hover, .stDownloadButton > button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 6px 16px rgba(0,0,0,.45), 0 0 12px rgba(255,77,245,.35) inset,
+             0 0 14px rgba(144,251,15,.25), 0 0 18px rgba(0,195,255,.2);
+  filter:brightness(1.05);
+}
+.stButton > button:active, .stDownloadButton > button:active{
+  transform:translateY(0); box-shadow:0 3px 8px rgba(0,0,0,.35), 0 0 10px rgba(255,77,245,.25) inset;
+}
+.stButton > button:disabled, .stDownloadButton > button:disabled{
+  opacity:.6; cursor:not-allowed; filter:grayscale(.1) brightness(.9);
+}
+/* Browse files */
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
+  border:2px solid transparent !important; border-radius:12px !important; color:#fff !important;
+  background:linear-gradient(#111,#111) padding-box,
+             linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+  box-shadow:0 4px 10px rgba(0,0,0,.35);
+}
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{ filter:brightness(1.05); }
+/* チャット送信アイコン */
+.stChatInput [data-baseweb="button"]{
+  border:2px solid transparent !important; border-radius:12px !important; color:#fff !important;
+  background:linear-gradient(#111,#111) padding-box,
+             linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) border-box !important;
+}
+
+/* ========= アバター色（AI=パープル／User=ライム） ========= */
+.stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
+.stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"]{
+  background:#a64dff !important; color:#fff !important; border-radius:12px !important;
+}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{
+  background:#00e08a !important; color:#000 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 
