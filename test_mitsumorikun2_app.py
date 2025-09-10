@@ -109,19 +109,20 @@ html, body { background:#000 !important; }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-/* ===== Chat Avatar：白枠をつける ===== */
-[data-testid="stChatMessageAvatar"] {
+/* ===== Chat Avatar：背景色カスタム ===== */
+
+/* Assistant（AI側）のアイコンをネオンピンク */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) 
+  [data-testid="stChatMessageAvatar"] {
+  background-color: #ff2ecc !important;
   border-radius: 50% !important;
-  background-color: #000 !important;   /* 黒ベース */
-  box-shadow: 0 0 0 2px #fff !important; /* 白いリング風の枠 */
-  padding: 2px !important;
 }
 
-/* アイコン画像/svgも丸く整形 */
-[data-testid="stChatMessageAvatar"] img,
-[data-testid="stChatMessageAvatar"] svg {
+/* User（自分側）のアイコンをネオングリーン */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) 
+  [data-testid="stChatMessageAvatar"] {
+  background-color: #00ff99 !important;
   border-radius: 50% !important;
-  background: transparent !important;
 }
 </style>
 """, unsafe_allow_html=True)
