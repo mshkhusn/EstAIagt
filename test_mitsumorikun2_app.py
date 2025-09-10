@@ -1,10 +1,9 @@
-# app.py（AI見積もりくん２ / Neon Splash Theme・CSS注入安定版：inject_global_css）
-# - GPT系（OpenAI gpt-4.1）で見積り生成
+# app.py（AI見積もりくん２ / Neon Splash Theme・安定版）
+# - OpenAI GPT系（gpt-4.1）で見積り生成
 # - チャット継続 → 再生成で「履歴＋新要件」を反映
 # - 追加入力時はプレビューを一旦クリア
 # - Excelダウンロード／DD見積テンプレ出力対応
-# - CSSは st.html があればそれで、無ければ markdown(unsafe_allow_html=True) でグローバル注入
-# - ここに貼るコードの外側に ``` のようなMarkdownコードフェンスは入れないこと！
+# - CSSは markdown(unsafe_allow_html=True) のみで注入（st.html/iframe不使用）
 
 import os
 import json
@@ -51,7 +50,7 @@ openai_client = OpenAI(http_client=httpx.Client(timeout=60.0))
 TAX_RATE = 0.10
 
 # =========================
-# CSS を**確実に**注入する仕組み（フォールバック付き）
+# CSS をグローバル注入（markdownのみ）
 # =========================
 CSS = """
 :root{
@@ -119,13 +118,8 @@ div[data-testid="stDataFrame"]{
 """
 
 def inject_global_css(css_text: str):
-    """Streamlitのサニタイズを回避してグローバルCSSを注入。
-    st.html があればそれを使用し、無ければ markdown(unsafe_allow_html=True) にフォールバック。
-    """
-    if hasattr(st, "html"):  # 新APIがある環境
-        st.html(f"<style>{css_text}</style>", height=0)
-    else:
-        st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+    """グローバルCSS注入（markdownのみ。st.html/iframeは使わない）"""
+    st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
 
 # フォント読み込み + CSS 注入（ページ冒頭で必ず実行）
 st.markdown(
@@ -180,7 +174,7 @@ with col_chat:
         elif msg["role"] == "user":
             st.chat_message("user").write(msg["content"])
 
-    # 生成後にヒントを出すプレースホルダ
+    # 生成後ヒント
     hint_placeholder = st.empty()
     if st.session_state["df"] is not None:
         hint_placeholder.caption(
