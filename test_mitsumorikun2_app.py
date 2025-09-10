@@ -136,6 +136,15 @@ html, body { background:#000 !important; }
   color: inherit !important;
 }
 
+/* 見積もり結果プレビューの見出しだけ拡大 */
+.preview-title{
+  font-size: 22px !important;  /* お好みで 24px などに調整可 */
+  line-height: 1.4 !important;
+  font-weight: 700 !important;
+  margin: 0.2rem 0 0.6rem !important;
+}
+
+
 
 </style>
 """, unsafe_allow_html=True)
@@ -423,7 +432,7 @@ if has_user_input:
 # 表示 & ダウンロード
 # =========================
 if st.session_state["df"] is not None:
-    st.success("見積もり結果プレビュー")
+    st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
     st.dataframe(st.session_state["df"])
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
