@@ -138,10 +138,10 @@ html, body { background:#000 !important; }
 
 /* 見積もり結果プレビューの見出しだけ拡大 */
 .preview-title{
-  font-size: 22px !important;  /* お好みで 24px などに調整可 */
+  font-size: 28px !important;   /* ← ここを大きく調整 */
   line-height: 1.4 !important;
-  font-weight: 700 !important;
-  margin: 0.2rem 0 0.6rem !important;
+  font-weight: 800 !important;
+  margin: 0.3rem 0 0.8rem !important;
 }
 
 
