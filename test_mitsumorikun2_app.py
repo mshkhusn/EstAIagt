@@ -26,55 +26,53 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* 全体の背景とフォント */
-html, body, .stApp {
-    background-color: #000000 !important;
-    color: #FFFFFF !important;
-    font-family: 'Mochiy Pop One', sans-serif !important;
+/* ====== フォント：Mochiy Pop One を“常に通常ウェイト”で ====== */
+html, body, .stApp, .stApp * {
+  font-family: 'Mochiy Pop One', sans-serif !important;
+  font-weight: 400 !important;          /* 見出し含め太字を解除 */
+  font-synthesis-weight: none !important; /* 擬似ボールドを禁止 */
+  letter-spacing: .01em;
 }
 
-/* 全要素にフォントと文字色を統一 */
-.stApp * {
-    font-family: 'Mochiy Pop One', sans-serif !important;
-    color: #FFFFFF !important;
+/* ====== 背景を“全域” 真っ黒に ====== */
+html, body { background:#000 !important; color:#fff !important; }
+.stApp { background:#000 !important; color:#fff !important; }
+
+/* アプリビュー全体 / メイン領域 / コンテナ / サイドバー */
+[data-testid="stAppViewContainer"],
+main, .main, .block-container,
+[data-testid="stVerticalBlock"], [data-testid="stSidebar"],
+[data-testid="stSidebarContent"] {
+  background:#000 !important; color:#fff !important;
 }
 
-/* ヘッダー部分も黒に */
-header, [data-testid="stHeader"] {
-    background-color: #000000 !important;
-    color: #FFFFFF !important;
+/* ヘッダー/ツールバー/フッターも黒に */
+header, [data-testid="stHeader"],
+footer, [data-testid="stToolbar"], [data-testid="stStatusWidget"] {
+  background:#000 !important; color:#fff !important; border: none !important;
 }
 
-/* 下部背景（メイン領域全体） */
-[data-testid="stAppViewContainer"] {
-    background-color: #000000 !important;
-    color: #FFFFFF !important;
-}
-
-/* 入力欄 */
+/* ====== 入力系 ====== */
 .stTextInput input, .stTextArea textarea, .stChatInput textarea {
-    background-color: #111111 !important;
-    color: #FFFFFF !important;
-    border: 1px solid #888888 !important;
+  background:#111 !important; color:#fff !important;
+  border:1px solid #888 !important; border-radius:10px;
 }
-
-/* 入力欄のプレースホルダー（要件を入力してください... も白に） */
 .stTextInput input::placeholder,
 .stTextArea textarea::placeholder,
 .stChatInput textarea::placeholder {
-    color: #DDDDDD !important;
+  color:#ddd !important;
+}
+/* 送信ボタンなど */
+.stButton button, .stChatInput [data-baseweb="button"] {
+  background:#222 !important; color:#fff !important; border:1px solid #888 !important;
 }
 
-/* ボタン */
-.stButton button {
-    background-color: #222222 !important;
-    color: #FFFFFF !important;
-    border: 1px solid #888888 !important;
-}
+/* 見出しの色（太字は上で解除済み） */
+h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { color:#fff !important; }
 
-/* 見出し */
-h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-    color: #FFFFFF !important;
+/* 余計な白背景を持つ要素を黒で潰す（保険） */
+[data-testid="stDecoration"], [data-testid="stBottomBlock"] {
+  background:#000 !important;
 }
 </style>
 """, unsafe_allow_html=True)
