@@ -159,6 +159,55 @@ html, body { background:#000 !important; }
               0 0 24px rgba(0, 195, 255, 0.4) !important;
   outline: none !important;
 }
+/* ===== 入力欄の文字を細字化（サイズ据え置き） ===== */
+.stTextInput input,
+.stTextArea textarea,
+.stChatInput textarea {
+  font-family: "Helvetica", "Arial", sans-serif !important;  /* 細めの標準フォント */
+  font-weight: 300 !important;   /* 細字に */
+  font-size: 16px !important;    /* ← 現状のまま維持 */
+  color: #fff !important;
+}
+/* ===== チャット履歴（AI/ユーザーの吹き出し）の文字を細字に ===== */
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] span,
+[data-testid="stChatMessage"] div {
+  font-weight: 400 !important;   /* 通常の太さ */
+  font-size: 16px !important;    /* 現状維持 */
+  line-height: 1.5 !important;   /* 読みやすく */
+  font-family: "Helvetica", "Arial", sans-serif !important;  /* 入力欄と同じ細めフォント */
+  color: #fff !important;
+}
+/* ===== チャット履歴（本文）を細字フォントで統一 ===== */
+/* Markdownが入る箱を狙い撃ちして、太字化をすべて打ち消す */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] * {
+  font-family: "Helvetica", "Arial", sans-serif !important;
+  font-weight: 400 !important;      /* 細字 */
+  line-height: 1.55 !important;     /* 読みやすく */
+}
+
+/* strong/b を強制的に通常太さへ（リスト内も含む） */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li b,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ol li p strong,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ul li p strong {
+  font-weight: 400 !important;      /* ← normal化 */
+  font-family: "Helvetica", "Arial", sans-serif !important;
+}
+これで「番号付きリストの見出し部分」も含め、AI見積もりくんの質問文が均一に細字になります。
+（アバターやボタン等には影響しません）
+
+
+
+
+
+
+
+ChatGPT に質問する
+
+
 
 
 </style>
