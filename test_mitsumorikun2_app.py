@@ -24,17 +24,34 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
+/* 背景を黒に */
+.stApp {
+    background-color: #000000 !important;
+    color: #FFFFFF !important;
+}
 
-/* アプリ全体を Mochiy Pop One に統一 */
-html, body, .stApp, .stApp * ,
-[data-testid="stMarkdownContainer"] * ,
-[data-testid="stSidebar"] * ,
-.stTextInput input, .stTextArea textarea, .stSelectbox div, .stButton button,
-.stChatInput textarea, [data-baseweb] * {
-  font-family: 'Mochiy Pop One', sans-serif !important;
-  font-weight: 400 !important;
-  letter-spacing: .01em;
+/* 本文文字色を白に統一 */
+.stApp, .stApp * {
+    color: #FFFFFF !important;
+}
+
+/* 入力欄やボタンの背景を黒基調に */
+.stTextInput input, .stTextArea textarea, .stSelectbox div, .stChatInput textarea {
+    background-color: #111111 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #555555 !important;
+}
+
+/* ボタン */
+.stButton button {
+    background-color: #222222 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #888888 !important;
+}
+
+/* 見出しは白で強調 */
+h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    color: #FFFFFF !important;
 }
 </style>
 """, unsafe_allow_html=True)
