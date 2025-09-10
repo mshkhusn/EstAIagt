@@ -181,64 +181,63 @@ if st.session_state["chat_history"] is None:
 # =========================
 # 認証
 # =========================
+# ====== タイトルロゴ（中央配置・巨大・pill枠・下マージン広め） ======
 st.markdown("""
 <style>
-/* ====== 楕円フチ：外側（グラデ）＋内側（黒） の二重ラッパで確実にpill化 ====== */
+/* ページ中央に配置するラッパ */
+.logo-wrap{
+  display:flex; justify-content:center; align-items:center;
+  width:100%;
+  margin: 24px 0 32px 0; /* ← 下を広め（パスワードとの行間） */
+}
+
+/* 外側：グラデ楕円フチ（確実に見せるため !important） */
 .logo-pill{
   display:inline-block;
-  padding: 3px;                                   /* ← フチの太さ */
-  border-radius: 999px;                            /* ← 強制pill */
-  background: linear-gradient(90deg,#ff4df5,#a64dff);
+  padding: 4px;                                            /* 枠の太さ */
+  border-radius: 9999px !important;                        /* 楕円（pill） */
+  background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
 }
+
+/* 内側：黒の塗りつぶし（!important で全体CSSを上書き） */
 .logo-box{
-  padding: 18px 40px;                              /* ← 全体サイズUP */
-  border-radius: 999px;                            /* ← 内側もpill */
-  background:#000;                                 /* ← 中は黒で抜き */
+  padding: 26px 64px;                                      /* 全体サイズ */
+  border-radius: 9999px !important;
+  background:#000 !important;
   font-family:'Mochiy Pop One',sans-serif;
   color:inherit !important;
 }
 
-/* 1行目：AI + 見積もり（上寄せ＆中央配置） */
+/* 1行目：AI + 見積もり（上揃え＋中央寄せ） */
 .logo-row1{
-  display:flex;
-  align-items:flex-start;                          /* ← 上に寄せる */
-  justify-content:center;                          /* ← 横中央に揃える */
-  gap: 6px;                                        /* ← 文字間を軽く */
-  line-height:1.0;
-  margin: 0;
+  display:flex; align-items:flex-start; justify-content:center;
+  gap: 8px; line-height:1.0; margin:0;
 }
-
 .logo-box .ai{
-  font-size: 64px;                                 /* ← 大きく */
-  font-weight: 900;
-  color:#ff4df5 !important;                        /* ピンク */
-  margin-right: 2px;                               /* さらに詰める */
+  font-size: 88px;  font-weight: 900; color:#ff4df5 !important; margin-right:2px;
 }
-
 .logo-box .mitsumori{
-  font-size: 44px;                                 /* ← 少し小さく */
-  font-weight: 900;
-  color:#ffffff !important;                        /* 白 */
+  font-size: 58px;  font-weight: 900; color:#ffffff !important;
 }
 
-/* 2行目：くん2（中央に配置／行間きっちり詰め） */
+/* 2行目：くん2（中央寄せ・行間ギュッと） */
 .logo-kunrow{
-  text-align:center;                               /* ← 真ん中に */
-  margin-top: -6px;                                /* ← 行間を詰める（調整可） */
-  line-height:1.0;
-  letter-spacing:-0.5px;
+  text-align:center; line-height:1.0; letter-spacing:-0.5px;
+  margin-top: -8px;   /* 行間の詰め具合（-10〜-4 で微調整可） */
 }
-.logo-box .kun{  color:#ffffff !important;  font-size: 28px; font-weight:900; }
-.logo-box .num2{ color:#ff4df5 !important;  font-size: 28px; font-weight:900; }
+.logo-box .kun{  color:#ffffff !important; font-size: 36px; font-weight:900; }
+.logo-box .num2{ color:#ff4df5 !important; font-size: 36px; font-weight:900; }
 </style>
 
-<div class="logo-pill">
-  <div class="logo-box">
-    <div class="logo-row1">
-      <span class="ai">AI</span><span class="mitsumori">見積もり</span>
-    </div>
-    <div class="logo-kunrow">
-      <span class="kun">くん</span><span class="num2">2</span>
+<div class="logo-wrap">
+  <div class="logo-pill">
+    <div class="logo-box">
+      <div class="logo-row1">
+        <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+      </div>
+      <div class="logo-kunrow">
+        <span class="kun">くん</span><span class="num2">2</span>
+      </div>
     </div>
   </div>
 </div>
