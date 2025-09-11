@@ -154,6 +154,25 @@ html, body { background:#000 !important; }
               0 0 24px rgba(0, 195, 255, 0.4) !important;
   outline: none !important;
 }
+/* ===== Markdown テーブルの罫線・文字色を白に ===== */
+[data-testid="stMarkdownContainer"] table {
+  border-collapse: collapse !important;
+  border: 1px solid #fff !important;
+}
+
+[data-testid="stMarkdownContainer"] th,
+[data-testid="stMarkdownContainer"] td {
+  border: 1px solid #fff !important;
+  padding: 6px 10px !important;
+  color: #fff !important;
+}
+
+/* ヘッダーセルを少し目立たせたい場合 */
+[data-testid="stMarkdownContainer"] th {
+  background-color: rgba(255,255,255,0.1) !important;
+  font-weight: 700 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
