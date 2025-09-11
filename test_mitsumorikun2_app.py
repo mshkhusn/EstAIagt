@@ -173,6 +173,14 @@ html, body { background:#000 !important; }
   font-weight: 700 !important;
 }
 
+/* ===== Markdownの水平線 <hr> も白にする ===== */
+[data-testid="stMarkdownContainer"] hr {
+  border: none !important;
+  border-top: 1px solid #fff !important;
+  margin: 1em 0 !important;
+}
+
+
 </style>
 """, unsafe_allow_html=True)
 
