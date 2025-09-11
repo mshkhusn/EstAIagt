@@ -20,13 +20,13 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# デザイン
+# デザイン（Markdownつぶし無し）
 # =========================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* ===== Base: 黒背景は body のみ、他は透明／白文字／Mochiy ===== */
+/* ===== Base: 黒背景は body のみ ===== */
 html, body { background:#000 !important; }
 .stApp, .stApp *{
   background:transparent !important;
@@ -52,6 +52,7 @@ html, body { background:#000 !important; }
 }
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
 .stChatInput textarea::placeholder{ color:#ddd !important; }
+
 /* 目アイコン */
 .stTextInput [data-baseweb="button"]{
   background:#333 !important; color:#fff !important;
@@ -69,8 +70,14 @@ html, body { background:#000 !important; }
 }
 
 /* ===== Chat ===== */
-[data-testid="stChatMessage"]{ background:transparent !important; border:none !important; border-radius:14px !important; }
-[data-testid="stChatInput"], [data-testid="stChatInput"]>div{ background:transparent !important; }
+[data-testid="stChatMessage"]{
+  background:transparent !important;
+  border:none !important;
+  border-radius:14px !important;
+}
+[data-testid="stChatInput"], [data-testid="stChatInput"]>div{
+  background:transparent !important;
+}
 .stChatInput textarea{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
@@ -114,9 +121,7 @@ html, body { background:#000 !important; }
   color: #ffffff !important;
   border-radius: 12px !important;
 }
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"],
-.stApp [data-testid="stChatMessage"][data-testid*="user"] [data-testid*="Avatar"],
-.stApp [data-testid="stChatMessage"] [data-testid*="user"] [data-testid*="Avatar"] {
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{
   background: #00e08a !important;   /* User: ネオンライム */
   color: #000000 !important;
 }
@@ -133,22 +138,12 @@ html, body { background:#000 !important; }
   line-height: 1.4 !important;
   font-weight: 900 !important;
   text-align: left;
-  color: #78f416 !important;   /* ← 指定のカラー */
-  text-shadow: none !important;
+  color: #78f416 !important;   /* 指定カラー */
   margin-bottom: 16px !important;
 }
-/* チャット入力フォームのフォーカス時スタイル */
-.stChatInput:focus-within textarea {
-  border: 3px solid transparent !important;
-  border-radius: 12px !important;
-  background:#111 !important;
-  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
-              0 0 18px rgba(144, 251, 15, 0.5),
-              0 0 24px rgba(0, 195, 255, 0.4) !important;
-  outline: none !important;
-}
-/* ===== パスワード入力欄のフォーカス時スタイル ===== */
+
+/* ===== 入力フォームのフォーカス時スタイル ===== */
+.stChatInput:focus-within textarea,
 .stTextInput input:focus {
   border: 3px solid transparent !important;
   border-radius: 12px !important;
@@ -159,61 +154,35 @@ html, body { background:#000 !important; }
               0 0 24px rgba(0, 195, 255, 0.4) !important;
   outline: none !important;
 }
-/* ===== 入力欄の文字を細字化（サイズ据え置き） ===== */
-.stTextInput input,
-.stTextArea textarea,
-.stChatInput textarea {
-  font-family: "Helvetica", "Arial", sans-serif !important;  /* 細めの標準フォント */
-  font-weight: 300 !important;   /* 細字に */
-  font-size: 16px !important;    /* ← 現状のまま維持 */
+/* ===== Markdown テーブルの罫線・文字色を白に ===== */
+[data-testid="stMarkdownContainer"] table {
+  border-collapse: collapse !important;
+  border: 1px solid #fff !important;
+}
+
+[data-testid="stMarkdownContainer"] th,
+[data-testid="stMarkdownContainer"] td {
+  border: 1px solid #fff !important;
+  padding: 6px 10px !important;
   color: #fff !important;
 }
-/* ===== チャット履歴（AI/ユーザーの吹き出し）の文字を細字に ===== */
-[data-testid="stChatMessage"] p,
-[data-testid="stChatMessage"] span,
-[data-testid="stChatMessage"] div {
-  font-weight: 400 !important;   /* 通常の太さ */
-  font-size: 16px !important;    /* 現状維持 */
-  line-height: 1.5 !important;   /* 読みやすく */
-  font-family: "Helvetica", "Arial", sans-serif !important;  /* 入力欄と同じ細めフォント */
-  color: #fff !important;
-}
-/* ===== チャット履歴（本文）を細字フォントで統一 ===== */
-/* Markdownが入る箱を狙い撃ちして、太字化をすべて打ち消す */
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] * {
-  font-family: "Helvetica", "Arial", sans-serif !important;
-  font-weight: 400 !important;      /* 細字 */
-  line-height: 1.55 !important;     /* 読みやすく */
+
+/* ヘッダーセルを少し目立たせたい場合 */
+[data-testid="stMarkdownContainer"] th {
+  background-color: rgba(255,255,255,0.1) !important;
+  font-weight: 700 !important;
 }
 
-/* strong/b を強制的に通常太さへ（リスト内も含む） */
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li b,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ol li p strong,
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ul li p strong {
-  font-weight: 400 !important;      /* ← normal化 */
-  font-family: "Helvetica", "Arial", sans-serif !important;
+/* ===== Markdownの水平線 <hr> も白にする ===== */
+[data-testid="stMarkdownContainer"] hr {
+  border: none !important;
+  border-top: 1px solid #fff !important;
+  margin: 1em 0 !important;
 }
-これで「番号付きリストの見出し部分」も含め、AI見積もりくんの質問文が均一に細字になります。
-（アバターやボタン等には影響しません）
-
-
-
-
-
-
-
-ChatGPT に質問する
-
-
 
 
 </style>
 """, unsafe_allow_html=True)
-
-
 
 # =========================
 # Secrets
@@ -251,69 +220,47 @@ if st.session_state["chat_history"] is None:
     ]
 
 # =========================
-# 認証
+# 認証（ロゴ）
 # =========================
 st.markdown("""
 <style>
-/* ページ中央に配置 */
+/* ロゴ（Mochiyのまま） */
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
   width:100%;
-  margin: 24px 0 40px 0;  /* 下の余白（パスワード欄との間隔） */
+  margin: 24px 0 40px 0;
 }
-
-/* 外側：グラデ楕円フチ */
 .logo-pill{
   display:inline-block;
-  padding: 6px;                                   /* フチの太さ */
+  padding: 6px;
   border-radius: 9999px !important;
   background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
 }
-
-/* 内側：黒背景（pill） */
 .logo-box{
-  padding: 30px 76px;                              /* 全体サイズ */
+  padding: 30px 76px;
   border-radius: 9999px !important;
   background:#000 !important;
   font-family:'Mochiy Pop One',sans-serif;
   color:inherit !important;
 }
-
-/* 1行目：AI + 見積もり */
 .logo-row1{
   display:flex; align-items:flex-start; justify-content:center;
   gap: 6px; line-height:1.02; margin:0;
 }
 .logo-box .ai{
-  font-size: 104px;
-  font-weight: 900;
-  color:#ff4df5 !important;
-  letter-spacing:-1.5px;
+  font-size: 104px; font-weight: 900;
+  color:#ff4df5 !important; letter-spacing:-1.5px;
 }
 .logo-box .mitsumori{
-  font-size: 68px;
-  font-weight: 900;
-  color:#ffffff !important;
-  letter-spacing:-1px;
+  font-size: 68px; font-weight: 900;
+  color:#ffffff !important; letter-spacing:-1px;
 }
-
-/* 2行目：くん2（さらにギュッと詰める） */
 .logo-kunrow{
-  text-align:center;
-  line-height:1.0;
-  margin-top:-28px;       /* ← 行間を極限まで詰める */
-  letter-spacing:-1px;
+  text-align:center; line-height:1.0;
+  margin-top:-28px; letter-spacing:-1px;
 }
-.logo-box .kun{
-  color:#ffffff !important;
-  font-size: 48px;
-  font-weight: 900;
-}
-.logo-box .num2{
-  color:#ff4df5 !important;
-  font-size: 48px;
-  font-weight: 900;
-}
+.logo-box .kun{ color:#ffffff !important; font-size: 48px; font-weight: 900; }
+.logo-box .num2{ color:#ff4df5 !important; font-size: 48px; font-weight: 900; }
 </style>
 
 <div class="logo-wrap">
@@ -330,21 +277,19 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
 password = st.text_input("パスワードを入力してください", type="password")
-
 if password != APP_PASSWORD:
     st.warning("認証が必要です")
     st.stop()
 
 # =========================
-# チャットUI
+# チャットUI（Markdownで描画）
 # =========================
 st.markdown("""
 <style>
 .custom-header {
-  color: #90fb0f !important;   /* ネオンライム */
-  font-size: 40px !important;  /* ← 大きくしました */
+  color: #90fb0f !important;
+  font-size: 40px !important;
   font-weight: 900 !important;
   margin-top: 20px !important;
   margin-bottom: 30px !important;
@@ -357,16 +302,15 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
+# 既存履歴をMarkdownで再描画
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
-        st.chat_message("assistant").write(msg["content"])
+        st.chat_message("assistant").markdown(msg["content"])
     elif msg["role"] == "user":
-        st.chat_message("user").write(msg["content"])
+        st.chat_message("user").markdown(msg["content"])
 
-# --- ヒント文プレースホルダを「チャット入力欄の直前」に配置 ---
+# --- ヒント文プレースホルダ（チャット入力直前） ---
 hint_placeholder = st.empty()
-# すでに見積もりがある場合は、初期描画でも表示
 if st.session_state["df"] is not None:
     hint_placeholder.caption(
         "チャットをさらに続けて見積もり精度を上げることができます。\n"
@@ -384,7 +328,7 @@ if user_input := st.chat_input("要件を入力してください..."):
     st.session_state["chat_history"].append({"role": "user", "content": user_input})
 
     with st.chat_message("user"):
-        st.write(user_input)
+        st.markdown(user_input)
 
     with st.chat_message("assistant"):
         with st.spinner("AIが考えています..."):
@@ -395,7 +339,7 @@ if user_input := st.chat_input("要件を入力してください..."):
                 max_tokens=1200
             )
             reply = resp.choices[0].message.content
-            st.write(reply)
+            st.markdown(reply)  # ← Markdownそのまま表示
             st.session_state["chat_history"].append({"role": "assistant", "content": reply})
 
 # =========================
