@@ -532,7 +532,7 @@ if has_user_input:
 # =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
-    st.dataframe(st.session_state["df"])
+    st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
