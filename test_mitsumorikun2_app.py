@@ -191,20 +191,21 @@ body::before {{
   }}
 }}
 
-/* ===== AI見積もりくんボタン専用 グリーン→ブルーグラデ ===== */
-.stButton button:has(span:contains("AI見積もりくんで見積もりを生成する")) {
+/* 直前に .gen-estimate-scope があるボタンだけを対象に */
+.gen-estimate-scope + div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  color: #fff !important;
+  color:#fff !important;
   border:none !important;
-  font-weight:600 !important;
-  box-shadow:0 0 10px rgba(0,224,138,0.6),
-             0 0 15px rgba(0,195,255,0.5),
-             0 0 20px rgba(0,224,138,0.4);
-}
-.stButton button:has(span:contains("AI見積もりくんで見積もりを生成する")):hover {
-  filter: brightness(1.1);
-  transform: scale(1.02);
-}
+  font-weight:700 !important;
+  border-radius:10px !important;
+  box-shadow:
+    0 0 10px rgba(0,224,138,.55),
+    0 0 16px rgba(0,195,255,.45);
+}}
+.gen-estimate-scope + div.stButton > button:hover {{
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}}
 
 </style>
 """, unsafe_allow_html=True)
