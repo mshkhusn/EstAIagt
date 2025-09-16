@@ -229,7 +229,7 @@ if st.session_state["chat_history"] is None:
 # =========================
 st.markdown("""
 <style>
-/* ロゴ（Mochiy／潰れ防止のサイズ・字間に調整） */
+/* ロゴ（Mochiy／潰れ防止調整版） */
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
   width:100%;
@@ -247,39 +247,41 @@ st.markdown("""
   background:#000 !important;
   font-family:'Mochiy Pop One',sans-serif;
   color:inherit !important;
-  white-space: nowrap; /* 折り返し防止 */
+  white-space: nowrap;
 }
 .logo-row1{
   display:flex; align-items:flex-start; justify-content:center;
-  gap: 8px; line-height:1.04; margin:0;
+  gap: 10px;
+  line-height:1.2;   /* 広めに */
+  margin:0;
 }
 .logo-box .ai{
-  font-size: 90px;            /* 104 → 90 */
-  font-weight: 900;
+  font-size: 88px;   /* 少し縮小 */
+  font-weight: 700;  /* 900 → 700 */
   color:#ff4df5 !important;
-  letter-spacing:-0.5px;      /* -1.5 → -0.5 */
+  letter-spacing: 1px; /* 広げる */
 }
 .logo-box .mitsumori{
-  font-size: 60px;            /* 68 → 60 */
-  font-weight: 900;
+  font-size: 60px;
+  font-weight: 700;
   color:#ffffff !important;
-  letter-spacing:0px;         /* -1 → 0 */
+  letter-spacing: 1px;
 }
 .logo-kunrow{
   text-align:center;
-  line-height:1.02;
-  margin-top:-20px;           /* -28 → -20: つぶれ軽減 */
-  letter-spacing:0px;
+  line-height:1.1;
+  margin-top:-16px; /* 間隔を調整 */
+  letter-spacing: 1px;
 }
 .logo-box .kun{
   color:#ffffff !important;
-  font-size: 44px;            /* 48 → 44 */
-  font-weight: 900;
+  font-size: 44px;
+  font-weight: 700;
 }
 .logo-box .num2{
   color:#ff4df5 !important;
-  font-size: 44px;            /* 48 → 44 */
-  font-weight: 900;
+  font-size: 44px;
+  font-weight: 700;
 }
 </style>
 
@@ -301,6 +303,7 @@ password = st.text_input("パスワードを入力してください", type="pas
 if password != APP_PASSWORD:
     st.warning("認証が必要です")
     st.stop()
+
 
 # =========================
 # チャットUI（Markdownで描画）
