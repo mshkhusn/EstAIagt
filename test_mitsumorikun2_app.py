@@ -200,10 +200,12 @@ body::before {{
   border-radius: 14px !important;
   box-shadow: 0 0 10px rgba(0,224,138,.35), 0 0 18px rgba(0,195,255,.25) !important;
 }}
+
 [data-testid="stVerticalBlock"]:has(> .df-scope) div:has([data-testid="stDataFrame"]) > * {{
   border-radius: 12px !important;
   background: #000 !important;
-  overflow: hidden;
+  overflow: hidden !important;
+  padding: 0 !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -547,14 +549,13 @@ if has_user_input:
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
 
-    # 👇 グラデ枠の対象にするためのマーカー＋同一コンテナ
-    with st.container():
-        st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)
-        st.dataframe(
-            st.session_state["df"],
-            hide_index=True,
-            use_container_width=True
-        )
+with st.container():                                  # ← これで同じ縦ブロックに閉じ込める
+    st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)  # ← マーカー
+    st.dataframe(
+        st.session_state["df"],
+        hide_index=True,
+        use_container_width=True
+    )
 
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
