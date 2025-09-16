@@ -225,14 +225,11 @@ body::before {{
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "YuGothic",
                Meiryo, sans-serif !important;
-  letter-spacing: normal !important;   /* グローバルの字間を解除 */
-  /* font-weight は上書きしない（AIの太字を生かす） */
-  /* ▼サイズを+1ptにしたい場合は下1行のコメントを外す
-  font-size: calc(1em + 1pt) !important;
-  */
+  letter-spacing: normal !important;   /* 字間は通常に */
+  /* font-weight は上書きしない（太字を生かす） */
 }}
 
-/* 太字／斜体は明示（安心のため） */
+/* 太字／斜体を明示しておく（不要なら削除OK） */
 .stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
 .stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b {{
   font-weight: 700 !important;
@@ -242,24 +239,21 @@ body::before {{
   font-style: italic !important;
 }}
 
-/* 見出し（Markdown # ～ ###） */
+/* 見出し（Markdownの#～）の太さも念のため */
 .stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h1 {{ font-weight: 800 !important; }}
 .stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h2 {{ font-weight: 700 !important; }}
 .stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h3 {{ font-weight: 700 !important; }}
 
-/* 入力欄（テキストエリア）もデバイスフォントに */
+/* 入力欄もデバイスフォントに */
 .stApp [data-testid="stChatInput"] textarea,
 .stApp [data-testid="stChatInput"] * {{
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "YuGothic",
                Meiryo, sans-serif !important;
   letter-spacing: normal !important;
-  /* ▼サイズ+1ptにしたい場合は下1行のコメントを外す
-  font-size: calc(1em + 1pt) !important;
-  */
 }}
 
-/* Chat内のコード/プレはOS標準の等幅に */
+/* Chat内のコード/プレはOS標準の等幅 */
 .stApp [data-testid="stChatMessage"] code,
 .stApp [data-testid="stChatMessage"] pre {{
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
