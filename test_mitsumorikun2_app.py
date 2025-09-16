@@ -98,22 +98,44 @@ html, body {{ background:#000 !important; }}
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 
-/* ===== File Uploader ===== */
+/* ===== File Uploader：ピンク→シアングラデ ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
-  position:relative !important; background:#111 !important; color:#fff !important;
-  border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important;
+  position: relative !important;
+  background: linear-gradient(90deg, #ff4df5, #00c3ff) !important;  /* グラデ背景 */
+  color: #fff !important;
+  border: none !important;                 /* 既存のグレー枠を消す */
+  border-radius: 12px !important;
+  padding-left: 64px !important;
+  box-shadow: 0 0 10px rgba(255,77,245,.35), 0 0 18px rgba(0,195,255,.25) !important;
+  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
+/* 内側ラッパーが上書きしないよう透過 */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > div {{
+  background: transparent !important;
+}}
+/* 既存アイコンは非表示のまま */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{
+  display: none !important;
+}}
+/* :has 対応ブラウザ向けの透過も維持（誤記 !重要 → !important に修正） */
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
-    background:transparent !important; border:none !重要;
+    background: transparent !important; border: none !important;
   }}
 }}
+/* 擬似アイコン（雲） */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
-  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
-  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+  content: ""; position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; background-repeat: no-repeat; background-position: center; background-size: contain;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }}
+/* ホバー時ちょいリッチ */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]:hover {{
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(255,77,245,.45), 0 0 26px rgba(0,195,255,.35) !important;
+}}
+
 
 /* ===== Avatar ===== */
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
