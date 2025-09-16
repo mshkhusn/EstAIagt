@@ -189,17 +189,24 @@ body::before {{
   transform: translateY(0);
 }}
 
-/* ===== DataFrame：ボタンと同じグラデ額縁（スコープ付き） ===== */
-[data-testid="stVerticalBlock"]:has(.df-scope) [data-testid="stDataFrame"] {{
-  border: 2px solid transparent !important;                           /* 枠の太さ */
-  border-radius: 12px !important;
-  border-image: linear-gradient(90deg, #00e08a, #00c3ff) 1 !important; /* 額縁グラデ */
-  box-shadow: 0 0 10px rgba(0,224,138,.35), 0 0 18px rgba(0,195,255,.25) !important;
-  background: #000 !important;
-}}
-
 /* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
+
+/* ===== DataFrame：ボタンと同じグラデ額縁（太め＋角丸をテーブルに合わせる） ===== */
+/* 同じ縦ブロック内に .df-scope があれば、そのブロックの DataFrame を装飾 */
+[data-testid="stVerticalBlock"]:has(> .df-scope) [data-testid="stDataFrame"] {{
+  --frame-radius: 18px;   /* 角丸（調整可） */
+  --frame-width: 8px;     /* 枠太さ（調整可） */
+  border: var(--frame-width) solid transparent !important;
+  border-radius: var(--frame-radius) !important;
+  border-image: linear-gradient(90deg, #00e08a, #00c3ff) 1 !important;
+  background: #000 !important;
+  box-shadow: 0 0 14px rgba(0,224,138,.35), 0 0 26px rgba(0,195,255,.25) !important;
+}}
+[data-testid="stVerticalBlock"]:has(> .df-scope) [data-testid="stDataFrame"] > div {{
+  border-radius: calc(var(--frame-radius) - max(var(--frame-width) - 2px, 0px)) !important;
+  overflow: hidden !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -281,7 +288,7 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !重要;  /* Mochiy Pop One は 400 だけ */
+  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
   font-family: 'Mochiy Pop One', sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
@@ -492,13 +499,13 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     return out
 
 # =========================
-# 実行（★ コンテナ方式でボタンにグラデを適用 ★）
+# 実行（★ コンテナ方式でボタンにグラデを適用 / DataFrame額縁も適用 ★）
 # =========================
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
     with st.container():
-        # この“目印”が同じ stVerticalBlock 内にあると、上のCSSが当たる
+        # この“目印”が同じ stVerticalBlock 内にあると、上のCSSが当たる（ボタン用）
         st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
 
         if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
@@ -540,11 +547,12 @@ if has_user_input:
 # 表示 & ダウンロード
 # =========================
 if st.session_state["df"] is not None:
-    st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
-
-    # ▼ DataFrame用のスコープと表を同じブロックに入れて、額縁CSSを確実に適用
     with st.container():
+        st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
+
+        # ▼ DataFrame装飾のスコープマーカー（この1行が同じブロックにあるとCSSが当たる）
         st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)
+
         st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
 
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
