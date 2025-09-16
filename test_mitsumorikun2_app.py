@@ -161,26 +161,31 @@ html, body {{ background:#000 !important; }}
 
 /* ===== 四隅インク：見切れ配置 ===== */
 body::before {{
-  content:""; position: fixed; inset:0;
+  content:"";
+  position: fixed;
+  inset:0;
   background:
-    url("data:image/png;base64,{INK_PINK}")   no-repeat left -60px  top  -40px,   /* ピンク */
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -120px top -60px,  /* ブルー 2倍 */
-    url("data:image/png;base64,{INK_GREEN}")  no-repeat left -40px  bottom -20px,/* イエロー 小さめ */
+    url("data:image/png;base64,{INK_PINK}")   no-repeat left  -60px top   -40px,  /* ピンク */
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -120px top  -60px,  /* ブルー 2倍 */
+    url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -40px bottom -20px; /* イエロー 小さめ */
   background-size:
     280px 280px,   /* ピンク */
     500px 500px,   /* ブルー */
-    160px 160px,   /* イエロー */
-    280px 280px;   /* オレンジ */
-  pointer-events:none; z-index:-1;
+    160px 160px;   /* イエロー */
+  pointer-events: none;
+  z-index: -1;
 }}
+
 @media (max-width: 900px) {{
   body::before {{
     background-position:
-      left -30px  top  -20px,
-      right -60px top  -30px,
-      left -20px  bottom -10px,
-      right -30px bottom -60px;
-    background-size: 200px 200px, 320px 320px, 120px 120px, 200px 200px;
+      left  -30px top   -20px,
+      right -60px top   -30px,
+      left  -20px bottom -10px;
+    background-size:
+      200px 200px,   /* ピンク */
+      320px 320px,   /* ブルー */
+      120px 120px;   /* イエロー */
   }}
 }}
 </style>
