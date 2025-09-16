@@ -218,6 +218,31 @@ body::before {{
 
 /* ===== ヒント文字色 ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
+
+/* === Chatだけデバイスフォントに戻す =============================== */
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"],
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] * {{
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "YuGothic",
+               Meiryo, sans-serif !important;
+  letter-spacing: normal !important;
+  font-weight: 400 !important;
+}}
+
+.stApp [data-testid="stChatInput"] textarea,
+.stApp [data-testid="stChatInput"] * {{
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "YuGothic",
+               Meiryo, sans-serif !important;
+  letter-spacing: normal !important;
+}}
+
+.stApp [data-testid="stChatMessage"] code,
+.stApp [data-testid="stChatMessage"] pre {{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
+               "Liberation Mono", monospace !important;
+}}
+
 </style>
 """, unsafe_allow_html=True)
 
