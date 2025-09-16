@@ -1,8 +1,7 @@
-# app.py （AI見積もりくん２）— 完全版
-# ・ロゴ「くん2」サイズ/色の強制修正
-# ・すべてのボタン（通常/ダウンロード）グラデ復活
-# ・アップローダ枠をピンク↔シアンのグラデ境界に
-# ・DataFrame は index 非表示
+# app.py （AI見積もりくん２）
+# GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
+# 追加要件込み再生成対応 / 追加質問時にプレビュー消去
+# 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
 
 import os
 import json
@@ -39,18 +38,18 @@ INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 未使�
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# デザイン一式（f-string 内：CSS の {} は {{ }}, 画像の {INK_*} はシングル）
+# デザイン一式（f-string内：CSSの {} は {{ }}、画像の {INK_*} はシングル）
 # =========================
 st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap");
 
 /* ===== Base ===== */
 html, body {{ background:#000 !important; }}
 .stApp, .stApp * {{
   background:transparent !important;
   color:#fff !important;
-  font-family:'Mochiy Pop One',sans-serif !important;
+  font-family:"Mochiy Pop One",sans-serif !important;
   letter-spacing:.01em;
 }}
 
@@ -75,6 +74,16 @@ html, body {{ background:#000 !important; }}
   border:1px solid #666 !important; border-radius:10px !important;
 }}
 
+/* ===== Buttons（デフォルト） ===== */
+.stButton button, .stDownloadButton > button {{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+  padding:.55rem 1rem !important; box-shadow:none !important;
+}}
+.stButton button:hover, .stDownloadButton > button:hover {{
+  background:#2c2c2c !important; border-color:#777 !important;
+}}
+
 /* ===== Chat ===== */
 [data-testid="stChatMessage"] {{
   background:transparent !important; border:none !important; border-radius:14px !important;
@@ -89,33 +98,49 @@ html, body {{ background:#000 !important; }}
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 
-/* ===== File Uploader ===== */
+/* ===== File Uploader：中は黒・外枠はピンク→シアンのグラデ境界 ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
-  position:relative !important;
-  color:#fff !important;
-  border:2px solid transparent !important;
-  border-radius:12px !important;
-  padding-left:64px !important;
-  /* 中は黒、枠はグラデ境界（ピンク→シアン） */
+  position: relative !important;
+  color: #fff !important;
+
+  /* 外枠をグラデ“境界”にする定番テク：二重レイヤー背景 + 透明ボーダー */
+  border: 2px solid transparent !important;
+  border-radius: 12px !important;
   background:
-    linear-gradient(#111,#111) padding-box,
-    linear-gradient(90deg,#ff4df5,#00c3ff) border-box !important;
+    linear-gradient(#111, #111) padding-box,                  /* 内側（中身）は黒 */
+    linear-gradient(90deg, #ff4df5, #00c3ff) border-box !important; /* 外枠はグラデ */
+  
+  padding-left: 64px !important;
+  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]:hover {{
-  box-shadow: 0 0 10px rgba(255,77,245,.35),
-              0 0 18px rgba(0,195,255,.25) !important;
+/* 内側ラッパーが上書きしないよう透過 */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > div {{
+  background: transparent !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
+/* 既存の雲アイコンは非表示 */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{
+  display: none !important;
+}}
+/* :has 対応ブラウザのときも透過維持 */
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
-    background:transparent !important; border:none !important;
+    background: transparent !important; border: none !important;
   }}
 }}
+/* 擬似アイコン（雲）を左に表示 */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
-  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
-  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+  content: ""; position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; background-repeat: no-repeat; background-position: center; background-size: contain;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }}
+/* ホバー時ちょいリッチ */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]:hover {{
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(255,77,245,.45), 0 0 26px rgba(0,195,255,.35) !important;
+}}
+
+
 
 /* ===== Avatar ===== */
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
@@ -169,9 +194,8 @@ body::before {{
   }}
 }}
 
-/* ===== すべての実ボタンにグラデ（生成/テンプレ出力/Excel DL 含む） ===== */
-.stButton > button,
-.stDownloadButton > button {{
+/* ===== 生成ボタン：グリーン→ブルーのグラデ（維持） ===== */
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
   border: none !important;
@@ -182,26 +206,18 @@ body::before {{
   box-shadow: 0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }}
-.stButton > button:hover,
-.stDownloadButton > button:hover {{
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:hover {{
   filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow: 0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
 }}
-.stButton > button:active,
-.stDownloadButton > button:active {{
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:active {{
   filter: brightness(.98);
   transform: translateY(0);
 }}
 
-/* ===== ロゴ：「くん2」を強制サイズ＆色 ===== */
-.logo-box .kun,
-.logo-box .num2 {{ font-size: 44px !important; line-height:1.0 !important; }}
-.logo-box .num2 {{ color: #ff4df5 !important; }}
-
-/* ===== ヒント文字色（全体の !important を上書き） ===== */
+/* ===== ヒント文字色 ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -247,7 +263,7 @@ st.markdown("""
 <style>
 .logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px 0; }
 .logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important; background:linear-gradient(90deg,#ff4df5,#a64dff) !important; }
-.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:'Mochiy Pop One',sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:"Mochiy Pop One",sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 .logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:8px; line-height:1.02; margin:0; }
 .logo-box .ai{ font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important; }
 .logo-box .mitsumori{ font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important; }
@@ -283,8 +299,8 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !important; /* Mochiy Pop One は 400 だけ */
-  font-family: 'Mochiy Pop One', sans-serif !important;
+  font-weight: 400 !important;
+  font-family: "Mochiy Pop One", sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
   text-shadow: 0 0 4px rgba(0,0,0,0.6);
@@ -494,13 +510,13 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     return out
 
 # =========================
-# 実行
+# 実行（★ コンテナ方式でボタンにグラデを適用 ★）
 # =========================
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
     with st.container():
-        # ボタン直前に目印（今後ピンポイント装飾に使える）
+        # この“目印”が同じ stVerticalBlock 内にあると、上のCSSが当たる
         st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
 
         if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
@@ -539,12 +555,10 @@ if has_user_input:
                     )
 
 # =========================
-# 表示 & ダウンロード
+# 表示 & ダウンロード（※ DataFrame は素のまま・枠装飾なし）
 # =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
-
-    # index を消して表示
     st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
 
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
