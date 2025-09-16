@@ -167,15 +167,15 @@ body::before {{
   position: fixed; inset:0;
   background:
     url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -160px,
-    url("data:image/png;base64},{INK_CYAN}")   no-repeat right -220px top  -60px,
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -220px top  -60px,
     url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -100px bottom -100px;
   background-size: 380px 380px, 500px 500px, 260px 400px;
-  pointer-events: none; z-index:-1;
+  pointer-events: none; z-index: -1;
 }}
-@media (max-width:900px) {{
+@media (max-width: 900px) {{
   body::before {{
-    background-position:left -80px top -80px, right -160px top -30px, left -100px bottom -60px;
-    background-size:260px 260px, 320px 320px, 200px 320px;
+    background-position: left -80px top -80px, right -160px top -30px, left -100px bottom -60px;
+    background-size: 260px 260px, 320px 320px, 200px 320px;
   }}
 }}
 </style>
