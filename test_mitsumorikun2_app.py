@@ -1,8 +1,13 @@
-# app.py （AI見積もりくん２）
+# app.py （AI見積もりくん２）— 完全版
+# - f-string中の{}エラー解消
+# - 生成ボタンのグラデ安定化（.gen-scope ラッパ方式）
+# - 見積もりプレビュー表をグラデ枠で囲む
+# - DataFrameの左端インデックス非表示（hide_index=True）
+
 import os
 import json
-from io import BytesIO
 import base64
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
@@ -19,9 +24,10 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# 画像（四隅インク）base64
+# 四隅インク画像をBase64で読む
 # =========================
 ROOT = Path(__file__).resolve().parent
+
 def b64_or_none(p: Path) -> str:
     try:
         with p.open("rb") as f:
@@ -32,9 +38,10 @@ def b64_or_none(p: Path) -> str:
 INK_PINK  = b64_or_none(ROOT / "static" / "ink" / "ink_pink.png")
 INK_CYAN  = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
+# INK_PURPLE は未使用でもOK
 
 # =========================
-# CSS（大枠：f-string不要）
+# グローバルCSS（f-string不要にして安全）
 # =========================
 st.markdown("""
 <style>
@@ -64,6 +71,7 @@ html, body { background:#000 !important; }
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
 .stChatInput textarea::placeholder { color:#ddd !important; }
 
+/* 目アイコン */
 .stTextInput [data-baseweb="button"] {
   background:#333 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
@@ -92,11 +100,18 @@ html, body { background:#000 !important; }
 }
 
 /* ===== Avatar ===== */
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] { background:#a64dff !important; color:#fff !important; border-radius:12px !important; }
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] { background:#00e08a !important; color:#000 !important; }
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
+  background:#a64dff !important; color:#fff !important; border-radius:12px !important;
+}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {
+  background:#00e08a !important; color:#000 !important;
+}
 
 /* ===== 見出し ===== */
-.preview-title { font-size:32px !important; font-weight:900 !important; color:#78f416 !important; margin-bottom:16px !important; }
+.preview-title {
+  font-size:32px !important; font-weight:900 !important;
+  color:#78f416 !important; margin-bottom:16px !important;
+}
 
 /* ===== フォーカス演出 ===== */
 .stChatInput:focus-within textarea, .stTextInput input:focus {
@@ -105,49 +120,46 @@ html, body { background:#000 !important; }
   box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
 }
 
-/* ===== Markdown テーブル等 ===== */
+/* ===== Markdown テーブル ===== */
 [data-testid="stMarkdownContainer"] table { border-collapse:collapse !important; border:1px solid #fff !important; }
-[data-testid="stMarkdownContainer"] th, [data-testid="stMarkdownContainer"] td { border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important; }
+[data-testid="stMarkdownContainer"] th, [data-testid="stMarkdownContainer"] td {
+  border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important;
+}
 [data-testid="stMarkdownContainer"] th { background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }
 [data-testid="stMarkdownContainer"] hr { border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }
 
 .stApp::before { content:""; background:none !important; }
 
-/* ===== 生成ボタン：グリーン→ブルーのグラデ（安定版） ===== */
-/* 1) :has() が使える環境では確実に同一ブロック内の st.button を着色 */
-[data-testid="stVerticalBlock"]:has(> .gen-scope) .stButton > button {
+/* ===== 生成ボタン（.gen-scopeラッパ内だけに適用：安定版） ===== */
+.gen-scope .stButton > button {
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  color:#fff !important; border:none !important; border-radius:12px !important;
-  padding:.68rem 1.15rem !important; font-weight:700 !important; text-shadow:0 1px 0 rgba(0,0,0,.25);
-  box-shadow:0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: .68rem 1.15rem !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.25);
+  box-shadow: 0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }
-[data-testid="stVerticalBlock"]:has(> .gen-scope) .stButton > button:hover {
-  filter:brightness(1.08); transform:translateY(-1px);
-  box-shadow:0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
+.gen-scope .stButton > button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
 }
-[data-testid="stVerticalBlock"]:has(> .gen-scope) .stButton > button:active { filter:brightness(.98); transform:translateY(0); }
-
-/* 2) フォールバック：.gen-scope の後続兄弟のどこかにある stButton を着色（:has非対応対策） */
-.gen-scope ~ div .stButton > button {
-  background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  color:#fff !important; border:none !important; border-radius:12px !important;
-  padding:.68rem 1.15rem !important; font-weight:700 !important; text-shadow:0 1px 0 rgba(0,0,0,.25);
-  box-shadow:0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
-  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
-}
-.gen-scope ~ div .stButton > button:hover {
-  filter:brightness(1.08); transform:translateY(-1px);
-  box-shadow:0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
+.gen-scope .stButton > button:active {
+  filter: brightness(.98);
+  transform: translateY(0);
 }
 
-/* ===== ヒント文（色指定） ===== */
+/* ===== ヒント文の色 ===== */
 .hint-blue { color:#00c3ff !important; font-weight:400 !important; }
 
-/* ===== DataFrame のグラデ枠（ラッパー方式） ===== */
+/* ===== DataFrame をグラデ枠で囲む（ラッパ方式） ===== */
 .df-frame {
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  padding: 2px !important; border-radius: 14px !important;
+  padding: 2px !important;
+  border-radius: 14px !important;
   box-shadow: 0 0 10px rgba(0,224,138,.35), 0 0 18px rgba(0,195,255,.25) !important;
 }
 .df-frame > div {
@@ -157,29 +169,31 @@ html, body { background:#000 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# =========================
-# 背景インク（画像差し込みだけ f-string）
-# =========================
-st.markdown(f"""
+# ===== 背景インク（置換方式で安全に差し込み）=====
+css_bg = """
 <style>
-body::before {{
+body::before {
   content:"";
   position: fixed; inset:0;
   background:
-    url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -160px,
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -220px top  -60px,
-    url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -100px bottom -100px;
+    url("data:image/png;base64,REPL_PINK")   no-repeat left  -160px top  -160px,
+    url("data:image/png;base64,REPL_CYAN")   no-repeat right -220px top  -60px,
+    url("data:image/png;base64,REPL_GREEN")  no-repeat left  -100px bottom -100px;
   background-size: 380px 380px, 500px 500px, 260px 400px;
   pointer-events: none; z-index: -1;
-}}
-@media (max-width: 900px) {{
-  body::before {{
+}
+@media (max-width: 900px) {
+  body::before {
     background-position: left -80px top -80px, right -160px top -30px, left -100px bottom -60px;
     background-size: 260px 260px, 320px 320px, 200px 320px;
-  }}
-}}
+  }
+}
 </style>
-""", unsafe_allow_html=True)
+""".replace("REPL_PINK", INK_PINK or ""
+     ).replace("REPL_CYAN", INK_CYAN or ""
+     ).replace("REPL_GREEN", INK_GREEN or "")
+
+st.markdown(css_bg, unsafe_allow_html=True)
 
 # =========================
 # Secrets
@@ -187,12 +201,15 @@ body::before {{
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 APP_PASSWORD   = st.secrets["APP_PASSWORD"]
 OPENAI_ORG_ID  = st.secrets.get("OPENAI_ORG_ID", None)
+
 if not OPENAI_API_KEY:
     st.error("OPENAI_API_KEY が設定されていません。st.secrets を確認してください。")
     st.stop()
+
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 if OPENAI_ORG_ID:
     os.environ["OPENAI_ORG_ID"] = OPENAI_ORG_ID
+
 openai_client = OpenAI(http_client=httpx.Client(timeout=60.0))
 
 # =========================
@@ -204,7 +221,8 @@ TAX_RATE = 0.10
 # セッション管理
 # =========================
 for k in ["chat_history", "items_json_raw", "items_json", "df", "meta"]:
-    if k not in st.session_state: st.session_state[k] = None
+    if k not in st.session_state:
+        st.session_state[k] = None
 
 if st.session_state["chat_history"] is None:
     st.session_state["chat_history"] = [
@@ -252,20 +270,23 @@ st.markdown("""
   font-size: 40px !important;
   font-weight: 400 !important;
   font-family: 'Mochiy Pop One', sans-serif !important;
-  letter-spacing: 1px !important; line-height: 1.3 !important;
+  letter-spacing: 1px !important;
+  line-height: 1.3 !important;
   text-shadow: 0 0 4px rgba(0,0,0,0.6);
 }
 </style>
 """, unsafe_allow_html=True)
+
 st.markdown('<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>', unsafe_allow_html=True)
 
+# 履歴を再描画
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
         st.chat_message("assistant").markdown(msg["content"])
     elif msg["role"] == "user":
         st.chat_message("user").markdown(msg["content"])
 
-# ヒント文プレースホルダ
+# ヒント文のプレースホルダ
 hint_placeholder = st.empty()
 if st.session_state["df"] is not None:
     hint_placeholder.markdown(
@@ -278,6 +299,7 @@ if st.session_state["df"] is not None:
 # 入力欄
 # =========================
 if user_input := st.chat_input("要件を入力してください..."):
+    # 新規入力でプレビューを一旦クリア
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
@@ -286,6 +308,7 @@ if user_input := st.chat_input("要件を入力してください..."):
     st.session_state["chat_history"].append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
+
     with st.chat_message("assistant"):
         with st.spinner("AIが考えています..."):
             resp = openai_client.chat.completions.create(
@@ -299,34 +322,43 @@ if user_input := st.chat_input("要件を入力してください..."):
             st.session_state["chat_history"].append({"role": "assistant", "content": reply})
 
 # =========================
-# 見積もり生成用プロンプト
+# 見積もり生成用プロンプト（{}直書きしない）
 # =========================
 def build_prompt_for_estimation(chat_history):
-    return f"""
-必ず有効な JSON のみを返してください。説明文・文章・Markdown・テーブルは禁止です。
-あなたは広告制作の見積もり作成エキスパートです。以下の会話履歴をもとに、見積もりの内訳を作成してください。
-【会話履歴】
-{json.dumps(chat_history, ensure_ascii=False, indent=2)}
-【カテゴリ例】
-- 企画・戦略関連（企画費、リサーチ費、コピーライティング、ディレクション など）
-- デザイン・クリエイティブ制作（デザイン費、アートディレクション、イラスト制作 など）
-- 撮影・映像関連（撮影費、スタッフ費、出演費、撮影機材費 など）
-- 編集・仕上げ（編集費、CG/VFX、MA、字幕制作 など）
-- Web関連（コーディング、CMS実装、テスト・QA、サーバー費 など）
-- 配信・媒体関連（媒体出稿費、配信管理費、広告審査費 など）
-- プロモーション・イベント関連（イベント運営費、会場費、施工費、スタッフ派遣 など）
-- 諸経費・共通項目（交通費、宿泊費、消耗品費、雑費 など）
-- 管理費（固定・一式）
-【ルール】
-- 必ず items 配列には1行以上の見積もり項目を返してください（空配列は禁止）。
-- 各要素キー: category / task / qty / unit / unit_price / note
-- 欠損がある場合は補完してください。
-- 「管理費」は必ず含める（task=管理費（固定）, qty=1, unit=式）。
-- 合計や税は含めない。
-- もし情報不足で正しい見積もりが作れない場合は、items に1行だけ
-  {"category":"質問","task":"追加で必要な情報を教えてください","qty":0,"unit":"","unit_price":0,"note":"不足情報あり"}
-  を返してください。
-"""
+    fallback_item = {
+        "category": "質問",
+        "task": "追加で必要な情報を教えてください",
+        "qty": 0,
+        "unit": "",
+        "unit_price": 0,
+        "note": "不足情報あり",
+    }
+    return (
+        "必ず有効な JSON のみを返してください。説明文・文章・Markdown・テーブルは禁止です。\n\n"
+        "あなたは広告制作の見積もり作成エキスパートです。\n"
+        "以下の会話履歴をもとに、見積もりの内訳を作成してください。\n\n"
+        "【会話履歴】\n"
+        f"{json.dumps(chat_history, ensure_ascii=False, indent=2)}\n\n"
+        "【カテゴリ例】\n"
+        "- 企画・戦略関連（企画費、リサーチ費、コピーライティング、ディレクション など）\n"
+        "- デザイン・クリエイティブ制作（デザイン費、アートディレクション、イラスト制作 など）\n"
+        "- 撮影・映像関連（撮影費、スタッフ費、出演費、撮影機材費 など）\n"
+        "- 編集・仕上げ（編集費、CG/VFX、MA、字幕制作 など）\n"
+        "- Web関連（コーディング、CMS実装、テスト・QA、サーバー費 など）\n"
+        "- 配信・媒体関連（媒体出稿費、配信管理費、広告審査費 など）\n"
+        "- プロモーション・イベント関連（イベント運営費、会場費、施工費、スタッフ派遣 など）\n"
+        "- 諸経費・共通項目（交通費、宿泊費、消耗品費、雑費 など）\n"
+        "- 管理費（固定・一式）\n\n"
+        "【ルール】\n"
+        "- 必ず items 配列には1行以上の見積もり項目を返してください（空配列は禁止）。\n"
+        "- 各要素キー: category / task / qty / unit / unit_price / note\n"
+        "- 欠損がある場合は補完してください。\n"
+        "- 「管理費」は必ず含める（task=管理費（固定）, qty=1, unit=式）。\n"
+        "- 合計や税は含めない。\n"
+        "- もし情報不足で正しい見積もりが作れない場合は、items に1行だけ\n"
+        f"  {json.dumps(fallback_item, ensure_ascii=False)}\n"
+        "  を返してください。\n"
+    )
 
 # =========================
 # JSONパース & フォールバック
@@ -335,14 +367,18 @@ def robust_parse_items_json(raw: str) -> str:
     try:
         obj = json.loads(raw)
     except Exception:
-        return json.dumps({"items":[
-            {"category":"質問","task":"要件を詳しく教えてください","qty":0,"unit":"","unit_price":0,"note":"AIがテキストを返しました"}
-        ]}, ensure_ascii=False)
+        return json.dumps({
+            "items":[
+                {"category":"質問","task":"要件を詳しく教えてください","qty":0,"unit":"","unit_price":0,"note":"AIがテキストを返しました"}
+            ]
+        }, ensure_ascii=False)
 
     if not isinstance(obj, dict):
         obj = {"items":[]}
     if "items" not in obj or not obj["items"]:
-        obj["items"] = [{"category":"質問","task":"追加で要件を教えてください","qty":0,"unit":"","unit_price":0,"note":"不足情報あり"}]
+        obj["items"] = [{
+            "category":"質問","task":"追加で要件を教えてください","qty":0,"unit":"","unit_price":0,"note":"不足情報あり"
+        }]
     return json.dumps(obj, ensure_ascii=False)
 
 # =========================
@@ -404,21 +440,26 @@ def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
 
 def _write_items_to_template(ws, df_items: pd.DataFrame):
     r0, c0 = _find_token(ws, TOKEN_ITEMS)
-    if r0: ws.cell(row=r0, column=c0).value = None
+    if r0:
+        ws.cell(row=r0, column=c0).value = None
     start_row = r0 or 19
+
     c_task = column_index_from_string(COLMAP["task"])
     c_qty  = column_index_from_string(COLMAP["qty"])
     c_unit = column_index_from_string(COLMAP["unit"])
     c_price= column_index_from_string(COLMAP["unit_price"])
     c_amt  = column_index_from_string(COLMAP["amount"])
-    r = start_row; current_cat = None
+
+    r = start_row
+    current_cat = None
     for _, row in df_items.iterrows():
         cat = str(row.get("category", "")) or ""
         if cat != current_cat:
             ws.cell(row=r, column=c_task).value = cat
             ws.cell(row=r, column=c_task).font = Font(bold=True)
             _ensure_amount_formula(ws, r, c_qty, c_price, c_amt)
-            current_cat = cat; r += 1
+            current_cat = cat
+            r += 1
         ws.cell(row=r, column=c_task).value  = str(row.get("task",""))
         ws.cell(row=r, column=c_qty).value   = float(row.get("qty", 0) or 0)
         ws.cell(row=r, column=c_unit).value  = str(row.get("unit",""))
@@ -430,22 +471,28 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     wb = load_workbook(filename=BytesIO(template_bytes))
     ws = wb.active
     _write_items_to_template(ws, df_items)
-    out = BytesIO(); wb.save(out); out.seek(0); return out
+    out = BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out
 
 # =========================
-# 実行（ボタン）
+# 生成ボタン（.gen-scope ラッパ内に配置）
 # =========================
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 if has_user_input:
     with st.container():
-        st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="gen-scope">', unsafe_allow_html=True)
+
         if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
             with st.spinner("AIが見積もりを生成中…"):
                 prompt = build_prompt_for_estimation(st.session_state["chat_history"])
                 resp = openai_client.chat.completions.create(
                     model="gpt-4.1",
-                    messages=[{"role":"system","content":"You MUST return only valid JSON."},
-                              {"role":"user","content":prompt}],
+                    messages=[
+                        {"role":"system","content":"You MUST return only valid JSON."},
+                        {"role":"user","content":prompt}
+                    ],
                     response_format={"type":"json_object"},
                     temperature=0.2,
                     max_tokens=4000
@@ -453,6 +500,7 @@ if has_user_input:
                 raw = resp.choices[0].message.content or '{"items":[]}'
                 items_json = robust_parse_items_json(raw)
                 df = df_from_items_json(items_json)
+
                 if df.empty:
                     st.warning("見積もりを出せませんでした。追加で要件を教えてください。")
                 else:
@@ -461,11 +509,15 @@ if has_user_input:
                     st.session_state["items_json"] = items_json
                     st.session_state["df"] = df
                     st.session_state["meta"] = meta
+
+                    # 入力欄の直上にヒント表示（ブルー）
                     hint_placeholder.markdown(
                         '<p class="hint-blue">チャットをさらに続けて見積もり精度を上げることができます。<br>'
                         '追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。</p>',
                         unsafe_allow_html=True
                     )
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # 表示 & ダウンロード
@@ -473,7 +525,7 @@ if has_user_input:
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
 
-    # ここを df-frame でラップ（:has不要／確実に枠が出る）
+    # グラデ枠で包む & インデックスは非表示
     st.markdown('<div class="df-frame">', unsafe_allow_html=True)
     st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
