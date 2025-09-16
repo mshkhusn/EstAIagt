@@ -296,7 +296,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown(
-    '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
+    '<h2 class="custom-header">AI見積もりくん2にチャットで相談して見積もりを生成しよう！</h2>',
     unsafe_allow_html=True
 )
 
