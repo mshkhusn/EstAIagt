@@ -166,7 +166,6 @@ body::before {{
     url("data:image/png;base64,{INK_PINK}")   no-repeat left -60px  top  -40px,   /* ピンク */
     url("data:image/png;base64,{INK_CYAN}")   no-repeat right -120px top -60px,  /* ブルー 2倍 */
     url("data:image/png;base64,{INK_GREEN}")  no-repeat left -40px  bottom -20px,/* イエロー 小さめ */
-    url("data:image/png;base64,{INK_PURPLE}") no-repeat right -60px bottom -120px; /* オレンジ 下へ */
   background-size:
     280px 280px,   /* ピンク */
     500px 500px,   /* ブルー */
