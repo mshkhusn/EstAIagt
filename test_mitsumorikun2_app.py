@@ -160,8 +160,7 @@ html, body {{ background:#000 !important; }}
 .stApp::before {{ content:""; background:none !important; }}
 
 
-st.markdown(f"""
-<style>
+
 /* ===== 四隅インク：ピンクさらに上／イエロー左寄せ ===== */
 body::before {{
   content:"";
