@@ -106,7 +106,7 @@ html, body {{ background:#000 !important; }}
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
-    background:transparent !important; border:none !important;
+    background:transparent !important; border:none !重要;
   }}
 }}
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
@@ -167,7 +167,7 @@ body::before {{
   }}
 }}
 
-/* ===== 生成ボタン：グリーン→ブルーのグラデ ===== */
+/* ===== 生成ボタン：グリーン→ブルーのグラデ（維持） ===== */
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
@@ -189,25 +189,8 @@ body::before {{
   transform: translateY(0);
 }}
 
-/* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
+/* ===== ヒント文字色 ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
-
-/* ===== DataFrame：ボタンと同じグラデ額縁（堅牢版・ダブルクォーテーション済み） ===== */
-.df-scope ~ * [data-testid="stDataFrame"],
-.df-scope ~ * [data-testid="stDataFrameResizable"] {{
-  --frame-radius: 18px;   /* 角丸 */
-  --frame-width: 8px;     /* 枠の太さ */
-  border: var(--frame-width) solid transparent !important;
-  border-radius: var(--frame-radius) !important;
-  border-image: linear-gradient(90deg, #00e08a, #00c3ff) 1 !important;
-  background: #000 !important;
-  box-shadow: 0 0 14px rgba(0,224,138,.35), 0 0 26px rgba(0,195,255,.25) !important;
-}}
-.df-scope ~ * [data-testid="stDataFrame"] > div,
-.df-scope ~ * [data-testid="stDataFrameResizable"] > div {{
-  border-radius: calc(var(--frame-radius) - max(var(--frame-width) - 2px, 0px)) !important;
-  overflow: hidden !important;
-}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -289,7 +272,7 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
+  font-weight: 400 !important;
   font-family: "Mochiy Pop One", sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
@@ -345,7 +328,7 @@ if user_input := st.chat_input("要件を入力してください..."):
                 max_tokens=1200
             )
             reply = resp.choices[0].message.content
-            st.markdown(reply)
+            st.markdown(reply)  # ← Markdownそのまま表示
             st.session_state["chat_history"].append({"role": "assistant", "content": reply})
 
 # =========================
@@ -545,15 +528,11 @@ if has_user_input:
                     )
 
 # =========================
-# 表示 & ダウンロード（※ DataFrame の直前に .df-scope を置く）
+# 表示 & ダウンロード（※ DataFrame は素のまま・枠装飾なし）
 # =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
-
-    # 額縁のスコープ（.df-scope を置いた後の DataFrame にだけ適用）
-    with st.container():
-        st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)
-        st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
+    st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
 
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
