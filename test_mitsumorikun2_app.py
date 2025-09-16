@@ -14,35 +14,47 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from openai import OpenAI
 import httpx
 
+# ==== インク画像をBase64化 ====
+def get_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+INK_PINK   = get_base64("static/ink/ink_pink.png")
+INK_CYAN   = get_base64("static/ink/ink_cyan.png")
+INK_GREEN  = get_base64("static/ink/ink_green.png")
+INK_PURPLE = get_base64("static/ink/ink_purple.png")
+
 # =========================
 # ページ設定
 # =========================
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# デザイン（Markdownつぶし無し）
+# デザイン一式
 # =========================
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* ===== Base ===== */
+/* ===== Base: 黒背景は body のみ ===== */
 html, body {{ background:#000 !important; }}
-body {{ position:relative; }}
-.stApp{{
-  position: relative;
+.stApp, .stApp *{{
+  background:transparent !important;
   color:#fff !important;
   font-family:'Mochiy Pop One',sans-serif !important;
+  font-weight:400 !important;
+  font-synthesis-weight:none !important;
+  letter-spacing:.01em;
 }}
-/* ここで要素の background を透明にしすぎると消えるので触らない */
 
+/* ヘッダー/フッター/サイドバー */
 [data-testid="stHeader"],
 [data-testid="stToolbar"], [data-testid="stStatusWidget"],
 [data-testid="stSidebar"], [data-testid="stSidebarContent"]{{
   background:transparent !important; border:none !important;
 }}
 
-/* Inputs / Buttons はそのまま（省略可：あなたの元CSS） */
+/* ===== Inputs ===== */
 .stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !important; }}
 .stTextInput input, .stTextArea textarea, .stSelectbox div{{
   background:#111 !important; color:#fff !important;
@@ -50,10 +62,14 @@ body {{ position:relative; }}
 }}
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
 .stChatInput textarea::placeholder{{ color:#ddd !important; }}
+
+/* 目アイコン */
 .stTextInput [data-baseweb="button"]{{
   background:#333 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
 }}
+
+/* ===== Buttons ===== */
 .stButton button, .stDownloadButton > button{{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
@@ -63,7 +79,10 @@ body {{ position:relative; }}
   background:#2c2c2c !important; border-color:#777 !important;
 }}
 
-[data-testid="stChatMessage"]{{ background:transparent !important; border:none !important; border-radius:14px !important; }}
+/* ===== Chat ===== */
+[data-testid="stChatMessage"]{{
+  background:transparent !important; border:none !important; border-radius:14px !important;
+}}
 [data-testid="stChatInput"], [data-testid="stChatInput"]>div{{ background:transparent !important; }}
 .stChatInput textarea{{
   background:#111 !important; color:#fff !important;
@@ -74,6 +93,7 @@ body {{ position:relative; }}
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 
+/* ===== File Uploader ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{{
   position:relative !important;
   background:#111 !important; color:#fff !important;
@@ -89,7 +109,7 @@ body {{ position:relative; }}
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{{
   content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
   width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }}
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{{
   background:#222 !important; color:#fff !important;
@@ -99,39 +119,58 @@ body {{ position:relative; }}
   background:#2c2c2c !important; border-color:#777 !important;
 }}
 
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{ background:#a64dff !important; color:#fff !important; border-radius:12px !important; }}
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{{ background:#00e08a !important; color:#000 !important; }}
-
-.preview-title{{ font-size:32px !important; font-weight:900 !important; color:#78f416 !important; margin-bottom:16px !important; }}
-
-.stChatInput:focus-within textarea, .stTextInput input:focus{{
-  border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
-  border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
+/* ===== Chat Avatar 色変更 ===== */
+.stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
+.stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
+  background: #a64dff !important; color: #ffffff !important; border-radius: 12px !important;
+}}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{{
+  background: #00e08a !important; color: #000000 !important;
 }}
 
-/* ===== Markdown table & hr を白線に ===== */
-[data-testid="stMarkdownContainer"] table{{ border-collapse:collapse !important; border:1px solid #fff !important; }}
+/* ===== 見積もり結果プレビュー見出し ===== */
+.preview-title{{
+  font-size: 32px !important; line-height: 1.4 !important; font-weight: 900 !important;
+  text-align: left; color: #78f416 !important; margin-bottom: 16px !important;
+}}
+
+/* ===== 入力フォーム フォーカス時 ===== */
+.stChatInput:focus-within textarea,
+.stTextInput input:focus {{
+  border: 3px solid transparent !important; border-radius: 12px !important; background:#111 !important;
+  border-image: linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
+  box-shadow: 0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
+  outline: none !important;
+}}
+
+/* ===== Markdownテーブル罫線 ===== */
+[data-testid="stMarkdownContainer"] table {{
+  border-collapse: collapse !important; border: 1px solid #fff !important;
+}}
 [data-testid="stMarkdownContainer"] th,
-[data-testid="stMarkdownContainer"] td{{ border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important; }}
-[data-testid="stMarkdownContainer"] th{{ background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }}
-[data-testid="stMarkdownContainer"] hr{{ border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }}
-
-/* ===== 四隅インク：body::before に base64 埋め込み ===== */
-body::before{{
-  content:"";
-  position: fixed; inset:0;
-  background:
-    url("data:image/png;base64,{INK_PINK}")   no-repeat left 3%  top 6%,
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right 4% top 8%,
-    url("data:image/png;base64,{INK_GREEN}")  no-repeat left 3%  bottom 6%,
-    url("data:image/png;base64,{INK_PURPLE}") no-repeat right 4% bottom 5%;
-  background-size: 220px 220px, 220px 220px, 220px 220px, 220px 220px;
-  pointer-events: none;
-  z-index: -1;
+[data-testid="stMarkdownContainer"] td {{
+  border: 1px solid #fff !important; padding: 6px 10px !important; color: #fff !important;
 }}
-@media (max-width: 900px){{
-  body::before{{ background-size: 160px 160px,160px 160px,160px 160px,160px 160px; }}
+[data-testid="stMarkdownContainer"] th {{
+  background-color: rgba(255,255,255,0.1) !important; font-weight: 700 !important;
+}}
+
+/* ===== Markdown水平線 ===== */
+[data-testid="stMarkdownContainer"] hr {{
+  border: none !important; border-top: 1px solid #fff !important; margin: 1em 0 !important;
+}}
+
+/* ===== 四隅インク背景 ===== */
+.stApp::before {{
+  content:""; position: fixed; top:0; left:0; width:100%; height:100%;
+  background:
+    url("data:image/png;base64,{INK_PINK}")   no-repeat left top,
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right top,
+    url("data:image/png;base64,{INK_GREEN}")  no-repeat left bottom,
+    url("data:image/png;base64,{INK_PURPLE}") no-repeat right bottom;
+  background-size: 220px;
+  z-index:-1;
 }}
 </style>
 """, unsafe_allow_html=True)
