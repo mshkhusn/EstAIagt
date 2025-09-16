@@ -34,13 +34,12 @@ INK_CYAN   = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN  = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
 INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")
 
-# 読めたものだけ重ねる
+# 読めたものだけ重ねる（未使用なら削除可）
 layers = []
 if INK_PINK:   layers.append(f'url("data:image/png;base64,{INK_PINK}")   no-repeat left 3%  top 6%')
 if INK_CYAN:   layers.append(f'url("data:image/png;base64,{INK_CYAN}")   no-repeat right 4% top 8%')
 if INK_GREEN:  layers.append(f'url("data:image/png;base64,{INK_GREEN}")  no-repeat left 3%  bottom 6%')
 if INK_PURPLE: layers.append(f'url("data:image/png;base64,{INK_PURPLE}") no-repeat right 4% bottom 5%')
-
 bg_css = ",\n    ".join(layers) if layers else "none"
 size_css = "220px 220px, 220px 220px, 220px 220px, 220px 220px" if layers else "auto"
 
@@ -72,7 +71,7 @@ html, body {{ background:#000 !important; }}
 }}
 
 /* ===== Inputs ===== */
-.stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !important; }}
+.stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !重要; }}
 .stTextInput input, .stTextArea textarea, .stSelectbox div {{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
@@ -86,7 +85,7 @@ html, body {{ background:#000 !important; }}
   border:1px solid #666 !important; border-radius:10px !important;
 }}
 
-/* ===== Buttons ===== */
+/* ===== Buttons（デフォルト） ===== */
 .stButton button, .stDownloadButton > button {{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
@@ -115,7 +114,7 @@ html, body {{ background:#000 !important; }}
   position:relative !important; background:#111 !important; color:#fff !important;
   border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !重要; }}
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
     background:transparent !important; border:none !important;
@@ -159,8 +158,6 @@ html, body {{ background:#000 !important; }}
 /* ===== 旧 .stApp::before を無効化（二重防止） ===== */
 .stApp::before {{ content:""; background:none !important; }}
 
-
-
 /* ===== 四隅インク：ピンクさらに上／ブルー右にはみ出し／イエロー縦長 ===== */
 body::before {{
   content:"";
@@ -177,7 +174,6 @@ body::before {{
   pointer-events: none;
   z-index: -1;
 }}
-
 @media (max-width: 900px) {{
   body::before {{
     background-position:
@@ -191,17 +187,9 @@ body::before {{
   }}
 }}
 
-/* ===== 生成ボタン（グリーン→ブルーのグラデ）強化版 ===== */
-/* 目印は前のまま <div class="gen-estimate-scope"></div> をボタン直前に置く */
-.gen-estimate-scope {{ display:none; }}
-
-/* 直後 or 近傍に来るあらゆる st.button を幅広くヒットさせる */
-.gen-estimate-scope + div button,
-.gen-estimate-scope + div .stButton > button,
-.gen-estimate-scope ~ div .stButton > button,
-.gen-estimate-scope ~ div [data-testid="stButton"] > button,
-.gen-estimate-scope ~ [data-testid="stButton"] > button,
-.gen-estimate-scope ~ div button[kind] {{
+/* ===== 生成ボタン：グリーン→ブルーのグラデ（コンテナ版） ===== */
+/* 同じ縦ブロック（stVerticalBlock）直下に .gen-scope を含む場合、そのブロック内のボタンを着色 */
+[data-testid="stVerticalBlock"]:has(> .gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
   border: none !important;
@@ -212,33 +200,21 @@ body::before {{
   box-shadow:
     0 0 10px rgba(0,224,138,.55),
     0 0 18px rgba(0,195,255,.45) !important;
-  /* Streamlit のテーマ変数より強くするため */
-  background-image: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  background-color: transparent !important;
-  border-color: transparent !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }}
-
-.gen-estimate-scope ~ div .stButton > button:hover,
-.gen-estimate-scope ~ div [data-testid="stButton"] > button:hover,
-.gen-estimate-scope ~ div button[kind]:hover {{
+[data-testid="stVerticalBlock"]:has(> .gen-scope) div.stButton > button:hover {{
   filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow:
     0 0 12px rgba(0,224,138,.65),
     0 0 24px rgba(0,195,255,.55) !important;
 }}
-
-.gen-estimate-scope ~ div .stButton > button:active,
-.gen-estimate-scope ~ div [data-testid="stButton"] > button:active,
-.gen-estimate-scope ~ div button[kind]:active {{
+[data-testid="stVerticalBlock"]:has(> .gen-scope) div.stButton > button:active {{
   filter: brightness(.98);
   transform: translateY(0);
 }}
 </style>
 """, unsafe_allow_html=True)
-
-
 
 # =========================
 # Secrets
@@ -280,7 +256,7 @@ if st.session_state["chat_history"] is None:
 # =========================
 st.markdown("""
 <style>
-/* ===== ロゴ（行間を元に戻し、潰れ防止：正規ウェイト＋字間少し広め） ===== */
+/* ===== ロゴ（潰れ防止：正規ウェイト＋字間少し広め） ===== */
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
   width:100%; margin:24px 0 40px 0;
@@ -296,26 +272,16 @@ st.markdown("""
 }
 .logo-row1{
   display:flex; align-items:flex-start; justify-content:center;
-  gap:8px; line-height:1.02;  /* ← 行間を元に戻す */
-  margin:0;
+  gap:8px; line-height:1.02; margin:0;
 }
-/* ポイント：Mochiy Pop One は実質 400 だけ。太字指定はやめ、字間で見やすく。 */
 .logo-box .ai{
-  font-size:90px;
-  font-weight:400;                /* 900→400（正規ウェイト） */
-  letter-spacing:0.5px;           /* つぶれ防止にわずかに広げる */
-  color:#ff4df5 !important;
+  font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important;
 }
 .logo-box .mitsumori{
-  font-size:60px;
-  font-weight:400;                /* 900→400 */
-  letter-spacing:0.5px;           /* -1px をやめて広げる */
-  color:#fff !important;
+  font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important;
 }
 .logo-kunrow{
-  text-align:center; line-height:1.0;
-  margin-top:-22px;               /* バランス調整（元-28を少し緩め） */
-  letter-spacing:0.5px;
+  text-align:center; line-height:1.0; margin-top:-22px; letter-spacing:0.5px;
 }
 .logo-box .kun{  font-size:44px; font-weight:400; color:#fff !important; }
 .logo-box .num2{ font-size:44px; font-weight:400; color:#ff4df5 !important; }
@@ -340,7 +306,6 @@ if password != APP_PASSWORD:
     st.warning("認証が必要です")
     st.stop()
 
-
 # =========================
 # チャットUI（Markdownで描画）
 # =========================
@@ -353,7 +318,7 @@ st.markdown("""
   font-family: 'Mochiy Pop One', sans-serif !important;
   letter-spacing: 1px !important;   /* 潰れ防止に少し広げる */
   line-height: 1.3 !important;
-  text-shadow: 0 0 4px rgba(0,0,0,0.6);  /* 輪郭をはっきりさせる */
+  text-shadow: 0 0 4px rgba(0,0,0,0.6);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -362,6 +327,7 @@ st.markdown(
     '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
     unsafe_allow_html=True
 )
+
 # 既存履歴をMarkdownで再描画
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
@@ -377,7 +343,9 @@ if st.session_state["df"] is not None:
         "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
     )
 
+# =========================
 # 入力欄
+# =========================
 if user_input := st.chat_input("要件を入力してください..."):
     # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
     st.session_state["df"] = None
@@ -554,43 +522,44 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     return out
 
 # =========================
-# 実行
+# 実行（★ コンテナ方式でボタンにグラデを適用 ★）
 # =========================
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
-    # ★ この1行をボタンの直前に入れる（重要）★
-    st.markdown('<div class="gen-estimate-scope"></div>', unsafe_allow_html=True)
+    with st.container():
+        # この“目印”が同じ stVerticalBlock 内にあると、上のCSSが当たる
+        st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
 
-    if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
-        with st.spinner("AIが見積もりを生成中…"):
-            prompt = build_prompt_for_estimation(st.session_state["chat_history"])
-            resp = openai_client.chat.completions.create(
-                model="gpt-4.1",
-                messages=[{"role":"system","content":"You MUST return only valid JSON."},
-                          {"role":"user","content":prompt}],
-                response_format={"type":"json_object"},
-                temperature=0.2,
-                max_tokens=4000
-            )
-            raw = resp.choices[0].message.content or '{"items":[]}'
-            items_json = robust_parse_items_json(raw)
-            df = df_from_items_json(items_json)
-
-            if df.empty:
-                st.warning("見積もりを出せませんでした。追加で要件を教えてください。")
-            else:
-                meta = compute_totals(df)
-                st.session_state["items_json_raw"] = raw
-                st.session_state["items_json"] = items_json
-                st.session_state["df"] = df
-                st.session_state["meta"] = meta
-
-                # ⬇︎ 生成直後の同一実行でもヒント文を即時表示（プレースホルダに挿入）
-                hint_placeholder.caption(
-                    "チャットをさらに続けて見積もり精度を上げることができます。\n"
-                    "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
+        if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
+            with st.spinner("AIが見積もりを生成中…"):
+                prompt = build_prompt_for_estimation(st.session_state["chat_history"])
+                resp = openai_client.chat.completions.create(
+                    model="gpt-4.1",
+                    messages=[{"role":"system","content":"You MUST return only valid JSON."},
+                              {"role":"user","content":prompt}],
+                    response_format={"type":"json_object"},
+                    temperature=0.2,
+                    max_tokens=4000
                 )
+                raw = resp.choices[0].message.content or '{"items":[]}'
+                items_json = robust_parse_items_json(raw)
+                df = df_from_items_json(items_json)
+
+                if df.empty:
+                    st.warning("見積もりを出せませんでした。追加で要件を教えてください。")
+                else:
+                    meta = compute_totals(df)
+                    st.session_state["items_json_raw"] = raw
+                    st.session_state["items_json"] = items_json
+                    st.session_state["df"] = df
+                    st.session_state["meta"] = meta
+
+                    # 入力欄の直上にヒント表示
+                    hint_placeholder.caption(
+                        "チャットをさらに続けて見積もり精度を上げることができます。\n"
+                        "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
+                    )
 
 # =========================
 # 表示 & ダウンロード
