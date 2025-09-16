@@ -213,6 +213,54 @@ body::before {{
 
 /* ===== ヒント文字色 ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
+
+
+/* ===== DD見積書テンプレで出力：スプラ風グラデ＋点滅グロー ===== */
+@keyframes splaPulse {{
+  0%, 100% {{
+    box-shadow:
+      0 0 10px rgba(0,224,138,.55),
+      0 0 16px rgba(255,77,245,.55),
+      0 0 0 2px rgba(255,255,255,.08) inset;
+  }}
+  50% {{
+    box-shadow:
+      0 0 24px rgba(0,224,138,.85),
+      0 0 30px rgba(255,77,245,.85),
+      0 0 0 2px rgba(255,255,255,.14) inset;
+  }}
+}}
+
+[data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button {{
+  background: linear-gradient(90deg, #00e08a, #ff4df5) !important; /* グリーン→ピンク */
+  color: #fff !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: .68rem 1.15rem !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.25);
+  animation: splaPulse 1.2s infinite ease-in-out; /* ← 点滅 */
+  transition: transform .08s ease, filter .15s ease;
+}}
+
+[data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button:hover {{
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}}
+
+[data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button:active {{
+  filter: brightness(.98);
+  transform: translateY(0);
+}}
+
+/* 動きが苦手な環境設定の人にはアニメ無効 */
+@media (prefers-reduced-motion: reduce) {{
+  [data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button {{
+    animation: none !important;
+  }}
+}}
+
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -568,6 +616,14 @@ if st.session_state["df"] is not None:
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
-    if tmpl is not None:
-        out = export_with_template(tmpl.read(), st.session_state["df"])
-        st.download_button("DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx")
+if tmpl is not None:
+    out = export_with_template(tmpl.read(), st.session_state["df"])
+    # ★ この2行を追加して専用スコープを作る（ここだけ CSS を当てる）
+    with st.container():
+        st.markdown('<div class="dd-scope"></div>', unsafe_allow_html=True)
+        st.download_button(
+            "DD見積書テンプレで出力",
+            out,
+            "見積もり_DDテンプレ.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
