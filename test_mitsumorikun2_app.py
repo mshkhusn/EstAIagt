@@ -26,25 +26,21 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* ===== Base: 黒背景は body のみ ===== */
+/* ===== Base ===== */
 html, body { background:#000 !important; }
-.stApp, .stApp *{
-  background:transparent !important;
+.stApp{
+  position: relative;                 /* ← 擬似要素の土台 */
   color:#fff !important;
   font-family:'Mochiy Pop One',sans-serif !important;
-  font-weight:400 !important;
-  font-synthesis-weight:none !important;
-  letter-spacing:.01em;
 }
+.stApp *{ color: inherit !important; background: transparent !important; }
 
-/* ヘッダー/フッター/サイドバーも透明 */
+/* ===== Inputs / Buttons（そのまま） ===== */
 [data-testid="stHeader"],
 [data-testid="stToolbar"], [data-testid="stStatusWidget"],
 [data-testid="stSidebar"], [data-testid="stSidebarContent"]{
   background:transparent !important; border:none !important;
 }
-
-/* ===== Inputs ===== */
 .stTextInput label, .stTextArea label, .stSelectbox label { color:#fff !important; }
 .stTextInput input, .stTextArea textarea, .stSelectbox div{
   background:#111 !important; color:#fff !important;
@@ -52,14 +48,10 @@ html, body { background:#000 !important; }
 }
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
 .stChatInput textarea::placeholder{ color:#ddd !important; }
-
-/* 目アイコン */
 .stTextInput [data-baseweb="button"]{
   background:#333 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
 }
-
-/* ===== Buttons（生成ボタン／ダウンロード統一） ===== */
 .stButton button, .stDownloadButton > button{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
@@ -68,16 +60,8 @@ html, body { background:#000 !important; }
 .stButton button:hover, .stDownloadButton > button:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
-
-/* ===== Chat ===== */
-[data-testid="stChatMessage"]{
-  background:transparent !important;
-  border:none !important;
-  border-radius:14px !important;
-}
-[data-testid="stChatInput"], [data-testid="stChatInput"]>div{
-  background:transparent !important;
-}
+[data-testid="stChatMessage"]{ background:transparent !important; border:none !important; border-radius:14px !important; }
+[data-testid="stChatInput"], [data-testid="stChatInput"]>div{ background:transparent !important; }
 .stChatInput textarea{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
@@ -86,8 +70,6 @@ html, body { background:#000 !important; }
   background:#222 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
 }
-
-/* ===== File Uploader ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{
   position:relative !important;
   background:#111 !important; color:#fff !important;
@@ -107,100 +89,53 @@ html, body { background:#000 !important; }
 }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{
   background:#222 !important; color:#fff !important;
-  border:1px solid #666 !important; border-radius:10px !important;
+  border:1px solid #666 !important; border-radius:10px !重要;
 }
 [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{
   background:#2c2c2c !important; border-color:#777 !important;
 }
 
-/* ===== Chat Avatar 色変更（ライム＆パープル） ===== */
-.stApp [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"],
-.stApp [data-testid="stChatMessage"] [data-testid^="chatAvatarIcon"],
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
-  background: #a64dff !important;   /* AI: ネオンパープル */
-  color: #ffffff !important;
-  border-radius: 12px !important;
-}
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{
-  background: #00e08a !important;   /* User: ネオンライム */
-  color: #000000 !important;
-}
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] svg,
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] img,
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] span {
-  background: transparent !important;
-  color: inherit !important;
-}
+/* ===== Avatar colors ===== */
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] { background:#a64dff !important; color:#fff !important; border-radius:12px !important; }
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{ background:#00e08a !important; color:#000 !important; }
 
-/* ===== 見積もり結果プレビュー見出し ===== */
-.preview-title{
-  font-size: 32px !important;
-  line-height: 1.4 !important;
-  font-weight: 900 !important;
-  text-align: left;
-  color: #78f416 !important;   /* 指定カラー */
-  margin-bottom: 16px !important;
-}
+/* ===== Preview title ===== */
+.preview-title{ font-size:32px !important; font-weight:900 !important; color:#78f416 !important; margin-bottom:16px !important; }
 
-/* ===== 入力フォームのフォーカス時スタイル ===== */
-.stChatInput:focus-within textarea,
-.stTextInput input:focus {
-  border: 3px solid transparent !important;
-  border-radius: 12px !important;
-  background:#111 !important;
+/* ===== Focus effect ===== */
+.stChatInput:focus-within textarea, .stTextInput input:focus{
+  border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
   border-image: linear-gradient(90deg, #ff4df5, #90fb0f, #00c3ff) 1 !important;
-  box-shadow: 0 0 12px rgba(255, 77, 245, 0.6),
-              0 0 18px rgba(144, 251, 15, 0.5),
-              0 0 24px rgba(0, 195, 255, 0.4) !important;
-  outline: none !important;
-}
-/* ===== Markdown テーブルの罫線・文字色を白に ===== */
-[data-testid="stMarkdownContainer"] table {
-  border-collapse: collapse !important;
-  border: 1px solid #fff !important;
+  box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
 }
 
+/* ===== Markdown table & hr を白線に ===== */
+[data-testid="stMarkdownContainer"] table{ border-collapse:collapse !important; border:1px solid #fff !important; }
 [data-testid="stMarkdownContainer"] th,
-[data-testid="stMarkdownContainer"] td {
-  border: 1px solid #fff !important;
-  padding: 6px 10px !important;
-  color: #fff !important;
-}
+[data-testid="stMarkdownContainer"] td{ border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important; }
+[data-testid="stMarkdownContainer"] th{ background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }
+[data-testid="stMarkdownContainer"] hr{ border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }
 
-/* ヘッダーセルを少し目立たせたい場合 */
-[data-testid="stMarkdownContainer"] th {
-  background-color: rgba(255,255,255,0.1) !important;
-  font-weight: 700 !important;
-}
-
-/* ===== Markdownの水平線 <hr> も白にする ===== */
-[data-testid="stMarkdownContainer"] hr {
-  border: none !important;
-  border-top: 1px solid #fff !important;
-  margin: 1em 0 !important;
-}
-/* ===== 四隅インク背景 ===== */
-.stApp {
-  background-color: #000;
-  position: relative;
-}
-
-.stApp::before {
+/* ===== 四隅インク背景（static/ink/*.png） ===== */
+.stApp::before{
   content:"";
-  position: fixed;
-  top:0; left:0;
-  width:100%; height:100%;
+  position: fixed; inset:0;
   background:
-    url('static/ink/ink_pink.png') no-repeat left top,
-    url('static/ink/ink_cyan.png') no-repeat right top,
-    url('static/ink/ink_green.png') no-repeat left bottom,
-    url('static/ink/ink_purple.png') no-repeat right bottom;
-  background-size: 220px;  /* 大きさ調整 */
-  z-index:-1;
+    url('static/ink/ink_pink.png')   no-repeat left 3% top 6%,
+    url('static/ink/ink_cyan.png')   no-repeat right 4% top 8%,
+    url('static/ink/ink_green.png')  no-repeat left 3% bottom 6%,
+    url('static/ink/ink_purple.png') no-repeat right 4% bottom 5%;
+  background-size: 220px, 220px, 220px, 220px;  /* 4枚のサイズ */
+  pointer-events: none;    /* 背景がクリックを邪魔しない */
+  z-index:-1;              /* 本文の背面に固定 */
 }
 
-
+/* 小さめ画面で縮小 */
+@media (max-width: 900px){
+  .stApp::before{ background-size: 160px,160px,160px,160px; }
+}
 </style>
+
 """, unsafe_allow_html=True)
 
 # =========================
