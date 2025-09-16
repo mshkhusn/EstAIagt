@@ -302,13 +302,13 @@ if password != APP_PASSWORD:
 st.markdown("""
 <style>
 .custom-header {
-  color: #90fb0f !important;      /* ネオンライム */
-  font-size: 40px !important;     /* サイズはそのまま */
-  font-weight: 700 !important;    /* ← 900 から 700 に下げて潰れ防止 */
-  letter-spacing: 0.02em !important;  /* 字間を少し広げる */
-  line-height: 1.3 !important;    /* 行間で視認性アップ */
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  color: #90fb0f !important;
+  font-size: 40px !important;
+  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
+  font-family: 'Mochiy Pop One', sans-serif !important;
+  letter-spacing: 1px !important;   /* 潰れ防止に少し広げる */
+  line-height: 1.3 !important;
+  text-shadow: 0 0 4px rgba(0,0,0,0.6);  /* 輪郭をはっきりさせる */
 }
 </style>
 """, unsafe_allow_html=True)
