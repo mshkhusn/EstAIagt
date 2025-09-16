@@ -218,6 +218,48 @@ body::before {{
 
 /* ===== ヒント文字色 ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
+
+/* === Chatだけデバイスフォント（太字/斜体/見出しは維持） ============== */
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"],
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] * {{
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "YuGothic",
+               Meiryo, sans-serif !important;
+  letter-spacing: normal !important;   /* 字間は通常に */
+  /* font-weight は上書きしない（太字を生かす） */
+}}
+
+/* 太字／斜体を明示しておく（不要なら削除OK） */
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] strong,
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] b {{
+  font-weight: 700 !important;
+}}
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] em,
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] i {{
+  font-style: italic !important;
+}}
+
+/* 見出し（Markdownの#～）の太さも念のため */
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h1 {{ font-weight: 800 !important; }}
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h2 {{ font-weight: 700 !important; }}
+.stApp [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h3 {{ font-weight: 700 !important; }}
+
+/* 入力欄もデバイスフォントに */
+.stApp [data-testid="stChatInput"] textarea,
+.stApp [data-testid="stChatInput"] * {{
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "YuGothic",
+               Meiryo, sans-serif !important;
+  letter-spacing: normal !important;
+}}
+
+/* Chat内のコード/プレはOS標準の等幅 */
+.stApp [data-testid="stChatMessage"] code,
+.stApp [data-testid="stChatMessage"] pre {{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
+               "Liberation Mono", monospace !important;
+}}
+
 </style>
 """, unsafe_allow_html=True)
 
