@@ -191,6 +191,20 @@ body::before {{
 
 /* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
+
+/* ===== DataFrame：ボタンと同じグラデ枠 ===== */
+/* 同じ縦ブロック（stVerticalBlock）直下に .df-scope があれば、そのブロックの DataFrame を額縁で囲む */
+[data-testid="stVerticalBlock"]:has(> .df-scope) div:has([data-testid="stDataFrame"]) {{
+  background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
+  padding: 2px !important;              /* 枠の太さ */
+  border-radius: 14px !important;
+  box-shadow: 0 0 10px rgba(0,224,138,.35), 0 0 18px rgba(0,195,255,.25) !important;
+}}
+[data-testid="stVerticalBlock"]:has(> .df-scope) div:has([data-testid="stDataFrame"]) > * {{
+  border-radius: 12px !important;
+  background: #000 !important;
+  overflow: hidden;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -272,7 +286,7 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !重要;  /* Mochiy Pop One は 400 だけ */
+  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
   font-family: 'Mochiy Pop One', sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
@@ -532,7 +546,16 @@ if has_user_input:
 # =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
-    st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
+
+    # 👇 グラデ枠の対象にするためのマーカー＋同一コンテナ
+    with st.container():
+        st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)
+        st.dataframe(
+            st.session_state["df"],
+            hide_index=True,
+            use_container_width=True
+        )
+
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
