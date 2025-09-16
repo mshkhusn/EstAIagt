@@ -6,6 +6,9 @@
 import os
 import json
 from io import BytesIO
+import base64
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 from openpyxl import load_workbook
@@ -14,10 +17,14 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from openai import OpenAI
 import httpx
 
-# --- 四隅インク（絶対パスで読んで、なければスキップ） ---
-import base64
-from pathlib import Path
+# =========================
+# ページ設定
+# =========================
+st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
+# =========================
+# 画像（四隅インク）を base64 で読む
+# =========================
 ROOT = Path(__file__).resolve().parent
 
 def b64_or_none(p: Path) -> str:
@@ -30,124 +37,175 @@ def b64_or_none(p: Path) -> str:
 INK_PINK   = b64_or_none(ROOT / "static" / "ink" / "ink_pink.png")
 INK_CYAN   = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN  = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
-INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 未使用でも残す
+# INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 未使用
 
 # =========================
-# ページ設定
+# CSS（f-string不要の部分）
 # =========================
-st.set_page_config(page_title="AI見積もりくん２", layout="centered")
-
-# =========================
-# デザイン一式（f-string内：CSSの {} は {{ }}、画像の {INK_*} はシングル）
-# =========================
-st.markdown(f"""
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
 /* ===== Base ===== */
-html, body {{ background:#000 !important; }}
-.stApp, .stApp * {{
+html, body { background:#000 !important; }
+.stApp, .stApp * {
   background:transparent !important;
   color:#fff !important;
   font-family:'Mochiy Pop One',sans-serif !important;
   letter-spacing:.01em;
-}}
+}
 
 /* ヘッダー/サイドバー */
 [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stStatusWidget"],
-[data-testid="stSidebar"],[data-testid="stSidebarContent"] {{
+[data-testid="stSidebar"],[data-testid="stSidebarContent"] {
   background:transparent !important; border:none !important;
-}}
+}
 
 /* ===== Inputs ===== */
-.stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !important; }}
-.stTextInput input, .stTextArea textarea, .stSelectbox div {{
+.stTextInput label, .stTextArea label, .stSelectbox label { color:#fff !important; }
+.stTextInput input, .stTextArea textarea, .stSelectbox div {
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
-}}
+}
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
-.stChatInput textarea::placeholder {{ color:#ddd !important; }}
+.stChatInput textarea::placeholder { color:#ddd !important; }
 
 /* 目アイコン */
-.stTextInput [data-baseweb="button"] {{
+.stTextInput [data-baseweb="button"] {
   background:#333 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
-}}
+}
 
 /* ===== Buttons（デフォルト） ===== */
-.stButton button, .stDownloadButton > button {{
+.stButton button, .stDownloadButton > button {
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
   padding:.55rem 1rem !important; box-shadow:none !important;
-}}
-.stButton button:hover, .stDownloadButton > button:hover {{
+}
+.stButton button:hover, .stDownloadButton > button:hover {
   background:#2c2c2c !important; border-color:#777 !important;
-}}
+}
 
 /* ===== Chat ===== */
-[data-testid="stChatMessage"] {{
+[data-testid="stChatMessage"] {
   background:transparent !important; border:none !important; border-radius:14px !important;
-}}
-[data-testid="stChatInput"], [data-testid="stChatInput"]>div {{ background:transparent !important; }}
-.stChatInput textarea {{
+}
+[data-testid="stChatInput"], [data-testid="stChatInput"]>div { background:transparent !important; }
+.stChatInput textarea {
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
-}}
-.stChatInput [data-baseweb="button"] {{
+}
+.stChatInput [data-baseweb="button"] {
   background:#222 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
-}}
+}
 
 /* ===== File Uploader ===== */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {
   position:relative !important; background:#111 !important; color:#fff !important;
   border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important;
-}}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
-@supports selector(div:has(> svg)) {{
-  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
+}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg { display:none !important; }
+@supports selector(div:has(> svg)) {
+  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {
     background:transparent !important; border:none !important;
-  }}
-}}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
+  }
+}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {
   content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
   width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
-}}
+}
 
 /* ===== Avatar ===== */
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {
   background:#a64dff !important; color:#fff !important; border-radius:12px !important;
-}}
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {{
+}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {
   background:#00e08a !important; color:#000 !important;
-}}
+}
 
 /* ===== 見積もり結果見出し ===== */
-.preview-title {{
+.preview-title {
   font-size:32px !important; font-weight:900 !important;
   color:#78f416 !important; margin-bottom:16px !important;
-}}
+}
 
 /* ===== フォーカス演出 ===== */
-.stChatInput:focus-within textarea, .stTextInput input:focus {{
+.stChatInput:focus-within textarea, .stTextInput input:focus {
   border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
   border-image:linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
   box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
-}}
+}
 
 /* ===== Markdown テーブル・水平線 ===== */
-[data-testid="stMarkdownContainer"] table {{ border-collapse:collapse !important; border:1px solid #fff !important; }}
-[data-testid="stMarkdownContainer"] th, [data-testid="stMarkdownContainer"] td {{
+[data-testid="stMarkdownContainer"] table { border-collapse:collapse !important; border:1px solid #fff !important; }
+[data-testid="stMarkdownContainer"] th, [data-testid="stMarkdownContainer"] td {
   border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important;
-}}
-[data-testid="stMarkdownContainer"] th {{ background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }}
-[data-testid="stMarkdownContainer"] hr {{ border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }}
+}
+[data-testid="stMarkdownContainer"] th { background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }
+[data-testid="stMarkdownContainer"] hr { border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }
 
 /* ===== 旧 .stApp::before を無効化（二重防止） ===== */
-.stApp::before {{ content:""; background:none !important; }}
+.stApp::before { content:""; background:none !important; }
 
-/* ===== 四隅インク（ピンク／シアン／イエロー） ===== */
+/* ===== 生成ボタン：グリーン→ブルーのグラデ ===== */
+[data-testid="stVerticalBlock"] .gen-scope ~ div.stButton > button,
+.gen-scope + div.stButton > button {
+  background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: .68rem 1.15rem !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.25);
+  box-shadow: 0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
+  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
+}
+[data-testid="stVerticalBlock"] .gen-scope ~ div.stButton > button:hover,
+.gen-scope + div.stButton > button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
+}
+[data-testid="stVerticalBlock"] .gen-scope ~ div.stButton > button:active,
+.gen-scope + div.stButton > button:active {
+  filter: brightness(.98);
+  transform: translateY(0);
+}
+
+/* ===== ヒント文字色（!important 上書き用） ===== */
+.hint-blue { color:#00c3ff !important; font-weight:400 !important; }
+
+/* ===== DataFrame：ボタンと同じグラデ枠（:has不使用版） ===== */
+.df-scope { display:none; } /* マーカーは非表示 */
+
+.df-scope + div{
+  background: linear-gradient(90deg, #00e08a, #00c3ff) !important; /* ボタンと同じ */
+  padding: 2px !important;            /* 枠の太さ */
+  border-radius: 14px !important;
+  box-shadow: 0 0 10px rgba(0,224,138,.35), 0 0 18px rgba(0,195,255,.25) !important;
+  margin: 0 !important;
+}
+.df-scope + div > div{
+  background:#000 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+.df-scope + div [data-testid="stDataFrame"]{
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# CSS（背景インク：画像を差し込む部分だけ f-string）
+# =========================
+st.markdown(
+    f"""
+<style>
 body::before {{
   content:"";
   position: fixed;
@@ -166,49 +224,10 @@ body::before {{
     background-size: 260px 260px, 320px 320px, 200px 320px;
   }}
 }}
-
-/* ===== 生成ボタン：グリーン→ブルーのグラデ ===== */
-[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
-  background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  color: #fff !important;
-  border: none !important;
-  border-radius: 12px !important;
-  padding: .68rem 1.15rem !important;
-  font-weight: 700 !important;
-  text-shadow: 0 1px 0 rgba(0,0,0,.25);
-  box-shadow: 0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
-  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
-}}
-[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:hover {{
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-  box-shadow: 0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
-}}
-[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:active {{
-  filter: brightness(.98);
-  transform: translateY(0);
-}}
-
-/* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
-.hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
-
-/* ===== DataFrame：ボタンと同じグラデ枠 ===== */
-/* 同じ縦ブロック（stVerticalBlock）直下に .df-scope があれば、そのブロックの DataFrame を額縁で囲む */
-[data-testid="stVerticalBlock"]:has(> .df-scope) div:has([data-testid="stDataFrame"]) {{
-  background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  padding: 2px !important;              /* 枠の太さ */
-  border-radius: 14px !important;
-  box-shadow: 0 0 10px rgba(0,224,138,.35), 0 0 18px rgba(0,195,255,.25) !important;
-}}
-
-[data-testid="stVerticalBlock"]:has(> .df-scope) div:has([data-testid="stDataFrame"]) > * {{
-  border-radius: 12px !important;
-  background: #000 !important;
-  overflow: hidden !important;
-  padding: 0 !important;
-}}
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # =========================
 # Secrets
@@ -298,7 +317,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown(
-    '<h2 class="custom-header">AI見積もりくん2にチャットで相談して見積もりを生成しよう！</h2>',
+    '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
     unsafe_allow_html=True
 )
 
@@ -505,7 +524,7 @@ has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_histo
 
 if has_user_input:
     with st.container():
-        # この“目印”が同じ stVerticalBlock 内にあると、上のCSSが当たる
+        # この“目印”が同じ縦ブロック内にあると、上のCSSが当たる
         st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
 
         if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
@@ -549,13 +568,14 @@ if has_user_input:
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
 
-with st.container():                                  # ← これで同じ縦ブロックに閉じ込める
-    st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)  # ← マーカー
-    st.dataframe(
-        st.session_state["df"],
-        hide_index=True,
-        use_container_width=True
-    )
+    # グラデ枠の対象にするためのマーカー＋同一コンテナ
+    with st.container():
+        st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)
+        st.dataframe(
+            st.session_state["df"],
+            hide_index=True,
+            use_container_width=True
+        )
 
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
