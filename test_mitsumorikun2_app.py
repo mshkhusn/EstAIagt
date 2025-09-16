@@ -179,6 +179,25 @@ html, body { background:#000 !important; }
   border-top: 1px solid #fff !important;
   margin: 1em 0 !important;
 }
+/* ===== 四隅インク背景 ===== */
+.stApp {
+  background-color: #000;
+  position: relative;
+}
+
+.stApp::before {
+  content:"";
+  position: fixed;
+  top:0; left:0;
+  width:100%; height:100%;
+  background:
+    url('static/ink/ink_pink.png') no-repeat left top,
+    url('static/ink/ink_cyan.png') no-repeat right top,
+    url('static/ink/ink_green.png') no-repeat left bottom,
+    url('static/ink/ink_purple.png') no-repeat right bottom;
+  background-size: 220px;  /* 大きさ調整 */
+  z-index:-1;
+}
 
 
 </style>
