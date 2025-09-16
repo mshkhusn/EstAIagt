@@ -191,19 +191,49 @@ body::before {{
   }}
 }}
 
-/* ===== 生成ボタン：グリーン→ブルーのグラデーション ===== */
-div.stMarkdown:has(.gen-estimate-scope) + div.stButton > button {{
+/* ===== 生成ボタン（グリーン→ブルーのグラデ）強化版 ===== */
+/* 目印は前のまま <div class="gen-estimate-scope"></div> をボタン直前に置く */
+.gen-estimate-scope {{ display:none; }}
+
+/* 直後 or 近傍に来るあらゆる st.button を幅広くヒットさせる */
+.gen-estimate-scope + div button,
+.gen-estimate-scope + div .stButton > button,
+.gen-estimate-scope ~ div .stButton > button,
+.gen-estimate-scope ~ div [data-testid="stButton"] > button,
+.gen-estimate-scope ~ [data-testid="stButton"] > button,
+.gen-estimate-scope ~ div button[kind] {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
   border: none !important;
   border-radius: 12px !important;
-  padding: .65rem 1.1rem !important;
+  padding: .68rem 1.15rem !important;
   font-weight: 700 !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.25);
   box-shadow:
     0 0 10px rgba(0,224,138,.55),
     0 0 18px rgba(0,195,255,.45) !important;
+  /* Streamlit のテーマ変数より強くするため */
+  background-image: linear-gradient(90deg, #00e08a, #00c3ff) !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
-  text-shadow: 0 1px 0 rgba(0,0,0,.2);
+}}
+
+.gen-estimate-scope ~ div .stButton > button:hover,
+.gen-estimate-scope ~ div [data-testid="stButton"] > button:hover,
+.gen-estimate-scope ~ div button[kind]:hover {{
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 12px rgba(0,224,138,.65),
+    0 0 24px rgba(0,195,255,.55) !important;
+}}
+
+.gen-estimate-scope ~ div .stButton > button:active,
+.gen-estimate-scope ~ div [data-testid="stButton"] > button:active,
+.gen-estimate-scope ~ div button[kind]:active {{
+  filter: brightness(.98);
+  transform: translateY(0);
 }}
 </style>
 """, unsafe_allow_html=True)
