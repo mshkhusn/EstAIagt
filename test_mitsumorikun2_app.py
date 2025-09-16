@@ -71,71 +71,122 @@ html, body {{ background:#000 !important; }}
   background:transparent !important; border:none !important;
 }}
 
-/* Inputs / Buttons（省略せずそのまま） */
+/* ===== Inputs ===== */
 .stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !important; }}
-.stTextInput input, .stTextArea textarea, .stSelectbox div{{ background:#111 !important; color:#fff !important; border:1px solid #555 !important; border-radius:10px !important; }}
-.stTextInput input::placeholder, .stTextArea textarea::placeholder, .stChatInput textarea::placeholder{{ color:#ddd !important; }}
-.stTextInput [data-baseweb="button"]{{ background:#333 !important; color:#fff !important; border:1px solid #666 !important; border-radius:10px !important; }}
-.stButton button, .stDownloadButton > button{{ background:#222 !important; color:#fff !important; border:1px solid #666 !important; border-radius:10px !important; padding:.55rem 1rem !important; }}
-.stButton button:hover, .stDownloadButton > button:hover{{ background:#2c2c2c !important; border-color:#777 !important; }}
-[data-testid="stChatMessage"]{{ background:transparent !important; border:none !important; border-radius:14px !important; }}
-[data-testid="stChatInput"], [data-testid="stChatInput"]>div{{ background:transparent !important; }}
-.stChatInput textarea{{ background:#111 !important; color:#fff !important; border:1px solid #555 !important; border-radius:10px !important; }}
-.stChatInput [data-baseweb="button"]{{ background:#222 !important; color:#fff !important; border:1px solid #555 !important; border-radius:10px !important; }}
-
-/* FileUploader（そのまま） */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{{ position:relative !important; background:#111 !important; color:#fff !important; border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important; }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg{{ display:none !important; }}
-@supports selector(div:has(> svg)){{
-  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg){{ background:transparent !important; border:none !important; }}
+.stTextInput input, .stTextArea textarea, .stSelectbox div {{
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{{ content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%); width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E"); }}
+.stTextInput input::placeholder, .stTextArea textarea::placeholder,
+.stChatInput textarea::placeholder {{ color:#ddd !important; }}
 
-/* Avatar 色 */
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{ background:#a64dff !important; color:#fff !important; border-radius:12px !important; }}
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{{ background:#00e08a !important; color:#000 !important; }}
+/* 目アイコン */
+.stTextInput [data-baseweb="button"] {{
+  background:#333 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+}}
 
-/* タイトル */
-.preview-title{{ font-size:32px !important; font-weight:900 !important; color:#78f416 !important; margin-bottom:16px !important; }}
+/* ===== Buttons ===== */
+.stButton button, .stDownloadButton > button {{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #666 !important; border-radius:10px !important;
+  padding:.55rem 1rem !important; box-shadow:none !important;
+}}
+.stButton button:hover, .stDownloadButton > button:hover {{
+  background:#2c2c2c !important; border-color:#777 !important;
+}}
 
-/* フォーカス演出 */
-.stChatInput:focus-within textarea, .stTextInput input:focus{{ border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
-  border-image: linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
-  box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important; }}
+/* ===== Chat ===== */
+[data-testid="stChatMessage"] {{
+  background:transparent !important; border:none !important; border-radius:14px !important;
+}}
+[data-testid="stChatInput"], [data-testid="stChatInput"]>div {{ background:transparent !important; }}
+.stChatInput textarea {{
+  background:#111 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}}
+.stChatInput [data-baseweb="button"] {{
+  background:#222 !important; color:#fff !important;
+  border:1px solid #555 !important; border-radius:10px !important;
+}}
 
-/* Markdown テーブル & hr を白に */
-[data-testid="stMarkdownContainer"] table{{ border-collapse:collapse !important; border:1px solid #fff !important; }}
-[data-testid="stMarkdownContainer"] th, [data-testid="stMarkdownContainer"] td{{ border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important; }}
-[data-testid="stMarkdownContainer"] th{{ background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }}
-[data-testid="stMarkdownContainer"] hr{{ border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }}
+/* ===== File Uploader ===== */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
+  position:relative !important; background:#111 !important; color:#fff !important;
+  border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important;
+}}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
+@supports selector(div:has(> svg)) {{
+  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
+    background:transparent !important; border:none !important;
+  }}
+}}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
+  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
+  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+}}
 
-/* 旧 .stApp::before を無効化（二重防止） */
-.stApp::before{{ content:""; background:none !important; }}
+/* ===== Avatar ===== */
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
+  background:#a64dff !important; color:#fff !important; border-radius:12px !important;
+}}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {{
+  background:#00e08a !important; color:#000 !important;
+}}
+
+/* ===== 見積もり結果見出し ===== */
+.preview-title {{
+  font-size:32px !important; font-weight:900 !important;
+  color:#78f416 !important; margin-bottom:16px !important;
+}}
+
+/* ===== フォーカス演出 ===== */
+.stChatInput:focus-within textarea, .stTextInput input:focus {{
+  border:3px solid transparent !important; border-radius:12px !important; background:#111 !important;
+  border-image:linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
+  box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
+}}
+
+/* ===== Markdown テーブル・水平線 ===== */
+[data-testid="stMarkdownContainer"] table {{ border-collapse:collapse !important; border:1px solid #fff !important; }}
+[data-testid="stMarkdownContainer"] th, [data-testid="stMarkdownContainer"] td {{
+  border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important;
+}}
+[data-testid="stMarkdownContainer"] th {{ background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }}
+[data-testid="stMarkdownContainer"] hr {{ border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }}
+
+/* ===== 旧 .stApp::before を無効化（二重防止） ===== */
+.stApp::before {{ content:""; background:none !important; }}
 
 /* ===== 四隅インク：見切れ配置 ===== */
-body::before{{
+body::before {{
   content:""; position: fixed; inset:0;
   background:
-    url("data:image/png;base64,{INK_PINK}")   no-repeat left -60px  top  -40px,
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -70px top  -20px,
-    url("data:image/png;base64,{INK_GREEN}")  no-repeat left -80px  bottom -50px,
-    url("data:image/png;base64,{INK_PURPLE}") no-repeat right -60px bottom -40px;
-  background-size: 280px 280px, 280px 280px, 280px 280px, 280px 280px;
-  pointer-events: none; z-index: -1;
+    url("data:image/png;base64,{INK_PINK}")   no-repeat left -60px  top  -40px,   /* ピンク */
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -120px top -60px,  /* ブルー 2倍 */
+    url("data:image/png;base64,{INK_GREEN}")  no-repeat left -40px  bottom -20px,/* イエロー 小さめ */
+    url("data:image/png;base64,{INK_PURPLE}") no-repeat right -60px bottom -120px; /* オレンジ 下へ */
+  background-size:
+    280px 280px,   /* ピンク */
+    500px 500px,   /* ブルー */
+    160px 160px,   /* イエロー */
+    280px 280px;   /* オレンジ */
+  pointer-events:none; z-index:-1;
 }}
-@media (max-width: 900px){{
-  body::before{{
+@media (max-width: 900px) {{
+  body::before {{
     background-position:
       left -30px  top  -20px,
-      right -35px top  -10px,
-      left -40px  bottom -25px,
-      right -30px bottom -20px;
-    background-size: 200px 200px, 200px 200px, 200px 200px, 200px 200px;
+      right -60px top  -30px,
+      left -20px  bottom -10px,
+      right -30px bottom -60px;
+    background-size: 200px 200px, 320px 320px, 120px 120px, 200px 200px;
   }}
 }}
 </style>
 """, unsafe_allow_html=True)
+
 
 
 # =========================
