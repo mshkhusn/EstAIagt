@@ -550,10 +550,10 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
-    # ←これを追加（ボタンの直前に置くことが重要）
+    # ★ この1行をボタンの直前に入れる（重要）★
     st.markdown('<div class="gen-estimate-scope"></div>', unsafe_allow_html=True)
 
-    if st.button("AI見積もりくんで見積もりを生成する"):
+    if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
         with st.spinner("AIが見積もりを生成中…"):
             prompt = build_prompt_for_estimation(st.session_state["chat_history"])
             resp = openai_client.chat.completions.create(
