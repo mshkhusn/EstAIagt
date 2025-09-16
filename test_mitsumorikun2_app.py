@@ -229,60 +229,45 @@ if st.session_state["chat_history"] is None:
 # =========================
 st.markdown("""
 <style>
-/* ロゴ（Mochiy／潰れ防止調整版） */
+/* ===== ロゴ（行間を元に戻し、潰れ防止：正規ウェイト＋字間少し広め） ===== */
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
-  width:100%;
-  margin: 24px 0 40px 0;
+  width:100%; margin:24px 0 40px 0;
 }
 .logo-pill{
-  display:inline-block;
-  padding: 6px;
-  border-radius: 9999px !important;
-  background: linear-gradient(90deg,#ff4df5,#a64dff) !important;
+  display:inline-block; padding:6px; border-radius:9999px !important;
+  background:linear-gradient(90deg,#ff4df5,#a64dff) !important;
 }
 .logo-box{
-  padding: 30px 76px;
-  border-radius: 9999px !important;
-  background:#000 !important;
-  font-family:'Mochiy Pop One',sans-serif;
-  color:inherit !important;
-  white-space: nowrap;
+  padding:30px 76px; border-radius:9999px !important; background:#000 !important;
+  font-family:'Mochiy Pop One',sans-serif; color:inherit !important; white-space:nowrap;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
 }
 .logo-row1{
   display:flex; align-items:flex-start; justify-content:center;
-  gap: 10px;
-  line-height:1.2;   /* 広めに */
+  gap:8px; line-height:1.02;  /* ← 行間を元に戻す */
   margin:0;
 }
+/* ポイント：Mochiy Pop One は実質 400 だけ。太字指定はやめ、字間で見やすく。 */
 .logo-box .ai{
-  font-size: 88px;   /* 少し縮小 */
-  font-weight: 700;  /* 900 → 700 */
+  font-size:90px;
+  font-weight:400;                /* 900→400（正規ウェイト） */
+  letter-spacing:0.5px;           /* つぶれ防止にわずかに広げる */
   color:#ff4df5 !important;
-  letter-spacing: 1px; /* 広げる */
 }
 .logo-box .mitsumori{
-  font-size: 60px;
-  font-weight: 700;
-  color:#ffffff !important;
-  letter-spacing: 1px;
+  font-size:60px;
+  font-weight:400;                /* 900→400 */
+  letter-spacing:0.5px;           /* -1px をやめて広げる */
+  color:#fff !important;
 }
 .logo-kunrow{
-  text-align:center;
-  line-height:1.1;
-  margin-top:-16px; /* 間隔を調整 */
-  letter-spacing: 1px;
+  text-align:center; line-height:1.0;
+  margin-top:-22px;               /* バランス調整（元-28を少し緩め） */
+  letter-spacing:0.5px;
 }
-.logo-box .kun{
-  color:#ffffff !important;
-  font-size: 44px;
-  font-weight: 700;
-}
-.logo-box .num2{
-  color:#ff4df5 !important;
-  font-size: 44px;
-  font-weight: 700;
-}
+.logo-box .kun{  font-size:44px; font-weight:400; color:#fff !important; }
+.logo-box .num2{ font-size:44px; font-weight:400; color:#ff4df5 !important; }
 </style>
 
 <div class="logo-wrap">
