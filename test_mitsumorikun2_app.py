@@ -14,15 +14,35 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from openai import OpenAI
 import httpx
 
-# ==== インク画像をBase64化 ====
-def get_base64(path):
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
+# --- 四隅インク（絶対パスで読んで、なければスキップ） ---
+import base64
+from pathlib import Path
+import streamlit as st  # 既にimport済みなら重複OK
 
-INK_PINK   = get_base64("static/ink/ink_pink.png")
-INK_CYAN   = get_base64("static/ink/ink_cyan.png")
-INK_GREEN  = get_base64("static/ink/ink_green.png")
-INK_PURPLE = get_base64("static/ink/ink_purple.png")
+ROOT = Path(__file__).resolve().parent
+
+def b64_or_none(p: Path) -> str:
+    try:
+        with p.open("rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        # 無い／読めないときは空文字に
+        return ""
+
+INK_PINK   = b64_or_none(ROOT / "static" / "ink" / "ink_pink.png")
+INK_CYAN   = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
+INK_GREEN  = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
+INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")
+
+# 読めたものだけ重ねる
+layers = []
+if INK_PINK:   layers.append(f'url("data:image/png;base64,{INK_PINK}")   no-repeat left 3%  top 6%')
+if INK_CYAN:   layers.append(f'url("data:image/png;base64,{INK_CYAN}")   no-repeat right 4% top 8%')
+if INK_GREEN:  layers.append(f'url("data:image/png;base64,{INK_GREEN}")  no-repeat left 3%  bottom 6%')
+if INK_PURPLE: layers.append(f'url("data:image/png;base64,{INK_PURPLE}") no-repeat right 4% bottom 5%')
+
+bg_css = ",\n    ".join(layers) if layers else "none"
+size_css = "220px 220px, 220px 220px, 220px 220px, 220px 220px" if layers else "auto"
 
 # =========================
 # ページ設定
@@ -172,6 +192,19 @@ html, body {{ background:#000 !important; }}
   background-size: 220px;
   z-index:-1;
 }}
+/* ここはあなたの既存スタイルに併記でOK。body::before だけ追加/更新する */
+body::before {{
+  content:"";
+  position: fixed; inset:0;
+  background: {bg_css};
+  background-size: {size_css};
+  pointer-events: none;
+  z-index: -1;
+}}
+@media (max-width: 900px){{
+  body::before{{ background-size: 160px 160px,160px 160px,160px 160px,160px 160px; }}
+}}
+
 </style>
 """, unsafe_allow_html=True)
 
