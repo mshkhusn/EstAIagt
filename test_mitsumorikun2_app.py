@@ -34,22 +34,13 @@ INK_CYAN   = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN  = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
 INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")
 
-# 読めたものだけ重ねる（未使用なら削除可）
-layers = []
-if INK_PINK:   layers.append(f'url("data:image/png;base64,{INK_PINK}")   no-repeat left 3%  top 6%')
-if INK_CYAN:   layers.append(f'url("data:image/png;base64,{INK_CYAN}")   no-repeat right 4% top 8%')
-if INK_GREEN:  layers.append(f'url("data:image/png;base64,{INK_GREEN}")  no-repeat left 3%  bottom 6%')
-if INK_PURPLE: layers.append(f'url("data:image/png;base64,{INK_PURPLE}") no-repeat right 4% bottom 5%')
-bg_css = ",\n    ".join(layers) if layers else "none"
-size_css = "220px 220px, 220px 220px, 220px 220px, 220px 220px" if layers else "auto"
-
 # =========================
 # ページ設定
 # =========================
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# デザイン一式
+# デザイン一式（f-string内なのでCSSの { } はすべて {{ }} でエスケープ）
 # =========================
 st.markdown(f"""
 <style>
@@ -71,7 +62,7 @@ html, body {{ background:#000 !important; }}
 }}
 
 /* ===== Inputs ===== */
-.stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff important; }}
+.stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !important; }}
 .stTextInput input, .stTextArea textarea, .stSelectbox div {{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
@@ -158,38 +149,29 @@ html, body {{ background:#000 !important; }}
 /* ===== 旧 .stApp::before を無効化（二重防止） ===== */
 .stApp::before {{ content:""; background:none !important; }}
 
-/* ===== 四隅インク：ピンクさらに上／ブルー右にはみ出し／イエロー縦長 ===== */
+/* ===== 四隅インク：ピンク／ブルー／イエロー ===== */
 body::before {{
   content:"";
   position: fixed;
   inset:0;
   background:
-    url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -160px, /* ピンク */
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -220px top  -60px,  /* ブルー → 右へ100px */
-    url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -100px bottom -100px;/* イエロー */
-  background-size:
-    380px 380px,   /* ピンク */
-    500px 500px,   /* ブルー */
-    260px 400px;   /* イエロー縦長 */
+    url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -160px,
+    url("data:image/png;base64},{INK_CYAN}")  no-repeat right -220px top  -60px,
+    url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -100px bottom -100px;
+  background-size: 380px 380px, 500px 500px, 260px 400px;
   pointer-events: none;
   z-index: -1;
 }}
 @media (max-width: 900px) {{
   body::before {{
-    background-position:
-      left  -80px top   -80px,   /* ピンク */
-      right -160px top  -30px,   /* ブルー → モバイルも少し右へ */
-      left -100px bottom -60px;  /* イエロー */
-    background-size:
-      260px 260px,   /* ピンク縮小 */
-      320px 320px,   /* ブルー縮小 */
-      200px 320px;   /* イエロー縦長 */
+    background-position: left -80px top -80px, right -160px top -30px, left -100px bottom -60px;
+    background-size: 260px 260px, 320px 320px, 200px 320px;
   }}
 }}
 
 /* ===== 生成ボタン：グリーン→ブルーのグラデ（コンテナ版） ===== */
-/* 同じ縦ブロック（stVerticalBlock）内のどこかに .gen-scope があれば、そのブロックのボタンを着色 */
-[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {
+/* 同じ縦ブロック（stVerticalBlock）内のどこかに .gen-scope があれば、そのブロック内のボタンを着色 */
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
   border: none !important;
@@ -197,22 +179,18 @@ body::before {{
   padding: .68rem 1.15rem !important;
   font-weight: 700 !important;
   text-shadow: 0 1px 0 rgba(0,0,0,.25);
-  box-shadow:
-    0 0 10px rgba(0,224,138,.55),
-    0 0 18px rgba(0,195,255,.45) !important;
+  box-shadow: 0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
-}
-[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:hover {
+}}
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:hover {{
   filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow:
-    0 0 12px rgba(0,224,138,.65),
-    0 0 24px rgba(0,195,255,.55) !important;
-}
-[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:active {
+  box-shadow: 0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
+}}
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:active {{
   filter: brightness(.98);
   transform: translateY(0);
-}
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -247,8 +225,10 @@ for k in ["chat_history", "items_json_raw", "items_json", "df", "meta"]:
 
 if st.session_state["chat_history"] is None:
     st.session_state["chat_history"] = [
-        {"role": "system", "content": "あなたは広告クリエイティブ制作のプロフェッショナルです。相場感をもとに見積もりを作成するため、ユーザーにヒアリングを行います。"},
-        {"role": "assistant", "content": "こんにちは！こちらは「AI見積もりくん２」です。見積もり作成のために、まず案件概要を教えてください。"}
+        { "role": "system",
+          "content": "あなたは広告クリエイティブ制作のプロフェッショナルです。相場感をもとに見積もりを作成するため、ユーザーにヒアリングを行います。" },
+        { "role": "assistant",
+          "content": "こんにちは！こちらは「AI見積もりくん２」です。見積もり作成のために、まず案件概要を教えてください。" }
     ]
 
 # =========================
@@ -256,33 +236,13 @@ if st.session_state["chat_history"] is None:
 # =========================
 st.markdown("""
 <style>
-/* ===== ロゴ（潰れ防止：正規ウェイト＋字間少し広め） ===== */
-.logo-wrap{
-  display:flex; justify-content:center; align-items:center;
-  width:100%; margin:24px 0 40px 0;
-}
-.logo-pill{
-  display:inline-block; padding:6px; border-radius:9999px !important;
-  background:linear-gradient(90deg,#ff4df5,#a64dff) !important;
-}
-.logo-box{
-  padding:30px 76px; border-radius:9999px !important; background:#000 !important;
-  font-family:'Mochiy Pop One',sans-serif; color:inherit !important; white-space:nowrap;
-  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
-}
-.logo-row1{
-  display:flex; align-items:flex-start; justify-content:center;
-  gap:8px; line-height:1.02; margin:0;
-}
-.logo-box .ai{
-  font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important;
-}
-.logo-box .mitsumori{
-  font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important;
-}
-.logo-kunrow{
-  text-align:center; line-height:1.0; margin-top:-22px; letter-spacing:0.5px;
-}
+.logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px 0; }
+.logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important; background:linear-gradient(90deg,#ff4df5,#a64dff) !important; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:'Mochiy Pop One',sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+.logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:8px; line-height:1.02; margin:0; }
+.logo-box .ai{ font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important; }
+.logo-box .mitsumori{ font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important; }
+.logo-kunrow{ text-align:center; line-height:1.0; margin-top:-22px; letter-spacing:0.5px; }
 .logo-box .kun{  font-size:44px; font-weight:400; color:#fff !important; }
 .logo-box .num2{ font-size:44px; font-weight:400; color:#ff4df5 !important; }
 </style>
@@ -480,7 +440,7 @@ def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
     c = ws.cell(row=row, column=amount_col_idx)
     qcol = get_column_letter(qty_col_idx)
     pcol = get_column_letter(price_col_idx)
-    c.value = f"={qcol}{row}*{pcol}{row}"
+    c.value = f"={{qcol}}{{row}}*{{pcol}}{{row}}".format(qcol=qcol, pcol=pcol, row=row)
     c.number_format = '#,##0'
 
 def _write_items_to_template(ws, df_items: pd.DataFrame):
