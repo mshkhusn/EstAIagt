@@ -302,11 +302,13 @@ if password != APP_PASSWORD:
 st.markdown("""
 <style>
 .custom-header {
-  color: #90fb0f !important;
-  font-size: 40px !important;
-  font-weight: 900 !important;
-  margin-top: 20px !important;
-  margin-bottom: 30px !important;
+  color: #90fb0f !important;      /* ネオンライム */
+  font-size: 40px !important;     /* サイズはそのまま */
+  font-weight: 700 !important;    /* ← 900 から 700 に下げて潰れ防止 */
+  letter-spacing: 0.02em !important;  /* 字間を少し広げる */
+  line-height: 1.3 !important;    /* 行間で視認性アップ */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -315,7 +317,6 @@ st.markdown(
     '<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>',
     unsafe_allow_html=True
 )
-
 # 既存履歴をMarkdownで再描画
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
