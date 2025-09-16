@@ -42,14 +42,14 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown(f"""
 <style>
-@import url("https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
 /* ===== Base ===== */
 html, body {{ background:#000 !important; }}
 .stApp, .stApp * {{
   background:transparent !important;
   color:#fff !important;
-  font-family:"Mochiy Pop One",sans-serif !important;
+  font-family:'Mochiy Pop One',sans-serif !important;
   letter-spacing:.01em;
 }}
 
@@ -98,44 +98,22 @@ html, body {{ background:#000 !important; }}
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 
-/* ===== File Uploader：ピンク→シアングラデ ===== */
+/* ===== File Uploader（共通デフォルト） ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
-  position: relative !important;
-  background: linear-gradient(90deg, #ff4df5, #00c3ff) !important;  /* グラデ背景 */
-  color: #fff !important;
-  border: none !important;                 /* 既存のグレー枠を消す */
-  border-radius: 12px !important;
-  padding-left: 64px !important;
-  box-shadow: 0 0 10px rgba(255,77,245,.35), 0 0 18px rgba(0,195,255,.25) !important;
-  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
+  position:relative !important; background:#111 !important; color:#fff !important;
+  border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important;
 }}
-/* 内側ラッパーが上書きしないよう透過 */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > div {{
-  background: transparent !important;
-}}
-/* 既存アイコンは非表示のまま */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{
-  display: none !important;
-}}
-/* :has 対応ブラウザ向けの透過も維持（誤記 !重要 → !important に修正） */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
-    background: transparent !important; border: none !important;
+    background:transparent !important; border:none !important;
   }}
 }}
-/* 擬似アイコン（雲） */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
-  content: ""; position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
-  width: 32px; height: 32px; background-repeat: no-repeat; background-position: center; background-size: contain;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
+  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }}
-/* ホバー時ちょいリッチ */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]:hover {{
-  filter: brightness(1.06);
-  transform: translateY(-1px);
-  box-shadow: 0 0 14px rgba(255,77,245,.45), 0 0 26px rgba(0,195,255,.35) !important;
-}}
-
 
 /* ===== Avatar ===== */
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
@@ -157,14 +135,6 @@ html, body {{ background:#000 !important; }}
   border-image:linear-gradient(90deg,#ff4df5,#90fb0f,#00c3ff) 1 !important;
   box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
 }}
-
-/* ===== Markdown テーブル・水平線 ===== */
-[data-testid="stMarkdownContainer"] table {{ border-collapse:collapse !important; border:1px solid #fff !important; }}
-[data-testid="stMarkdownContainer"] th, [data-testid="stMarkdownContainer"] td {{
-  border:1px solid #fff !important; padding:6px 10px !important; color:#fff !important;
-}}
-[data-testid="stMarkdownContainer"] th {{ background-color:rgba(255,255,255,.1) !important; font-weight:700 !important; }}
-[data-testid="stMarkdownContainer"] hr {{ border:none !important; border-top:1px solid #fff !important; margin:1em 0 !important; }}
 
 /* ===== 旧 .stApp::before を無効化（二重防止） ===== */
 .stApp::before {{ content:""; background:none !important; }}
@@ -189,7 +159,7 @@ body::before {{
   }}
 }}
 
-/* ===== 生成ボタン：グリーン→ブルーのグラデ（維持） ===== */
+/* ===== 生成ボタン：グリーン→ブルーのグラデ ===== */
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
@@ -211,11 +181,23 @@ body::before {{
   transform: translateY(0);
 }}
 
-/* ===== ヒント文字色 ===== */
+/* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
 
+/* ====== DDゾーン専用：アップローダーをピンク⇄シアンのグラデに ====== */
+[data-testid="stVerticalBlock"]:has(> .dd-scope) [data-testid="stFileUploaderDropzone"] {{
+  background: linear-gradient(135deg, #ff4df5, #00c3ff) !important;
+  color:#fff !important;
+  border:none !important;
+  border-radius:12px !important;
+}}
+/* 内側コンテンツは透過&余計な背景を殺す */
+[data-testid="stVerticalBlock"]:has(> .dd-scope) [data-testid="stFileUploaderDropzone"] > div {{
+  background:transparent !important;
+}}
+/* アイコンは既存の ::before をそのまま使用 */
 
-/* ===== DD見積書テンプレで出力：スプラ風グラデ＋点滅グロー ===== */
+/* ====== DDテンプレDLボタン：スプラ風グラデ＋点滅グロー ====== */
 @keyframes splaPulse {{
   0%, 100% {{
     box-shadow:
@@ -230,37 +212,30 @@ body::before {{
       0 0 0 2px rgba(255,255,255,.14) inset;
   }}
 }}
-
 [data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button {{
   background: linear-gradient(90deg, #00e08a, #ff4df5) !important; /* グリーン→ピンク */
-  color: #fff !important;
-  border: none !important;
-  border-radius: 12px !important;
-  padding: .68rem 1.15rem !important;
-  font-weight: 700 !important;
-  text-shadow: 0 1px 0 rgba(0,0,0,.25);
-  animation: splaPulse 1.2s infinite ease-in-out; /* ← 点滅 */
+  color:#fff !important;
+  border:none !important;
+  border-radius:12px !important;
+  padding:.68rem 1.15rem !important;
+  font-weight:700 !important;
+  text-shadow:0 1px 0 rgba(0,0,0,.25);
+  animation: splaPulse 1.2s infinite ease-in-out;
   transition: transform .08s ease, filter .15s ease;
 }}
-
 [data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button:hover {{
   filter: brightness(1.08);
   transform: translateY(-1px);
 }}
-
 [data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button:active {{
   filter: brightness(.98);
   transform: translateY(0);
 }}
-
-/* 動きが苦手な環境設定の人にはアニメ無効 */
 @media (prefers-reduced-motion: reduce) {{
   [data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button {{
     animation: none !important;
   }}
 }}
-
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -306,7 +281,7 @@ st.markdown("""
 <style>
 .logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px 0; }
 .logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important; background:linear-gradient(90deg,#ff4df5,#a64dff) !important; }
-.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:"Mochiy Pop One",sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:'Mochiy Pop One',sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 .logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:8px; line-height:1.02; margin:0; }
 .logo-box .ai{ font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important; }
 .logo-box .mitsumori{ font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important; }
@@ -342,8 +317,8 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !important;
-  font-family: "Mochiy Pop One", sans-serif !important;
+  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
+  font-family: 'Mochiy Pop One', sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
   text-shadow: 0 0 4px rgba(0,0,0,0.6);
@@ -495,7 +470,7 @@ def compute_totals(df: pd.DataFrame):
     return {"taxable": taxable, "tax": tax, "total": total}
 
 # =========================
-# DDテンプレ出力
+# DDテンプレ出力：Excel書き出し支援
 # =========================
 TOKEN_ITEMS = "{{ITEMS_START}}"
 COLMAP = {"task": "B", "qty": "O", "unit": "Q", "unit_price": "S", "amount": "W"}
@@ -598,16 +573,16 @@ if has_user_input:
                     )
 
 # =========================
-# 表示 & ダウンロード（※ DataFrame は素のまま・枠装飾なし）
+# 表示 & ダウンロード
 # =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
     st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
-
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
 
+    # Excelダウンロード（通常）
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
@@ -615,15 +590,11 @@ if st.session_state["df"] is not None:
     st.download_button("Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
-if tmpl is not None:
-    out = export_with_template(tmpl.read(), st.session_state["df"])
-    # ★ この2行を追加して専用スコープを作る（ここだけ CSS を当てる）
+    # ★ DDテンプレ：アップローダ＋出力ボタンを専用スコープで囲む（NameError防止 & CSS適用）
     with st.container():
         st.markdown('<div class="dd-scope"></div>', unsafe_allow_html=True)
-        st.download_button(
-            "DD見積書テンプレで出力",
-            out,
-            "見積もり_DDテンプレ.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"], key="dd_tmpl")
+        if tmpl is not None:
+            out = export_with_template(tmpl.read(), st.session_state["df"])
+            st.download_button("DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
