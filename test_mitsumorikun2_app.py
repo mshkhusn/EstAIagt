@@ -160,17 +160,19 @@ html, body {{ background:#000 !important; }}
 .stApp::before {{ content:""; background:none !important; }}
 
 
-/* ===== 四隅インク：見切れ配置（ピンク拡大＋上移動／イエロー縦長） ===== */
+st.markdown(f"""
+<style>
+/* ===== 四隅インク：ピンクさらに上／イエロー左寄せ ===== */
 body::before {{
   content:"";
   position: fixed;
   inset:0;
   background:
-    url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -120px, /* ピンク → 拡大してさらに上へ */
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -120px top  -60px,  /* ブルー 2倍 */
-    url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -80px bottom -100px;/* イエロー → 縦長 */
+    url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -160px, /* ピンク → さらに上へ */
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -120px top  -60px,  /* ブルー */
+    url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -120px bottom -100px;/* イエロー → 左寄せ */
   background-size:
-    380px 380px,   /* ピンクさらに拡大 */
+    380px 380px,   /* ピンク */
     500px 500px,   /* ブルー */
     260px 320px;   /* イエロー縦長 */
   pointer-events: none;
@@ -180,9 +182,9 @@ body::before {{
 @media (max-width: 900px) {{
   body::before {{
     background-position:
-      left  -80px top   -60px,   /* ピンク */
+      left  -80px top   -80px,   /* ピンク */
       right -60px top   -30px,   /* ブルー */
-      left  -60px bottom -60px;  /* イエロー */
+      left  -80px bottom -60px;  /* イエロー左寄せ */
     background-size:
       260px 260px,   /* ピンク縮小 */
       320px 320px,   /* ブルー縮小 */
