@@ -30,7 +30,7 @@ def b64_or_none(p: Path) -> str:
 INK_PINK   = b64_or_none(ROOT / "static" / "ink" / "ink_pink.png")
 INK_CYAN   = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN  = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
-INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 使っていないが残しておく
+INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 未使用でも残す
 
 # =========================
 # ページ設定
@@ -167,8 +167,7 @@ body::before {{
   }}
 }}
 
-/* ===== 生成ボタン：グリーン→ブルーのグラデ（コンテナ版） ===== */
-/* 同じ縦ブロック（stVerticalBlock）内に .gen-scope があれば、そのブロックのボタンを着色 */
+/* ===== 生成ボタン：グリーン→ブルーのグラデ ===== */
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
@@ -189,6 +188,9 @@ body::before {{
   filter: brightness(.98);
   transform: translateY(0);
 }}
+
+/* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
+.hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -270,7 +272,7 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
+  font-weight: 400 !重要;  /* Mochiy Pop One は 400 だけ */
   font-family: 'Mochiy Pop One', sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
@@ -295,7 +297,7 @@ for msg in st.session_state["chat_history"]:
 hint_placeholder = st.empty()
 if st.session_state["df"] is not None:
     hint_placeholder.markdown(
-        '<p style="color:#00c3ff !important;">'
+        '<p class="hint-blue">'
         'チャットをさらに続けて見積もり精度を上げることができます。<br>'
         '追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。'
         '</p>',
@@ -495,8 +497,10 @@ if has_user_input:
                 prompt = build_prompt_for_estimation(st.session_state["chat_history"])
                 resp = openai_client.chat.completions.create(
                     model="gpt-4.1",
-                    messages=[{"role":"system","content":"You MUST return only valid JSON."},
-                              {"role":"user","content":prompt}],
+                    messages=[
+                        {"role":"system","content":"You MUST return only valid JSON."},
+                        {"role":"user","content":prompt}
+                    ],
                     response_format={"type":"json_object"},
                     temperature=0.2,
                     max_tokens=4000
@@ -514,14 +518,15 @@ if has_user_input:
                     st.session_state["df"] = df
                     st.session_state["meta"] = meta
 
-                    # 入力欄の直上にヒント表示
+                    # 入力欄の直上にヒント表示（ブルー）
                     hint_placeholder.markdown(
-                        '<p style="color:#00c3ff !important;">'
+                        '<p class="hint-blue">'
                         'チャットをさらに続けて見積もり精度を上げることができます。<br>'
                         '追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。'
                         '</p>',
                         unsafe_allow_html=True
-                )
+                    )
+
 # =========================
 # 表示 & ダウンロード
 # =========================
