@@ -2,6 +2,7 @@
 # GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
 # 追加要件込み再生成対応 / 追加質問時にプレビュー消去
 # 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
+# 生成中はボタンを完全に非表示（セッション状態で制御）
 
 import os
 import json
@@ -189,8 +190,8 @@ body::before {{
   transform: translateY(0);
 }}
 
-/* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
-.hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
+/* ===== ヒント文字色（!important を確実に上書き） ===== */
+.hint-blue {{ color:#33ccff !important; font-weight:400 !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -223,6 +224,10 @@ for k in ["chat_history", "items_json_raw", "items_json", "df", "meta"]:
     if k not in st.session_state:
         st.session_state[k] = None
 
+# 生成中フラグ
+if "is_generating" not in st.session_state:
+    st.session_state["is_generating"] = False
+
 if st.session_state["chat_history"] is None:
     st.session_state["chat_history"] = [
         {"role": "system", "content": "あなたは広告クリエイティブ制作のプロフェッショナルです。相場感をもとに見積もりを作成するため、ユーザーにヒアリングを行います。"},
@@ -242,6 +247,7 @@ st.markdown("""
 .logo-box .mitsumori{ font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important; }
 .logo-kunrow{ text-align:center; line-height:1.0; margin-top:-22px; letter-spacing:0.5px; }
 .logo-box .kun{  font-size:44px; font-weight:400; color:#fff !important; }
+.box .num2{{}} /* noop to avoid accidental deletion */
 .logo-box .num2{ font-size:44px; font-weight:400; color:#ff4df5 !important; }
 </style>
 
@@ -272,7 +278,7 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !重要;  /* Mochiy Pop One は 400 だけ */
+  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
   font-family: 'Mochiy Pop One', sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
@@ -328,7 +334,7 @@ if user_input := st.chat_input("要件を入力してください..."):
                 max_tokens=1200
             )
             reply = resp.choices[0].message.content
-            st.markdown(reply)  # ← Markdownそのまま表示
+            st.markdown(reply)
             st.session_state["chat_history"].append({"role": "assistant", "content": reply})
 
 # =========================
@@ -483,27 +489,32 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     return out
 
 # =========================
-# 実行（★ コンテナ方式でボタンにグラデを適用 ★）
+# 実行（★ 生成中はボタンを非表示にする ★）
 # =========================
-has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
+has_user_input = any(msg["role"] == "user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
-    with st.container():
-        # この“目印”が同じ stVerticalBlock 内にあると、上のCSSが当たる
-        st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
-
-        if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
+    if not st.session_state["is_generating"]:
+        # 生成中ではない：ボタンを表示
+        with st.container():
+            st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
+            if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
+                st.session_state["is_generating"] = True
+                st.rerun()
+    else:
+        # 生成中：ボタンは描画しない（スピナーのみ）
+        with st.chat_message("assistant"):
             with st.spinner("AIが見積もりを生成中…"):
                 prompt = build_prompt_for_estimation(st.session_state["chat_history"])
                 resp = openai_client.chat.completions.create(
                     model="gpt-4.1",
                     messages=[
-                        {"role":"system","content":"You MUST return only valid JSON."},
-                        {"role":"user","content":prompt}
+                        {"role": "system", "content": "You MUST return only valid JSON."},
+                        {"role": "user", "content": prompt},
                     ],
-                    response_format={"type":"json_object"},
+                    response_format={"type": "json_object"},
                     temperature=0.2,
-                    max_tokens=4000
+                    max_tokens=4000,
                 )
                 raw = resp.choices[0].message.content or '{"items":[]}'
                 items_json = robust_parse_items_json(raw)
@@ -527,6 +538,10 @@ if has_user_input:
                         unsafe_allow_html=True
                     )
 
+        # フラグOFFに戻して再描画（ボタン復活）
+        st.session_state["is_generating"] = False
+        st.rerun()
+
 # =========================
 # 表示 & ダウンロード
 # =========================
@@ -541,8 +556,10 @@ if st.session_state["df"] is not None:
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
     buf.seek(0)
-    st.download_button("Excelでダウンロード", buf, "見積もり.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button(
+        "Excelでダウンロード", buf, "見積もり.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
     if tmpl is not None:
