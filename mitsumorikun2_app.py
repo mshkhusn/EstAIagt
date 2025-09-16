@@ -98,32 +98,36 @@ html, body {{ background:#000 !important; }}
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 
-/* ===== File Uploader：ピンク→シアングラデ ===== */
+/* ===== File Uploader：中は黒・外枠はピンク→シアンのグラデ境界 ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
   position: relative !important;
-  background: linear-gradient(90deg, #ff4df5, #00c3ff) !important;  /* グラデ背景 */
   color: #fff !important;
-  border: none !important;                 /* 既存のグレー枠を消す */
+
+  /* 外枠をグラデ“境界”にする定番テク：二重レイヤー背景 + 透明ボーダー */
+  border: 2px solid transparent !important;
   border-radius: 12px !important;
+  background:
+    linear-gradient(#111, #111) padding-box,                  /* 内側（中身）は黒 */
+    linear-gradient(90deg, #ff4df5, #00c3ff) border-box !important; /* 外枠はグラデ */
+  
   padding-left: 64px !important;
-  box-shadow: 0 0 10px rgba(255,77,245,.35), 0 0 18px rgba(0,195,255,.25) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }}
 /* 内側ラッパーが上書きしないよう透過 */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > div {{
   background: transparent !important;
 }}
-/* 既存アイコンは非表示のまま */
+/* 既存の雲アイコンは非表示 */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{
   display: none !important;
 }}
-/* :has 対応ブラウザ向けの透過も維持（誤記 !重要 → !important に修正） */
+/* :has 対応ブラウザのときも透過維持 */
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
     background: transparent !important; border: none !important;
   }}
 }}
-/* 擬似アイコン（雲） */
+/* 擬似アイコン（雲）を左に表示 */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
   content: ""; position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
   width: 32px; height: 32px; background-repeat: no-repeat; background-position: center; background-size: contain;
@@ -135,6 +139,7 @@ html, body {{ background:#000 !important; }}
   transform: translateY(-1px);
   box-shadow: 0 0 14px rgba(255,77,245,.45), 0 0 26px rgba(0,195,255,.35) !important;
 }}
+
 
 
 /* ===== Avatar ===== */
