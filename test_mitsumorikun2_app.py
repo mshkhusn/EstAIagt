@@ -71,7 +71,7 @@ html, body {{ background:#000 !important; }}
 }}
 
 /* ===== Inputs ===== */
-.stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !重要; }}
+.stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff important; }}
 .stTextInput input, .stTextArea textarea, .stSelectbox div {{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
@@ -114,7 +114,7 @@ html, body {{ background:#000 !important; }}
   position:relative !important; background:#111 !important; color:#fff !important;
   border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !重要; }}
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
     background:transparent !important; border:none !important;
@@ -188,8 +188,8 @@ body::before {{
 }}
 
 /* ===== 生成ボタン：グリーン→ブルーのグラデ（コンテナ版） ===== */
-/* 同じ縦ブロック（stVerticalBlock）直下に .gen-scope を含む場合、そのブロック内のボタンを着色 */
-[data-testid="stVerticalBlock"]:has(> .gen-scope) div.stButton > button {{
+/* 同じ縦ブロック（stVerticalBlock）内のどこかに .gen-scope があれば、そのブロックのボタンを着色 */
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
   border: none !important;
@@ -201,18 +201,18 @@ body::before {{
     0 0 10px rgba(0,224,138,.55),
     0 0 18px rgba(0,195,255,.45) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
-}}
-[data-testid="stVerticalBlock"]:has(> .gen-scope) div.stButton > button:hover {{
+}
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow:
     0 0 12px rgba(0,224,138,.65),
     0 0 24px rgba(0,195,255,.55) !important;
-}}
-[data-testid="stVerticalBlock"]:has(> .gen-scope) div.stButton > button:active {{
+}
+[data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:active {
   filter: brightness(.98);
   transform: translateY(0);
-}}
+}
 </style>
 """, unsafe_allow_html=True)
 
