@@ -1,7 +1,4 @@
 # app.py （AI見積もりくん２）
-# GPT系のみ対応 / JSON強制 & 質問カテゴリフォールバック
-# 追加要件込み再生成対応 / 追加質問時にプレビュー消去
-# 見積もり生成後に「チャット入力欄の直上」にヒント文を必ず表示（st.emptyでプレースホルダ制御）
 
 import os
 import json
@@ -19,7 +16,6 @@ import base64
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-
 def b64_or_none(p: Path) -> str:
     try:
         with p.open("rb") as f:
@@ -30,7 +26,7 @@ def b64_or_none(p: Path) -> str:
 INK_PINK   = b64_or_none(ROOT / "static" / "ink" / "ink_pink.png")
 INK_CYAN   = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN  = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
-INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 未使用でも残す
+INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")
 
 # =========================
 # ページ設定
@@ -38,13 +34,12 @@ INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 未使�
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# デザイン一式（f-string内：CSSの {} は {{ }}、画像の {INK_*} はシングル）
+# デザイン（f-string の {} は {{ }})
 # =========================
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* ===== Base ===== */
 html, body {{ background:#000 !important; }}
 .stApp, .stApp * {{
   background:transparent !important;
@@ -53,7 +48,6 @@ html, body {{ background:#000 !important; }}
   letter-spacing:.01em;
 }}
 
-/* ヘッダー/サイドバー */
 [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stStatusWidget"],
 [data-testid="stSidebar"],[data-testid="stSidebarContent"] {{
   background:transparent !important; border:none !important;
@@ -68,13 +62,12 @@ html, body {{ background:#000 !important; }}
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
 .stChatInput textarea::placeholder {{ color:#ddd !important; }}
 
-/* 目アイコン */
 .stTextInput [data-baseweb="button"] {{
   background:#333 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
 }}
 
-/* ===== Buttons（デフォルト） ===== */
+/* ===== Buttons（汎用） ===== */
 .stButton button, .stDownloadButton > button {{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
@@ -85,9 +78,7 @@ html, body {{ background:#000 !important; }}
 }}
 
 /* ===== Chat ===== */
-[data-testid="stChatMessage"] {{
-  background:transparent !important; border:none !important; border-radius:14px !important;
-}}
+[data-testid="stChatMessage"] {{ background:transparent !important; border:none !important; border-radius:14px !important; }}
 [data-testid="stChatInput"], [data-testid="stChatInput"]>div {{ background:transparent !important; }}
 .stChatInput textarea {{
   background:#111 !important; color:#fff !important;
@@ -116,18 +107,11 @@ html, body {{ background:#000 !important; }}
 }}
 
 /* ===== Avatar ===== */
-.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
-  background:#a64dff !important; color:#fff !important; border-radius:12px !important;
-}}
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {{
-  background:#00e08a !important; color:#000 !important;
-}}
+.stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{ background:#a64dff !important; color:#fff !important; border-radius:12px !important; }}
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {{ background:#00e08a !important; color:#000 !important; }}
 
 /* ===== 見積もり結果見出し ===== */
-.preview-title {{
-  font-size:32px !important; font-weight:900 !important;
-  color:#78f416 !important; margin-bottom:16px !important;
-}}
+.preview-title {{ font-size:32px !important; font-weight:900 !important; color:#78f416 !important; margin-bottom:16px !important; }}
 
 /* ===== フォーカス演出 ===== */
 .stChatInput:focus-within textarea, .stTextInput input:focus {{
@@ -136,10 +120,8 @@ html, body {{ background:#000 !important; }}
   box-shadow:0 0 12px rgba(255,77,245,.6), 0 0 18px rgba(144,251,15,.5), 0 0 24px rgba(0,195,255,.4) !important;
 }}
 
-/* ===== 旧 .stApp::before を無効化（二重防止） ===== */
+/* ===== 背景インク ===== */
 .stApp::before {{ content:""; background:none !important; }}
-
-/* ===== 四隅インク（ピンク／シアン／イエロー） ===== */
 body::before {{
   content:"";
   position: fixed;
@@ -162,42 +144,30 @@ body::before {{
 /* ===== 生成ボタン：グリーン→ブルーのグラデ ===== */
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  color: #fff !important;
-  border: none !important;
-  border-radius: 12px !important;
-  padding: .68rem 1.15rem !important;
-  font-weight: 700 !important;
-  text-shadow: 0 1px 0 rgba(0,0,0,.25);
+  color: #fff !important; border: none !important; border-radius: 12px !important;
+  padding: .68rem 1.15rem !important; font-weight: 700 !important; text-shadow: 0 1px 0 rgba(0,0,0,.25);
   box-shadow: 0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }}
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:hover {{
-  filter: brightness(1.08);
-  transform: translateY(-1px);
+  filter: brightness(1.08); transform: translateY(-1px);
   box-shadow: 0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
 }}
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button:active {{
-  filter: brightness(.98);
-  transform: translateY(0);
+  filter: brightness(.98); transform: translateY(0);
 }}
 
-/* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
+/* ===== ヒントの青色 ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
 
-/* ====== DDゾーン専用：アップローダーをピンク⇄シアンのグラデに ====== */
-[data-testid="stVerticalBlock"]:has(> .dd-scope) [data-testid="stFileUploaderDropzone"] {{
+/* ========= ここから：DD専用の確実な装飾（.dd-wrap 配下だけに適用） ========= */
+.dd-wrap [data-testid="stFileUploaderDropzone"] {{
   background: linear-gradient(135deg, #ff4df5, #00c3ff) !important;
-  color:#fff !important;
-  border:none !important;
-  border-radius:12px !important;
+  color:#fff !important; border:none !important; border-radius:12px !important;
 }}
-/* 内側コンテンツは透過&余計な背景を殺す */
-[data-testid="stVerticalBlock"]:has(> .dd-scope) [data-testid="stFileUploaderDropzone"] > div {{
-  background:transparent !important;
-}}
-/* アイコンは既存の ::before をそのまま使用 */
+.dd-wrap [data-testid="stFileUploaderDropzone"] > div {{ background:transparent !important; }}
 
-/* ====== DDテンプレDLボタン：スプラ風グラデ＋点滅グロー ====== */
+/* スプラ風点滅グロー */
 @keyframes splaPulse {{
   0%, 100% {{
     box-shadow:
@@ -212,30 +182,20 @@ body::before {{
       0 0 0 2px rgba(255,255,255,.14) inset;
   }}
 }}
-[data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button {{
+
+.dd-wrap .stDownloadButton > button {{
   background: linear-gradient(90deg, #00e08a, #ff4df5) !important; /* グリーン→ピンク */
-  color:#fff !important;
-  border:none !important;
-  border-radius:12px !important;
-  padding:.68rem 1.15rem !important;
-  font-weight:700 !important;
-  text-shadow:0 1px 0 rgba(0,0,0,.25);
+  color:#fff !important; border:none !important; border-radius:12px !important;
+  padding:.68rem 1.15rem !important; font-weight:700 !important; text-shadow:0 1px 0 rgba(0,0,0,.25);
   animation: splaPulse 1.2s infinite ease-in-out;
   transition: transform .08s ease, filter .15s ease;
 }}
-[data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button:hover {{
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-}}
-[data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button:active {{
-  filter: brightness(.98);
-  transform: translateY(0);
-}}
+.dd-wrap .stDownloadButton > button:hover {{ filter: brightness(1.08); transform: translateY(-1px); }}
+.dd-wrap .stDownloadButton > button:active {{ filter: brightness(.98); transform: translateY(0); }}
 @media (prefers-reduced-motion: reduce) {{
-  [data-testid="stVerticalBlock"]:has(> .dd-scope) .stDownloadButton > button {{
-    animation: none !important;
-  }}
+  .dd-wrap .stDownloadButton > button {{ animation:none !important; }}
 }}
+/* ========= ここまで：DD専用 ========= */
 </style>
 """, unsafe_allow_html=True)
 
@@ -286,8 +246,8 @@ st.markdown("""
 .logo-box .ai{ font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important; }
 .logo-box .mitsumori{ font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important; }
 .logo-kunrow{ text-align:center; line-height:1.0; margin-top:-22px; letter-spacing:0.5px; }
-.logo-box .kun{  font-size:44px; font-weight:400; color:#fff !important; }
-.logo-box .num2{ font-size:44px; font-weight:400; color:#ff4df5 !important; }
+.logo-box .kun{{font-size:44px; font-weight:400; color:#fff !important;}}
+.logo-box .num2{{font-size:44px; font-weight:400; color:#ff4df5 !important;}}
 </style>
 
 <div class="logo-wrap">
@@ -310,14 +270,14 @@ if password != APP_PASSWORD:
     st.stop()
 
 # =========================
-# チャットUI（Markdownで描画）
+# チャットUI
 # =========================
 st.markdown("""
 <style>
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
+  font-weight: 400 !important;
   font-family: 'Mochiy Pop One', sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
@@ -331,14 +291,13 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 既存履歴をMarkdownで再描画
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
         st.chat_message("assistant").markdown(msg["content"])
     elif msg["role"] == "user":
         st.chat_message("user").markdown(msg["content"])
 
-# --- ヒント文プレースホルダ（チャット入力直前） ---
+# ヒント文（チャット入力直前）
 hint_placeholder = st.empty()
 if st.session_state["df"] is not None:
     hint_placeholder.markdown(
@@ -349,11 +308,8 @@ if st.session_state["df"] is not None:
         unsafe_allow_html=True
     )
 
-# =========================
 # 入力欄
-# =========================
 if user_input := st.chat_input("要件を入力してください..."):
-    # 新しい入力があれば過去の見積もり結果をクリア（プレビューを一度消す）
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
@@ -373,12 +329,10 @@ if user_input := st.chat_input("要件を入力してください..."):
                 max_tokens=1200
             )
             reply = resp.choices[0].message.content
-            st.markdown(reply)  # ← Markdownそのまま表示
+            st.markdown(reply)
             st.session_state["chat_history"].append({"role": "assistant", "content": reply})
 
-# =========================
-# 見積もり生成用プロンプト
-# =========================
+# 見積もり生成プロンプト
 def build_prompt_for_estimation(chat_history):
     return f"""
 必ず有効な JSON のみを返してください。説明文・文章・Markdown・テーブルは禁止です。
@@ -411,9 +365,7 @@ def build_prompt_for_estimation(chat_history):
   を返してください。
 """
 
-# =========================
 # JSONパース & フォールバック
-# =========================
 def robust_parse_items_json(raw: str) -> str:
     try:
         obj = json.loads(raw)
@@ -432,9 +384,7 @@ def robust_parse_items_json(raw: str) -> str:
         }]
     return json.dumps(obj, ensure_ascii=False)
 
-# =========================
 # DataFrame生成
-# =========================
 def df_from_items_json(items_json: str) -> pd.DataFrame:
     try:
         data = json.loads(items_json) if items_json else {}
@@ -460,18 +410,14 @@ def df_from_items_json(items_json: str) -> pd.DataFrame:
     df["小計"] = (df["qty"] * df["unit_price"]).astype(int)
     return df
 
-# =========================
 # 合計計算
-# =========================
 def compute_totals(df: pd.DataFrame):
     taxable = int(df["小計"].sum())
     tax = int(round(taxable * TAX_RATE))
     total = taxable + tax
     return {"taxable": taxable, "tax": tax, "total": total}
 
-# =========================
-# DDテンプレ出力：Excel書き出し支援
-# =========================
+# DDテンプレ出力
 TOKEN_ITEMS = "{{ITEMS_START}}"
 COLMAP = {"task": "B", "qty": "O", "unit": "Q", "unit_price": "S", "amount": "W"}
 
@@ -527,25 +473,18 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     out.seek(0)
     return out
 
-# =========================
-# 実行（★ コンテナ方式でボタンにグラデを適用 ★）
-# =========================
+# 実行（生成ボタン）
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
-
 if has_user_input:
     with st.container():
-        # この“目印”が同じ stVerticalBlock 内にあると、上のCSSが当たる
         st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
-
         if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
             with st.spinner("AIが見積もりを生成中…"):
                 prompt = build_prompt_for_estimation(st.session_state["chat_history"])
                 resp = openai_client.chat.completions.create(
                     model="gpt-4.1",
-                    messages=[
-                        {"role":"system","content":"You MUST return only valid JSON."},
-                        {"role":"user","content":prompt}
-                    ],
+                    messages=[{"role":"system","content":"You MUST return only valid JSON."},
+                              {"role":"user","content":prompt}],
                     response_format={"type":"json_object"},
                     temperature=0.2,
                     max_tokens=4000
@@ -562,19 +501,14 @@ if has_user_input:
                     st.session_state["items_json"] = items_json
                     st.session_state["df"] = df
                     st.session_state["meta"] = meta
-
-                    # 入力欄の直上にヒント表示（ブルー）
                     hint_placeholder.markdown(
                         '<p class="hint-blue">'
                         'チャットをさらに続けて見積もり精度を上げることができます。<br>'
                         '追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。'
-                        '</p>',
-                        unsafe_allow_html=True
+                        '</p>', unsafe_allow_html=True
                     )
 
-# =========================
 # 表示 & ダウンロード
-# =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
     st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
@@ -582,7 +516,6 @@ if st.session_state["df"] is not None:
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
 
-    # Excelダウンロード（通常）
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
@@ -590,11 +523,11 @@ if st.session_state["df"] is not None:
     st.download_button("Excelでダウンロード", buf, "見積もり.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # ★ DDテンプレ：アップローダ＋出力ボタンを専用スコープで囲む（NameError防止 & CSS適用）
-    with st.container():
-        st.markdown('<div class="dd-scope"></div>', unsafe_allow_html=True)
-        tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"], key="dd_tmpl")
-        if tmpl is not None:
-            out = export_with_template(tmpl.read(), st.session_state["df"])
-            st.download_button("DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    # ===== DD見積書テンプレ：専用ラッパ .dd-wrap で囲む（ここが今回のポイント） =====
+    st.markdown('<div class="dd-wrap">', unsafe_allow_html=True)
+    tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"], key="dd_tmpl")
+    if tmpl is not None:
+        out = export_with_template(tmpl.read(), st.session_state["df"])
+        st.download_button("DD見積書テンプレで出力", out, "見積もり_DDテンプレ.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.markdown('</div>', unsafe_allow_html=True)
