@@ -159,8 +159,7 @@ html, body {{ background:#000 !important; }}
 /* ===== 旧 .stApp::before を無効化（二重防止） ===== */
 .stApp::before {{ content:""; background:none !important; }}
 
-st.markdown(f"""
-<style>
+
 /* ===== 四隅インク：見切れ配置（ピンク拡大＋上移動／イエロー縦長） ===== */
 body::before {{
   content:"";
