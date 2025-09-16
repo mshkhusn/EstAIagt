@@ -42,14 +42,14 @@ st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 # =========================
 st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap");
 
 /* ===== Base ===== */
 html, body {{ background:#000 !important; }}
 .stApp, .stApp * {{
   background:transparent !important;
   color:#fff !important;
-  font-family:'Mochiy Pop One',sans-serif !important;
+  font-family:"Mochiy Pop One",sans-serif !important;
   letter-spacing:.01em;
 }}
 
@@ -98,22 +98,44 @@ html, body {{ background:#000 !important; }}
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 
-/* ===== File Uploader ===== */
+/* ===== File Uploader：ピンク→シアングラデ ===== */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
-  position:relative !important; background:#111 !important; color:#fff !important;
-  border:1.5px solid #666 !important; border-radius:12px !important; padding-left:64px !important;
+  position: relative !important;
+  background: linear-gradient(90deg, #ff4df5, #00c3ff) !important;  /* グラデ背景 */
+  color: #fff !important;
+  border: none !important;                 /* 既存のグレー枠を消す */
+  border-radius: 12px !important;
+  padding-left: 64px !important;
+  box-shadow: 0 0 10px rgba(255,77,245,.35), 0 0 18px rgba(0,195,255,.25) !important;
+  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
+/* 内側ラッパーが上書きしないよう透過 */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] > div {{
+  background: transparent !important;
+}}
+/* 既存アイコンは非表示のまま */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{
+  display: none !important;
+}}
+/* :has 対応ブラウザ向けの透過も維持（誤記 !重要 → !important に修正） */
 @supports selector(div:has(> svg)) {{
   [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
-    background:transparent !important; border:none !important;
+    background: transparent !important; border: none !important;
   }}
 }}
+/* 擬似アイコン（雲） */
 [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
-  content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
-  width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
+  content: ""; position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; background-repeat: no-repeat; background-position: center; background-size: contain;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }}
+/* ホバー時ちょいリッチ */
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]:hover {{
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(255,77,245,.45), 0 0 26px rgba(0,195,255,.35) !important;
+}}
+
 
 /* ===== Avatar ===== */
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
@@ -167,7 +189,7 @@ body::before {{
   }}
 }}
 
-/* ===== 生成ボタン：グリーン→ブルーのグラデ ===== */
+/* ===== 生成ボタン：グリーン→ブルーのグラデ（維持） ===== */
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
@@ -189,7 +211,7 @@ body::before {{
   transform: translateY(0);
 }}
 
-/* ===== ヒント文字色（全体の !important を上書きするためのクラス） ===== */
+/* ===== ヒント文字色 ===== */
 .hint-blue {{ color:#00c3ff !important; font-weight:400 !important; }}
 </style>
 """, unsafe_allow_html=True)
@@ -236,7 +258,7 @@ st.markdown("""
 <style>
 .logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px 0; }
 .logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important; background:linear-gradient(90deg,#ff4df5,#a64dff) !important; }
-.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:'Mochiy Pop One',sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:"Mochiy Pop One",sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 .logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:8px; line-height:1.02; margin:0; }
 .logo-box .ai{ font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important; }
 .logo-box .mitsumori{ font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important; }
@@ -272,8 +294,8 @@ st.markdown("""
 .custom-header {
   color: #90fb0f !important;
   font-size: 40px !important;
-  font-weight: 400 !重要;  /* Mochiy Pop One は 400 だけ */
-  font-family: 'Mochiy Pop One', sans-serif !important;
+  font-weight: 400 !important;
+  font-family: "Mochiy Pop One", sans-serif !important;
   letter-spacing: 1px !important;
   line-height: 1.3 !important;
   text-shadow: 0 0 4px rgba(0,0,0,0.6);
@@ -528,11 +550,12 @@ if has_user_input:
                     )
 
 # =========================
-# 表示 & ダウンロード
+# 表示 & ダウンロード（※ DataFrame は素のまま・枠装飾なし）
 # =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
     st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
+
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
     st.write(f"**合計:** {st.session_state['meta']['total']:,}円")
