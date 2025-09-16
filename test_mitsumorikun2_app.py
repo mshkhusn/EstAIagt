@@ -17,7 +17,6 @@ import httpx
 # --- 四隅インク（絶対パスで読んで、なければスキップ） ---
 import base64
 from pathlib import Path
-import streamlit as st  # 既にimport済みなら重複OK
 
 ROOT = Path(__file__).resolve().parent
 
@@ -26,13 +25,12 @@ def b64_or_none(p: Path) -> str:
         with p.open("rb") as f:
             return base64.b64encode(f.read()).decode()
     except Exception:
-        # 無い／読めないときは空文字に
         return ""
 
 INK_PINK   = b64_or_none(ROOT / "static" / "ink" / "ink_pink.png")
 INK_CYAN   = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN  = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
-INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")
+INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")  # 使っていないが残しておく
 
 # =========================
 # ページ設定
@@ -40,7 +38,7 @@ INK_PURPLE = b64_or_none(ROOT / "static" / "ink" / "ink_purple.png")
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# デザイン一式（f-string内なのでCSSの { } はすべて {{ }} でエスケープ）
+# デザイン一式（f-string内：CSSの {} は {{ }}、画像の {INK_*} はシングル）
 # =========================
 st.markdown(f"""
 <style>
@@ -149,14 +147,14 @@ html, body {{ background:#000 !important; }}
 /* ===== 旧 .stApp::before を無効化（二重防止） ===== */
 .stApp::before {{ content:""; background:none !important; }}
 
-/* ===== 四隅インク：ピンク／ブルー／イエロー ===== */
+/* ===== 四隅インク（ピンク／シアン／イエロー） ===== */
 body::before {{
   content:"";
   position: fixed;
   inset:0;
   background:
     url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -160px,
-    url("data:image/png;base64},{INK_CYAN}")  no-repeat right -220px top  -60px,
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -220px top  -60px,
     url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -100px bottom -100px;
   background-size: 380px 380px, 500px 500px, 260px 400px;
   pointer-events: none;
@@ -170,7 +168,7 @@ body::before {{
 }}
 
 /* ===== 生成ボタン：グリーン→ブルーのグラデ（コンテナ版） ===== */
-/* 同じ縦ブロック（stVerticalBlock）内のどこかに .gen-scope があれば、そのブロック内のボタンを着色 */
+/* 同じ縦ブロック（stVerticalBlock）内に .gen-scope があれば、そのブロックのボタンを着色 */
 [data-testid="stVerticalBlock"]:has(.gen-scope) div.stButton > button {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
@@ -225,10 +223,8 @@ for k in ["chat_history", "items_json_raw", "items_json", "df", "meta"]:
 
 if st.session_state["chat_history"] is None:
     st.session_state["chat_history"] = [
-        { "role": "system",
-          "content": "あなたは広告クリエイティブ制作のプロフェッショナルです。相場感をもとに見積もりを作成するため、ユーザーにヒアリングを行います。" },
-        { "role": "assistant",
-          "content": "こんにちは！こちらは「AI見積もりくん２」です。見積もり作成のために、まず案件概要を教えてください。" }
+        {"role": "system", "content": "あなたは広告クリエイティブ制作のプロフェッショナルです。相場感をもとに見積もりを作成するため、ユーザーにヒアリングを行います。"},
+        {"role": "assistant", "content": "こんにちは！こちらは「AI見積もりくん２」です。見積もり作成のために、まず案件概要を教えてください。"}
     ]
 
 # =========================
@@ -276,7 +272,7 @@ st.markdown("""
   font-size: 40px !important;
   font-weight: 400 !important;  /* Mochiy Pop One は 400 だけ */
   font-family: 'Mochiy Pop One', sans-serif !important;
-  letter-spacing: 1px !important;   /* 潰れ防止に少し広げる */
+  letter-spacing: 1px !important;
   line-height: 1.3 !important;
   text-shadow: 0 0 4px rgba(0,0,0,0.6);
 }
@@ -440,7 +436,7 @@ def _ensure_amount_formula(ws, row, qty_col_idx, price_col_idx, amount_col_idx):
     c = ws.cell(row=row, column=amount_col_idx)
     qcol = get_column_letter(qty_col_idx)
     pcol = get_column_letter(price_col_idx)
-    c.value = f"={{qcol}}{{row}}*{{pcol}}{{row}}".format(qcol=qcol, pcol=pcol, row=row)
+    c.value = f"={qcol}{row}*{pcol}{row}"
     c.number_format = '#,##0'
 
 def _write_items_to_template(ws, df_items: pd.DataFrame):
