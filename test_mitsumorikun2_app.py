@@ -229,7 +229,7 @@ if st.session_state["chat_history"] is None:
 # =========================
 st.markdown("""
 <style>
-/* ロゴ（Mochiyのまま） */
+/* ロゴ（Mochiy／潰れ防止のサイズ・字間に調整） */
 .logo-wrap{
   display:flex; justify-content:center; align-items:center;
   width:100%;
@@ -247,25 +247,40 @@ st.markdown("""
   background:#000 !important;
   font-family:'Mochiy Pop One',sans-serif;
   color:inherit !important;
+  white-space: nowrap; /* 折り返し防止 */
 }
 .logo-row1{
   display:flex; align-items:flex-start; justify-content:center;
-  gap: 6px; line-height:1.02; margin:0;
+  gap: 8px; line-height:1.04; margin:0;
 }
 .logo-box .ai{
-  font-size: 104px; font-weight: 900;
-  color:#ff4df5 !important; letter-spacing:-1.5px;
+  font-size: 90px;            /* 104 → 90 */
+  font-weight: 900;
+  color:#ff4df5 !important;
+  letter-spacing:-0.5px;      /* -1.5 → -0.5 */
 }
 .logo-box .mitsumori{
-  font-size: 68px; font-weight: 900;
-  color:#ffffff !important; letter-spacing:-1px;
+  font-size: 60px;            /* 68 → 60 */
+  font-weight: 900;
+  color:#ffffff !important;
+  letter-spacing:0px;         /* -1 → 0 */
 }
 .logo-kunrow{
-  text-align:center; line-height:1.0;
-  margin-top:-28px; letter-spacing:-1px;
+  text-align:center;
+  line-height:1.02;
+  margin-top:-20px;           /* -28 → -20: つぶれ軽減 */
+  letter-spacing:0px;
 }
-.logo-box .kun{ color:#ffffff !important; font-size: 48px; font-weight: 900; }
-.logo-box .num2{ color:#ff4df5 !important; font-size: 48px; font-weight: 900; }
+.logo-box .kun{
+  color:#ffffff !important;
+  font-size: 44px;            /* 48 → 44 */
+  font-weight: 900;
+}
+.logo-box .num2{
+  color:#ff4df5 !important;
+  font-size: 44px;            /* 48 → 44 */
+  font-weight: 900;
+}
 </style>
 
 <div class="logo-wrap">
