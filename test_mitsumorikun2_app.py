@@ -295,12 +295,12 @@ for msg in st.session_state["chat_history"]:
 hint_placeholder = st.empty()
 if st.session_state["df"] is not None:
     hint_placeholder.markdown(
-    '<p style="color:#00c3ff;">'
-    'チャットをさらに続けて見積もり精度を上げることができます。<br>'
-    '追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。'
-    '</p>',
-    unsafe_allow_html=True
-)
+        '<p style="color:#00c3ff !important;">'
+        'チャットをさらに続けて見積もり精度を上げることができます。<br>'
+        '追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。'
+        '</p>',
+        unsafe_allow_html=True
+    )
 
 # =========================
 # 入力欄
@@ -515,11 +515,13 @@ if has_user_input:
                     st.session_state["meta"] = meta
 
                     # 入力欄の直上にヒント表示
-                    hint_placeholder.caption(
-                        "チャットをさらに続けて見積もり精度を上げることができます。\n"
-                        "追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。"
-                    )
-
+                    hint_placeholder.markdown(
+                        '<p style="color:#00c3ff !important;">'
+                        'チャットをさらに続けて見積もり精度を上げることができます。<br>'
+                        '追加で要件を入力した後に再度このボタンを押すと、過去のチャット履歴＋新しい要件を反映して見積もりが更新されます。'
+                        '</p>',
+                        unsafe_allow_html=True
+                )
 # =========================
 # 表示 & ダウンロード
 # =========================
