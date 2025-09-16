@@ -161,14 +161,14 @@ html, body {{ background:#000 !important; }}
 
 
 
-/* ===== 四隅インク：ピンクさらに上／ブルー右寄せ／イエロー縦長 ===== */
+/* ===== 四隅インク：ピンクさらに上／ブルー右にはみ出し／イエロー縦長 ===== */
 body::before {{
   content:"";
   position: fixed;
   inset:0;
   background:
     url("data:image/png;base64,{INK_PINK}")   no-repeat left  -160px top  -160px, /* ピンク */
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right  -20px  top  -60px, /* ブルー → 右に寄せた */
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right -220px top  -60px,  /* ブルー → 右へ100px */
     url("data:image/png;base64,{INK_GREEN}")  no-repeat left  -100px bottom -100px;/* イエロー */
   background-size:
     380px 380px,   /* ピンク */
@@ -182,7 +182,7 @@ body::before {{
   body::before {{
     background-position:
       left  -80px top   -80px,   /* ピンク */
-      right  20px top   -30px,   /* ブルー → モバイルも少し右 */
+      right -160px top  -30px,   /* ブルー → モバイルも少し右へ */
       left -100px bottom -60px;  /* イエロー */
     background-size:
       260px 260px,   /* ピンク縮小 */
@@ -190,7 +190,6 @@ body::before {{
       200px 320px;   /* イエロー縦長 */
   }}
 }}
-
 </style>
 """, unsafe_allow_html=True)
 
