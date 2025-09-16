@@ -190,6 +190,22 @@ body::before {{
       200px 320px;   /* イエロー縦長 */
   }}
 }}
+
+/* ===== AI見積もりくんボタン専用 グリーン→ブルーグラデ ===== */
+.stButton button:has(span:contains("AI見積もりくんで見積もりを生成する")) {
+  background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
+  color: #fff !important;
+  border:none !important;
+  font-weight:600 !important;
+  box-shadow:0 0 10px rgba(0,224,138,0.6),
+             0 0 15px rgba(0,195,255,0.5),
+             0 0 20px rgba(0,224,138,0.4);
+}
+.stButton button:has(span:contains("AI見積もりくんで見積もりを生成する")):hover {
+  filter: brightness(1.1);
+  transform: scale(1.02);
+}
+
 </style>
 """, unsafe_allow_html=True)
 
