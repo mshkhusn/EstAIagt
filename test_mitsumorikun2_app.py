@@ -1,8 +1,9 @@
 # app.py （AI見積もりくん２）— 完全版
-# - f-string中の{}エラー解消
-# - 生成ボタンのグラデ安定化（.gen-scope ラッパ方式）
-# - 見積もりプレビュー表をグラデ枠で囲む
-# - DataFrameの左端インデックス非表示（hide_index=True）
+# - 生成ボタンのグラデ復活（:has + .gen-scope）
+# - 見積もりプレビュー表をグラデ枠で囲む（:has + .df-scope）
+# - DataFrameの左端インデックス非表示
+# - f-string中の {} エラー解消（json.dumps で埋め込み）
+# - 背景インクは置換注入で安全化
 
 import os
 import json
@@ -24,7 +25,7 @@ import httpx
 st.set_page_config(page_title="AI見積もりくん２", layout="centered")
 
 # =========================
-# 四隅インク画像をBase64で読む
+# 画像（四隅インク）Base64
 # =========================
 ROOT = Path(__file__).resolve().parent
 
@@ -38,10 +39,9 @@ def b64_or_none(p: Path) -> str:
 INK_PINK  = b64_or_none(ROOT / "static" / "ink" / "ink_pink.png")
 INK_CYAN  = b64_or_none(ROOT / "static" / "ink" / "ink_cyan.png")
 INK_GREEN = b64_or_none(ROOT / "static" / "ink" / "ink_green.png")
-# INK_PURPLE は未使用でもOK
 
 # =========================
-# グローバルCSS（f-string不要にして安全）
+# デザイン（CSS）
 # =========================
 st.markdown("""
 <style>
@@ -77,7 +77,7 @@ html, body { background:#000 !important; }
   border:1px solid #666 !important; border-radius:10px !important;
 }
 
-/* ===== Buttons（デフォルト） ===== */
+/* ===== Buttons（デフォルト無地） ===== */
 .stButton button, .stDownloadButton > button {
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
@@ -130,8 +130,11 @@ html, body { background:#000 !important; }
 
 .stApp::before { content:""; background:none !important; }
 
-/* ===== 生成ボタン（.gen-scopeラッパ内だけに適用：安定版） ===== */
-.gen-scope .stButton > button {
+/* ===== ヒント文 ===== */
+.hint-blue { color:#00c3ff !important; font-weight:400 !important; }
+
+/* ===== 生成ボタン：同じ縦ブロック内に .gen-scope があればグラデ適用 ===== */
+[data-testid="stVerticalBlock"]:has(> .gen-scope) .stButton > button {
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
   border: none !important;
@@ -142,34 +145,32 @@ html, body { background:#000 !important; }
   box-shadow: 0 0 10px rgba(0,224,138,.55), 0 0 18px rgba(0,195,255,.45) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
 }
-.gen-scope .stButton > button:hover {
+[data-testid="stVerticalBlock"]:has(> .gen-scope) .stButton > button:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow: 0 0 12px rgba(0,224,138,.65), 0 0 24px rgba(0,195,255,.55) !important;
 }
-.gen-scope .stButton > button:active {
+[data-testid="stVerticalBlock"]:has(> .gen-scope) .stButton > button:active {
   filter: brightness(.98);
   transform: translateY(0);
 }
 
-/* ===== ヒント文の色 ===== */
-.hint-blue { color:#00c3ff !important; font-weight:400 !important; }
-
-/* ===== DataFrame をグラデ枠で囲む（ラッパ方式） ===== */
-.df-frame {
+/* ===== DataFrame：同じ縦ブロック内に .df-scope があればグラデ枠 ===== */
+[data-testid="stVerticalBlock"]:has(> .df-scope) div[data-testid="stDataFrame"] {
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  padding: 2px !important;
+  padding: 2px !important;               /* 枠の太さ */
   border-radius: 14px !important;
   box-shadow: 0 0 10px rgba(0,224,138,.35), 0 0 18px rgba(0,195,255,.25) !important;
 }
-.df-frame > div {
-  background:#000 !important; border-radius:12px !important; overflow:hidden !important; padding:0 !important;
+[data-testid="stVerticalBlock"]:has(> .df-scope) div[data-testid="stDataFrame"] > div {
+  background:#000 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
 }
-.df-frame [data-testid="stDataFrame"] { border-radius:12px !important; overflow:hidden !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ===== 背景インク（置換方式で安全に差し込み）=====
+# ===== 背景インク（置換で注入：f-string未使用）=====
 css_bg = """
 <style>
 body::before {
@@ -279,14 +280,14 @@ st.markdown("""
 
 st.markdown('<h2 class="custom-header">AI見積もりくんにチャットで相談して見積もりを生成しよう！</h2>', unsafe_allow_html=True)
 
-# 履歴を再描画
+# 既存履歴をMarkdownで再描画
 for msg in st.session_state["chat_history"]:
     if msg["role"] == "assistant":
         st.chat_message("assistant").markdown(msg["content"])
     elif msg["role"] == "user":
         st.chat_message("user").markdown(msg["content"])
 
-# ヒント文のプレースホルダ
+# ヒント文プレースホルダ
 hint_placeholder = st.empty()
 if st.session_state["df"] is not None:
     hint_placeholder.markdown(
@@ -299,13 +300,14 @@ if st.session_state["df"] is not None:
 # 入力欄
 # =========================
 if user_input := st.chat_input("要件を入力してください..."):
-    # 新規入力でプレビューを一旦クリア
+    # 新しい入力があれば過去の見積もり結果をクリア
     st.session_state["df"] = None
     st.session_state["meta"] = None
     st.session_state["items_json"] = None
     st.session_state["items_json_raw"] = None
 
     st.session_state["chat_history"].append({"role": "user", "content": user_input})
+
     with st.chat_message("user"):
         st.markdown(user_input)
 
@@ -477,12 +479,14 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
     return out
 
 # =========================
-# 生成ボタン（.gen-scope ラッパ内に配置）
+# 生成ボタン（:has + .gen-scope 方式）
 # =========================
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
+
 if has_user_input:
     with st.container():
-        st.markdown('<div class="gen-scope">', unsafe_allow_html=True)
+        # 目印：この縦ブロックのボタンにだけグラデを当てる
+        st.markdown('<div class="gen-scope"></div>', unsafe_allow_html=True)
 
         if st.button("AI見積もりくんで見積もりを生成する", key="gen_estimate"):
             with st.spinner("AIが見積もりを生成中…"):
@@ -517,18 +521,16 @@ if has_user_input:
                         unsafe_allow_html=True
                     )
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
 # =========================
-# 表示 & ダウンロード
+# 表示 & ダウンロード（:has + .df-scope 方式）
 # =========================
 if st.session_state["df"] is not None:
     st.markdown('<div class="preview-title">見積もり結果プレビュー</div>', unsafe_allow_html=True)
 
-    # グラデ枠で包む & インデックスは非表示
-    st.markdown('<div class="df-frame">', unsafe_allow_html=True)
-    st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        # 目印：この縦ブロックの DataFrame にだけ枠を当てる
+        st.markdown('<div class="df-scope"></div>', unsafe_allow_html=True)
+        st.dataframe(st.session_state["df"], hide_index=True, use_container_width=True)
 
     st.write(f"**小計（税抜）:** {st.session_state['meta']['taxable']:,}円")
     st.write(f"**消費税:** {st.session_state['meta']['tax']:,}円")
@@ -538,8 +540,12 @@ if st.session_state["df"] is not None:
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         st.session_state["df"].to_excel(writer, index=False, sheet_name="見積もり")
     buf.seek(0)
-    st.download_button("Excelでダウンロード", buf, "見積もり.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button(
+        "Excelでダウンロード",
+        buf,
+        "見積もり.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
     tmpl = st.file_uploader("DD見積書テンプレートをアップロード（.xlsx）", type=["xlsx"])
     if tmpl is not None:
