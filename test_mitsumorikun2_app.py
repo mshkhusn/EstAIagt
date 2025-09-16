@@ -192,10 +192,10 @@ body::before {{
 }}
 
 /* ===== 生成ボタン：グリーン→ブルーのグラデーション ===== */
-/* 目印 .gen-estimate-scope の“直後”にレンダリングされる stButton だけを対象にする */
-.gen-estimate-scope + div.stButton > button,
-.gen-estimate-scope + div.stButton button,
-.gen-estimate-scope + div [data-testid^="baseButton"] {{
+/* 「.gen-estimate-scope を内包する stMarkdown」直後の stButton を対象にする */
+div.stMarkdown:has(.gen-estimate-scope) + div.stButton > button,
+div.stMarkdown:has(.gen-estimate-scope) + div.stButton button,
+div.stMarkdown:has(.gen-estimate-scope) + div [data-testid^="baseButton"] {
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
   color: #fff !important;
   border: none !important;
@@ -207,24 +207,24 @@ body::before {{
     0 0 18px rgba(0,195,255,.45) !important;
   transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
   text-shadow: 0 1px 0 rgba(0,0,0,.2);
-}}
+}
 
-.gen-estimate-scope + div.stButton > button:hover,
-.gen-estimate-scope + div.stButton button:hover,
-.gen-estimate-scope + div [data-testid^="baseButton"]:hover {{
+div.stMarkdown:has(.gen-estimate-scope) + div.stButton > button:hover,
+div.stMarkdown:has(.gen-estimate-scope) + div.stButton button:hover,
+div.stMarkdown:has(.gen-estimate-scope) + div [data-testid^="baseButton"]:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow:
     0 0 12px rgba(0,224,138,.65),
     0 0 24px rgba(0,195,255,.55) !important;
-}}
+}
 
-.gen-estimate-scope + div.stButton > button:active,
-.gen-estimate-scope + div.stButton button:active,
-.gen-estimate-scope + div [data-testid^="baseButton"]:active {{
+div.stMarkdown:has(.gen-estimate-scope) + div.stButton > button:active,
+div.stMarkdown:has(.gen-estimate-scope) + div.stButton button:active,
+div.stMarkdown:has(.gen-estimate-scope) + div [data-testid^="baseButton"]:active {
   transform: translateY(0);
   filter: brightness(.98);
-}}
+}
 
 </style>
 """, unsafe_allow_html=True)
