@@ -56,9 +56,9 @@ st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap');
 
-/* ===== Base: 黒背景は body のみ ===== */
+/* ===== Base: 黒背景 ===== */
 html, body {{ background:#000 !important; }}
-.stApp, .stApp *{{
+.stApp, .stApp * {{
   background:transparent !important;
   color:#fff !important;
   font-family:'Mochiy Pop One',sans-serif !important;
@@ -70,72 +70,71 @@ html, body {{ background:#000 !important; }}
 /* ヘッダー/フッター/サイドバー */
 [data-testid="stHeader"],
 [data-testid="stToolbar"], [data-testid="stStatusWidget"],
-[data-testid="stSidebar"], [data-testid="stSidebarContent"]{{
+[data-testid="stSidebar"], [data-testid="stSidebarContent"] {{
   background:transparent !important; border:none !important;
 }}
 
 /* ===== Inputs ===== */
 .stTextInput label, .stTextArea label, .stSelectbox label {{ color:#fff !important; }}
-.stTextInput input, .stTextArea textarea, .stSelectbox div{{
+.stTextInput input, .stTextArea textarea, .stSelectbox div {{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 .stTextInput input::placeholder, .stTextArea textarea::placeholder,
-.stChatInput textarea::placeholder{{ color:#ddd !important; }}
-
+.stChatInput textarea::placeholder {{ color:#ddd !important; }}
 /* 目アイコン */
-.stTextInput [data-baseweb="button"]{{
+.stTextInput [data-baseweb="button"] {{
   background:#333 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
 }}
 
 /* ===== Buttons ===== */
-.stButton button, .stDownloadButton > button{{
+.stButton button, .stDownloadButton > button {{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
   padding:.55rem 1rem !important; box-shadow:none !important;
 }}
-.stButton button:hover, .stDownloadButton > button:hover{{
+.stButton button:hover, .stDownloadButton > button:hover {{
   background:#2c2c2c !important; border-color:#777 !important;
 }}
 
 /* ===== Chat ===== */
-[data-testid="stChatMessage"]{{
+[data-testid="stChatMessage"] {{
   background:transparent !important; border:none !important; border-radius:14px !important;
 }}
-[data-testid="stChatInput"], [data-testid="stChatInput"]>div{{ background:transparent !important; }}
-.stChatInput textarea{{
+[data-testid="stChatInput"], [data-testid="stChatInput"]>div {{ background:transparent !important; }}
+.stChatInput textarea {{
   background:#111 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
 }}
-.stChatInput [data-baseweb="button"]{{
+.stChatInput [data-baseweb="button"] {{
   background:#222 !important; color:#fff !important;
   border:1px solid #555 !important; border-radius:10px !important;
 }}
 
 /* ===== File Uploader ===== */
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]{{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {{
   position:relative !important;
   background:#111 !important; color:#fff !important;
   border:1.5px solid #666 !important; border-radius:12px !important;
   padding-left:64px !important;
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg{{ display:none !important; }}
-@supports selector(div:has(> svg)){{
-  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg){{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] svg {{ display:none !important; }}
+@supports selector(div:has(> svg)) {{
+  [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] div:has(> svg) {{
     background:transparent !important; border:none !important;
   }}
 }}
-[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before{{
+[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"]::before {{
   content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%);
   width:32px; height:32px; background-repeat:no-repeat; background-position:center; background-size:contain;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M6 19a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.4A3.5 3.5 0 1 1 18 19H6z'/%3E%3C/svg%3E");
 }}
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]{{
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {{
   background:#222 !important; color:#fff !important;
   border:1px solid #666 !important; border-radius:10px !important;
 }}
-[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover{{
+[data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover {{
   background:#2c2c2c !important; border-color:#777 !important;
 }}
 
@@ -145,12 +144,12 @@ html, body {{ background:#000 !important; }}
 .stApp [data-testid="stChatMessage"] [data-testid*="Avatar"] {{
   background: #a64dff !important; color: #ffffff !important; border-radius: 12px !important;
 }}
-.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"]{{
+.stApp [data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid*="Avatar"] {{
   background: #00e08a !important; color: #000000 !important;
 }}
 
 /* ===== 見積もり結果プレビュー見出し ===== */
-.preview-title{{
+.preview-title {{
   font-size: 32px !important; line-height: 1.4 !important; font-weight: 900 !important;
   text-align: left; color: #78f416 !important; margin-bottom: 16px !important;
 }}
@@ -181,32 +180,29 @@ html, body {{ background:#000 !important; }}
   border: none !important; border-top: 1px solid #fff !important; margin: 1em 0 !important;
 }}
 
-/* ===== 四隅インク背景 ===== */
+/* ===== 旧インク背景を無効化（重複防止） ===== */
 .stApp::before {{
-  content:""; position: fixed; top:0; left:0; width:100%; height:100%;
-  background:
-    url("data:image/png;base64,{INK_PINK}")   no-repeat left top,
-    url("data:image/png;base64,{INK_CYAN}")   no-repeat right top,
-    url("data:image/png;base64,{INK_GREEN}")  no-repeat left bottom,
-    url("data:image/png;base64,{INK_PURPLE}") no-repeat right bottom;
-  background-size: 220px;
-  z-index:-1;
+  content:""; background:none !important;
 }}
-/* ここはあなたの既存スタイルに併記でOK。body::before だけ追加/更新する */
+
+/* ===== 四隅インク背景 (body::before で1回だけ) ===== */
 body::before {{
-  content:"";
-  position: fixed; inset:0;
-  background: {bg_css};
-  background-size: {size_css};
+  content:""; position: fixed; inset:0;
+  background:
+    url("data:image/png;base64,{INK_PINK}")   no-repeat left 3%  top 6%,
+    url("data:image/png;base64,{INK_CYAN}")   no-repeat right 4% top 8%,
+    url("data:image/png;base64,{INK_GREEN}")  no-repeat left 3%  bottom 6%,
+    url("data:image/png;base64,{INK_PURPLE}") no-repeat right 4% bottom 5%;
+  background-size: 220px 220px, 220px 220px, 220px 220px, 220px 220px;
   pointer-events: none;
   z-index: -1;
 }}
-@media (max-width: 900px){{
-  body::before{{ background-size: 160px 160px,160px 160px,160px 160px,160px 160px; }}
+@media (max-width: 900px) {{
+  body::before {{ background-size: 160px 160px,160px 160px,160px 160px,160px 160px; }}
 }}
-
 </style>
 """, unsafe_allow_html=True)
+
 
 # =========================
 # Secrets
