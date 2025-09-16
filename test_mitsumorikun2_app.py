@@ -191,20 +191,39 @@ body::before {{
   }}
 }}
 
-/* 直前に .gen-estimate-scope があるボタンだけを対象に */
-.gen-estimate-scope + div.stButton > button {{
+/* ===== 生成ボタン：グリーン→ブルーのグラデーション ===== */
+/* 目印 .gen-estimate-scope の“直後”にレンダリングされる stButton だけを対象にする */
+.gen-estimate-scope + div.stButton > button,
+.gen-estimate-scope + div.stButton button,
+.gen-estimate-scope + div [data-testid^="baseButton"] {{
   background: linear-gradient(90deg, #00e08a, #00c3ff) !important;
-  color:#fff !important;
-  border:none !important;
-  font-weight:700 !important;
-  border-radius:10px !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: .65rem 1.1rem !important;
+  font-weight: 700 !important;
   box-shadow:
     0 0 10px rgba(0,224,138,.55),
-    0 0 16px rgba(0,195,255,.45);
+    0 0 18px rgba(0,195,255,.45) !important;
+  transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
+  text-shadow: 0 1px 0 rgba(0,0,0,.2);
 }}
-.gen-estimate-scope + div.stButton > button:hover {{
+
+.gen-estimate-scope + div.stButton > button:hover,
+.gen-estimate-scope + div.stButton button:hover,
+.gen-estimate-scope + div [data-testid^="baseButton"]:hover {{
   filter: brightness(1.08);
   transform: translateY(-1px);
+  box-shadow:
+    0 0 12px rgba(0,224,138,.65),
+    0 0 24px rgba(0,195,255,.55) !important;
+}}
+
+.gen-estimate-scope + div.stButton > button:active,
+.gen-estimate-scope + div.stButton button:active,
+.gen-estimate-scope + div [data-testid^="baseButton"]:active {{
+  transform: translateY(0);
+  filter: brightness(.98);
 }}
 
 </style>
@@ -531,6 +550,9 @@ def export_with_template(template_bytes: bytes, df_items: pd.DataFrame):
 has_user_input = any(msg["role"]=="user" for msg in st.session_state["chat_history"])
 
 if has_user_input:
+    # ←これを追加（ボタンの直前に置くことが重要）
+    st.markdown('<div class="gen-estimate-scope"></div>', unsafe_allow_html=True)
+
     if st.button("AI見積もりくんで見積もりを生成する"):
         with st.spinner("AIが見積もりを生成中…"):
             prompt = build_prompt_for_estimation(st.session_state["chat_history"])
