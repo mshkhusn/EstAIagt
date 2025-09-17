@@ -305,10 +305,17 @@ st.markdown("""
 <style>
 .logo-wrap{ display:flex; justify-content:center; align-items:center; width:100%; margin:24px 0 40px 0; }
 .logo-pill{ display:inline-block; padding:6px; border-radius:9999px !important; background:linear-gradient(90deg,#ff4df5,#a64dff) !important; }
-.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:"Mochiy Pop One",sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+.logo-box{ padding:30px 76px; border-radius:9999px !important; background:#000 !important; font-family:'Mochiy Pop One',sans-serif; color:inherit !important; white-space:nowrap; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 .logo-row1{ display:flex; align-items:flex-start; justify-content:center; gap:8px; line-height:1.02; margin:0; }
 .logo-box .ai{ font-size:90px; font-weight:400; letter-spacing:0.5px; color:#ff4df5 !important; }
 .logo-box .mitsumori{ font-size:60px; font-weight:400; letter-spacing:0.5px; color:#fff !important; }
+
+/* ← ここが追加：'も' と 'り' の間だけキツくする */
+.logo-box .mitsumori .kern-ri{
+  display:inline-block;
+  margin-left:-0.14em;  /* 詰め幅。-0.10〜-0.18emで微調整どうぞ */
+}
+
 .logo-kunrow{ text-align:center; line-height:1.0; margin-top:-22px; letter-spacing:0.5px; }
 .logo-box .kun{  font-size:44px; font-weight:400; color:#fff !important; }
 .logo-box .num2{ font-size:44px; font-weight:400; color:#ff4df5 !important; }
@@ -318,7 +325,9 @@ st.markdown("""
   <div class="logo-pill">
     <div class="logo-box">
       <div class="logo-row1">
-        <span class="ai">AI</span><span class="mitsumori">見積もり</span>
+        <span class="ai">AI</span>
+        <!-- 'り' をだけ span で包んで詰める -->
+        <span class="mitsumori">見積も<span class="kern-ri">り</span></span>
       </div>
       <div class="logo-kunrow">
         <span class="kun">くん</span><span class="num2">2</span>
