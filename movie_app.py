@@ -25,7 +25,7 @@ import httpx
 # =========================
 # ページ設定
 # =========================
-st.set_page_config(page_title="映像制作概算見積エージェント (GPT-4.1)", layout="centered")
+st.set_page_config(page_title="映像制作概算見積エージェント", layout="centered")
 
 # =========================
 # Secrets
@@ -70,7 +70,7 @@ for k in ["items_json_raw", "items_json", "df", "meta", "final_html"]:
 # =========================
 # 認証
 # =========================
-st.title("映像制作概算見積エージェント (GPT-4.1)")
+st.title("映像制作概算見積エージェント")
 password = st.text_input("パスワードを入力してください", type="password")
 if password != APP_PASSWORD:
     st.warning("🔒 認証が必要です")
