@@ -704,12 +704,16 @@ if st.session_state["final_html"]:
     st.components.v1.html(st.session_state["final_html"], height=900, scrolling=True)
     download_excel(st.session_state["df"], st.session_state["meta"])
 
-    st.markdown("---")
-    st.subheader("DD見積書テンプレで出力")
-    tmpl = st.file_uploader("DD見積書テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
-    if tmpl is not None:
-        st.caption("テンプレに `{{ITEMS_START}}` を明細1行目（例：B19）に置いてください。小計セルはW列のSUM式で自動検出（例：W72）。行挿入は行いません。")
-        export_with_template(tmpl.read(), st.session_state["df"], st.session_state["meta"])
+ # =========================
+    # ▼▼▼ DD見積書テンプレで出力（UI）— 非表示のためコメントアウト ▼▼▼
+    # st.markdown("---")
+    # st.subheader("DD見積書テンプレで出力")
+    # tmpl = st.file_uploader("DD見積書テンプレート（.xlsx）をアップロード", type=["xlsx"], key="tmpl_upload")
+    # if tmpl is not None:
+    #     st.caption("テンプレに `{{ITEMS_START}}` を明細1行目（例：B19）に置いてください。小計セルはW列のSUM式で自動検出（例：W72）。行挿入は行いません。")
+    #     export_with_template(tmpl.read(), st.session_state["df"], st.session_state["meta"])
+    # ▲▲▲ ここまでコメントアウト ▲▲▲
+    # =========================
 
     with st.expander("デバッグ：モデル生出力（RAW）", expanded=False):
         st.code(st.session_state.get("items_json_raw", "(no raw)"))
